@@ -1,0 +1,109 @@
+.auth-page {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-canvas-soft);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-xl);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+}
+
+.auth-card h1 {
+  margin: 0 0 var(--space-xs);
+  font: var(--text-display-sm);
+  color: var(--color-ink);
+  letter-spacing: -0.6px;
+}
+
+.auth-card .subtitle {
+  margin: 0 0 var(--space-lg);
+  font: var(--text-body-sm);
+  color: var(--color-mute);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  text-align: left;
+}
+
+.auth-field label {
+  font: var(--text-body-sm-strong);
+  color: var(--color-ink);
+}
+
+.auth-field input {
+  font: var(--text-body-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.auth-field input:focus {
+  border-color: var(--color-hairline-strong);
+}
+
+.auth-error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  font: var(--text-body-sm);
+  color: var(--color-error-deep);
+  background: var(--color-error-soft);
+  border-radius: var(--rounded-sm);
+  text-align: left;
+}
+
+.auth-submit {
+  margin-top: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg);
+  font: var(--text-button-lg);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--rounded-pill);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.auth-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: var(--space-lg);
+  font: var(--text-body-sm);
+  color: var(--color-body);
+}
+
+.auth-footer a {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  color: var(--color-link-deep);
+}
