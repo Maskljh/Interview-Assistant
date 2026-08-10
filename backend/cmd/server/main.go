@@ -49,7 +49,7 @@ func main() {
 	r.Use(corsMiddleware())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
-	interview.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, store)
+	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))

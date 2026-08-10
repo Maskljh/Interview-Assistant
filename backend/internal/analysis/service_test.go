@@ -126,7 +126,7 @@ func fakeFullLLM(questionCount int, decideAction string) llm.Client {
 	}}
 }
 
-func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
+func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) (*gin.Engine, *interview.Service) {
 	t.Helper()
 	store := testStore(t)
 	secret := os.Getenv("JWT_SECRET")
@@ -136,9 +136,10 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	user.RegisterRoutes(r, sqlDB, secret)
-	interview.RegisterRoutes(r, sqlDB, secret, llmClient, store)
+	svc := interview.NewService(sqlDB, llmClient, store)
+	interview.RegisterRoutes(r, secret, svc)
 	analysis.RegisterRoutes(r, sqlDB, secret, llmClient, "test-model")
-	return r
+	return r, svc
 }
 
 func registerUser(t *testing.T, r *gin.Engine, email string) string {
@@ -188,11 +189,13 @@ func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int
 
 func TestFinishWritesFeedbackJSON(t *testing.T) {
 	sqlDB := testDB(t)
-	store := testStore(t)
 	ctx := context.Background()
 	llmClient := fakeFullLLM(5, "finish")
 
-	r := testRouter(t, sqlDB, llmClient)
+	r, svc := testRouter(t, sqlDB, llmClient)
+	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
+	svc.SetEvaluator(analysisSvc)
+
 	token := registerUser(t, r, "test-analysis-finish@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
@@ -203,10 +206,6 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
 	}
-
-	svc := interview.NewService(sqlDB, llmClient, store)
-	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
-	svc.SetEvaluator(analysisSvc)
 
 	var userID int64
 	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-analysis-finish@example.com").Scan(&userID); err != nil {
@@ -253,10 +252,84 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	}
 }
 
+type failingEvaluator struct{}
+
+func (f failingEvaluator) Evaluate(ctx context.Context, sessionID int64) (int, []byte, error) {
+	return 0, nil, fmt.Errorf("llm unavailable")
+}
+
+func TestFinishEvaluateFailureCompletedAvailableFalse(t *testing.T) {
+	sqlDB := testDB(t)
+	ctx := context.Background()
+	llmClient := fakeFullLLM(5, "finish")
+
+	r, svc := testRouter(t, sqlDB, llmClient)
+	svc.SetEvaluator(failingEvaluator{})
+
+	token := registerUser(t, r, "test-analysis-eval-fail@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var userID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-analysis-eval-fail@example.com").Scan(&userID); err != nil {
+		t.Fatalf("query user: %v", err)
+	}
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer"); err != nil {
+		t.Fatalf("HandleAnswer: %v", err)
+	}
+
+	var status string
+	var feedbackJSON []byte
+	var rawFeedback sql.NullString
+	if err := sqlDB.QueryRow(
+		`SELECT status, feedback_json, raw_feedback FROM interview_sessions WHERE id = ?`,
+		sessionID,
+	).Scan(&status, &feedbackJSON, &rawFeedback); err != nil {
+		t.Fatalf("query session: %v", err)
+	}
+	if status != "completed" {
+		t.Fatalf("status = %q, want completed", status)
+	}
+	if len(feedbackJSON) > 0 {
+		t.Fatalf("feedback_json should be empty on evaluate failure")
+	}
+	if !rawFeedback.Valid || rawFeedback.String == "" {
+		t.Fatalf("raw_feedback should contain error text")
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/interviews/%d/report", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get report status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Available bool `json:"available"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if resp.Available {
+		t.Fatalf("available = true, want false after evaluate failure")
+	}
+}
+
 func TestGetReportAvailableFalseWhenNoFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
-	r := testRouter(t, sqlDB, llmClient)
+	r, _ := testRouter(t, sqlDB, llmClient)
 	token := registerUser(t, r, "test-analysis-no-fb@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
@@ -289,7 +362,7 @@ func TestGetReportAvailableFalseWhenNoFeedback(t *testing.T) {
 func TestGetReportReturnsFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
-	r := testRouter(t, sqlDB, llmClient)
+	r, _ := testRouter(t, sqlDB, llmClient)
 	token := registerUser(t, r, "test-analysis-get-fb@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
@@ -322,7 +395,7 @@ func TestGetReportReturnsFeedback(t *testing.T) {
 func TestRetryReportGeneratesFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
-	r := testRouter(t, sqlDB, llmClient)
+	r, _ := testRouter(t, sqlDB, llmClient)
 	token := registerUser(t, r, "test-analysis-retry@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
@@ -361,7 +434,7 @@ func TestRetryReportGeneratesFeedback(t *testing.T) {
 func TestGetReportForeignSessionReturnsNotFound(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
-	r := testRouter(t, sqlDB, llmClient)
+	r, _ := testRouter(t, sqlDB, llmClient)
 	tokenA := registerUser(t, r, "test-analysis-foreign-a@example.com")
 	tokenB := registerUser(t, r, "test-analysis-foreign-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")

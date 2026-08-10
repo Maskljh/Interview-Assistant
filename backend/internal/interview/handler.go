@@ -1,7 +1,6 @@
 package interview
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -9,8 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/auth"
-	"github.com/interview-assistant/backend/internal/llm"
-	"github.com/interview-assistant/backend/internal/sessionredis"
 )
 
 type Handler struct {
@@ -63,12 +60,12 @@ type turnResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func NewHandler(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Handler {
-	return &Handler{svc: NewService(db, llmClient, store)}
+func NewHandler(svc *Service) *Handler {
+	return &Handler{svc: svc}
 }
 
-func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client, store sessionredis.Store) {
-	h := NewHandler(db, llmClient, store)
+func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
+	h := NewHandler(svc)
 	protected := r.Group("/api/interviews")
 	protected.Use(auth.Middleware(secret))
 	protected.POST("", h.Create)
