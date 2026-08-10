@@ -226,7 +226,7 @@ export default function InterviewRoomPage() {
               type="button"
               className="interview-room-end"
               onClick={handleForceEnd}
-              disabled={ending || disconnected}
+              disabled={ending}
             >
               {ending ? 'Ending…' : 'End interview'}
             </button>

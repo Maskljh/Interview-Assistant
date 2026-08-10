@@ -381,6 +381,10 @@ func (s *Service) finishSession(ctx context.Context, sessionID int64, state *ses
 	if err := s.finishAndNotify(ctx, sessionID); err != nil {
 		return nil, err
 	}
+	// When a notifier is wired (production WS), BroadcastDone already reaches all clients.
+	if s.notify != nil {
+		return nil, nil
+	}
 	return []OutboundMessage{{Type: "done"}}, nil
 }
 

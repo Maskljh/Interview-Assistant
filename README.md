@@ -156,6 +156,16 @@ curl -s -X POST http://127.0.0.1:8080/api/interviews \
 
 See [docs/superpowers/plans/acceptance-checklist.md](docs/superpowers/plans/acceptance-checklist.md) for MVP acceptance results (A1–A6).
 
+## Known limitations
+
+This MVP intentionally omits several production hardening features:
+
+- **No `failed` status on abandon** — closing the browser or disconnecting mid-session does not mark the interview `failed`; use **End interview** (HTTP force-end works even when the WebSocket is down).
+- **No per-user concurrency cap** — a user may have multiple `in_progress` sessions; only one live room per session is enforced via Redis.
+- **Sync evaluation may delay the last `done`** — the WebSocket `done` message is sent after synchronous post-interview scoring; slow LLM calls can add noticeable latency before navigation to the report.
+- **Rare concurrent `BeginLive` race** — two simultaneous WebSocket connects for the same session could briefly duplicate the first question; reconnect is idempotent in normal use.
+- **A3/A6 need `DEEPSEEK_API_KEY`** — full end-to-end acceptance (start interview + scored report) requires a valid DeepSeek API key on the server.
+
 ## Project layout
 
 ```
