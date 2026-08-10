@@ -1,0 +1,10 @@
+﻿node_modules/
+frontend/dist/
+backend/bin/
+.env
+*.exe
+.DS_Store
+.superpowers/
+.worktrees/
+
+.worktrees/
