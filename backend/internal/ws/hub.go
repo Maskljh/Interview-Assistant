@@ -34,3 +34,19 @@ func (h *Hub) Unregister(sessionID int64, conn *websocket.Conn) {
 		}
 	}
 }
+
+func (h *Hub) Broadcast(sessionID int64, msg ServerMsg) {
+	h.mu.Lock()
+	targets := make([]*websocket.Conn, 0, len(h.conns[sessionID]))
+	for conn := range h.conns[sessionID] {
+		targets = append(targets, conn)
+	}
+	h.mu.Unlock()
+	for _, conn := range targets {
+		_ = conn.WriteJSON(msg)
+	}
+}
+
+func (h *Hub) BroadcastDone(sessionID int64) {
+	h.Broadcast(sessionID, ServerMsg{Type: "done"})
+}

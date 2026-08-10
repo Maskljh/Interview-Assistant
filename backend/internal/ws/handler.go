@@ -22,6 +22,7 @@ type Handler struct {
 
 func RegisterRoutes(r *gin.Engine, svc *interview.Service, secret string) {
 	h := &Handler{svc: svc, secret: secret, hub: NewHub()}
+	svc.SetSessionNotifier(h.hub)
 	r.GET("/ws/interviews/:id", h.Serve)
 }
 

@@ -197,12 +197,19 @@ func (r *Repo) StartSession(sessionID int64, questions []struct {
 	return r.ListQuestions(sessionID)
 }
 
-func (r *Repo) BeginSession(sessionID int64) error {
-	_, err := r.db.Exec(
-		`UPDATE interview_sessions SET status = ?, started_at = COALESCE(started_at, NOW()) WHERE id = ?`,
-		string(StatusInProgress), sessionID,
+func (r *Repo) BeginSession(sessionID int64) (bool, error) {
+	res, err := r.db.Exec(
+		`UPDATE interview_sessions SET status = ?, started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = ?`,
+		string(StatusInProgress), sessionID, string(StatusReady),
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (r *Repo) AppendTurn(sessionID int64, role, kind, content string) (int, error) {

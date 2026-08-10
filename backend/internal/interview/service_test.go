@@ -418,3 +418,60 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 		t.Fatalf("answer 3 last type = %q, want question (forced next_question after follow-up cap)", got)
 	}
 }
+
+func TestBeginLiveIdempotent(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
+	token := registerUser(t, r, "test-interview-begin-idempotent@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(6), store)
+
+	var userID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-interview-begin-idempotent@example.com").Scan(&userID); err != nil {
+		t.Fatalf("query user: %v", err)
+	}
+
+	msgs1, err := svc.BeginLive(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("BeginLive 1: %v", err)
+	}
+	if lastOutboundType(msgs1) != "question" {
+		t.Fatalf("BeginLive 1 last type = %q, want question", lastOutboundType(msgs1))
+	}
+
+	var turnCount int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM interview_turns WHERE session_id = ?`, sessionID).Scan(&turnCount); err != nil {
+		t.Fatalf("count turns after first BeginLive: %v", err)
+	}
+	if turnCount != 1 {
+		t.Fatalf("turn count after first BeginLive = %d, want 1", turnCount)
+	}
+
+	msgs2, err := svc.BeginLive(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("BeginLive 2: %v", err)
+	}
+	if lastOutboundType(msgs2) != "question" {
+		t.Fatalf("BeginLive 2 last type = %q, want question (reconnect pending)", lastOutboundType(msgs2))
+	}
+
+	var turnCountAfter int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM interview_turns WHERE session_id = ?`, sessionID).Scan(&turnCountAfter); err != nil {
+		t.Fatalf("count turns after second BeginLive: %v", err)
+	}
+	if turnCountAfter != 1 {
+		t.Fatalf("turn count after second BeginLive = %d, want 1 (no duplicate Q0)", turnCountAfter)
+	}
+}

@@ -30,14 +30,23 @@ type OutboundMessage struct {
 	Progress *Progress
 }
 
+type SessionNotifier interface {
+	BroadcastDone(sessionID int64)
+}
+
 type Service struct {
-	repo  *Repo
-	llm   llm.Client
-	store sessionredis.Store
+	repo   *Repo
+	llm    llm.Client
+	store  sessionredis.Store
+	notify SessionNotifier
 }
 
 func NewService(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Service {
 	return &Service{repo: NewRepo(db), llm: llmClient, store: store}
+}
+
+func (s *Service) SetSessionNotifier(n SessionNotifier) {
+	s.notify = n
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode) (*Session, error) {
@@ -149,59 +158,78 @@ func (s *Service) BeginLive(ctx context.Context, userID, sessionID int64) ([]Out
 		return nil, ErrInvalidState
 	}
 
-	switch session.Status {
-	case StatusReady:
-		if err := s.repo.BeginSession(sessionID); err != nil {
-			return nil, err
-		}
-		q, err := s.repo.GetQuestionByIndex(sessionID, 0)
+	if session.Status == StatusReady {
+		started, err := s.repo.BeginSession(sessionID)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
-			return nil, err
+		if started {
+			return s.initFirstQuestion(ctx, sessionID, total)
 		}
-		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
-			return nil, err
-		}
-		state := &sessionredis.LiveState{
-			SessionID:          sessionID,
-			QuestionIndex:      0,
-			FollowUpsOnCurrent: 0,
-			TurnCount:          1,
-			PendingKind:        "question",
-			PendingText:        q.Question,
-		}
-		if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
-			return nil, err
-		}
-		progress := &Progress{Current: 1, Total: total}
-		return []OutboundMessage{
-			{Type: "session_started", Progress: progress},
-			{Type: "question", Content: q.Question, Progress: progress},
-		}, nil
-
-	case StatusInProgress:
-		state, err := s.store.Get(ctx, sessionID)
+		session, err = s.repo.GetByID(sessionID)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrNotFound
+			}
 			return nil, err
 		}
-		if state == nil {
+		if session.Status != StatusInProgress {
 			return nil, ErrInvalidState
 		}
-		progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
-		msgType := state.PendingKind
-		if msgType == "" {
-			msgType = "question"
-		}
-		return []OutboundMessage{
-			{Type: "session_started", Progress: progress},
-			{Type: msgType, Content: state.PendingText, Progress: progress},
-		}, nil
+	}
 
-	default:
+	if session.Status == StatusInProgress {
+		return s.reconnectLive(ctx, sessionID, total)
+	}
+	return nil, ErrInvalidState
+}
+
+func (s *Service) initFirstQuestion(ctx context.Context, sessionID int64, total int) ([]OutboundMessage, error) {
+	q, err := s.repo.GetQuestionByIndex(sessionID, 0)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
+		return nil, err
+	}
+	state := &sessionredis.LiveState{
+		SessionID:          sessionID,
+		QuestionIndex:      0,
+		FollowUpsOnCurrent: 0,
+		TurnCount:          1,
+		PendingKind:        "question",
+		PendingText:        q.Question,
+	}
+	if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
+		return nil, err
+	}
+	progress := &Progress{Current: 1, Total: total}
+	return []OutboundMessage{
+		{Type: "session_started", Progress: progress},
+		{Type: "question", Content: q.Question, Progress: progress},
+	}, nil
+}
+
+func (s *Service) reconnectLive(ctx context.Context, sessionID int64, total int) ([]OutboundMessage, error) {
+	state, err := s.store.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
 		return nil, ErrInvalidState
 	}
+	progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
+	msgType := state.PendingKind
+	if msgType == "" {
+		msgType = "question"
+	}
+	return []OutboundMessage{
+		{Type: "session_started", Progress: progress},
+		{Type: msgType, Content: state.PendingText, Progress: progress},
+	}, nil
 }
 
 func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, content string) ([]OutboundMessage, error) {
@@ -305,7 +333,10 @@ func (s *Service) ForceEnd(ctx context.Context, userID, sessionID int64) error {
 		_, err = s.finishSession(ctx, sessionID, state)
 		return err
 	}
-	return s.Finish(ctx, sessionID)
+	if err := s.finishAndNotify(ctx, sessionID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) Finish(ctx context.Context, sessionID int64) error {
@@ -316,8 +347,18 @@ func (s *Service) Finish(ctx context.Context, sessionID int64) error {
 	return nil
 }
 
-func (s *Service) finishSession(ctx context.Context, sessionID int64, state *sessionredis.LiveState) ([]OutboundMessage, error) {
+func (s *Service) finishAndNotify(ctx context.Context, sessionID int64) error {
 	if err := s.Finish(ctx, sessionID); err != nil {
+		return err
+	}
+	if s.notify != nil {
+		s.notify.BroadcastDone(sessionID)
+	}
+	return nil
+}
+
+func (s *Service) finishSession(ctx context.Context, sessionID int64, state *sessionredis.LiveState) ([]OutboundMessage, error) {
+	if err := s.finishAndNotify(ctx, sessionID); err != nil {
 		return nil, err
 	}
 	return []OutboundMessage{{Type: "done"}}, nil
