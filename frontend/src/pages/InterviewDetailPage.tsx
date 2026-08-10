@@ -7,6 +7,7 @@ import {
   type InterviewMode,
   type InterviewStatus,
 } from '../api/interviews';
+import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
 import './InterviewPages.css';
 
@@ -44,6 +45,9 @@ export default function InterviewDetailPage() {
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savingToBank, setSavingToBank] = useState(false);
+  const [bankMessage, setBankMessage] = useState('');
+  const [bankError, setBankError] = useState('');
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
@@ -78,6 +82,20 @@ export default function InterviewDetailPage() {
       cancelled = true;
     };
   }, [interviewId]);
+
+  async function handleSaveToBank() {
+    setSavingToBank(true);
+    setBankMessage('');
+    setBankError('');
+    try {
+      const { imported } = await importQuestionsFromSession(interviewId);
+      setBankMessage(`已存入 ${imported} 题`);
+    } catch (err) {
+      setBankError(err instanceof ApiError ? err.message : '存入题库失败');
+    } finally {
+      setSavingToBank(false);
+    }
+  }
 
   const sortedTurns = interview
     ? [...interview.turns].sort((a, b) => a.seq - b.seq)
@@ -134,7 +152,19 @@ export default function InterviewDetailPage() {
                   View report
                 </Link>
               )}
+              {interview.questions.length > 0 && (
+                <button
+                  type="button"
+                  className="interview-inline-link"
+                  onClick={() => void handleSaveToBank()}
+                  disabled={savingToBank}
+                >
+                  {savingToBank ? '存入中…' : '存入题库'}
+                </button>
+              )}
             </div>
+            {bankMessage && <p className="interview-success">{bankMessage}</p>}
+            {bankError && <p className="interview-error">{bankError}</p>}
 
             <h2 className="interview-section-title">Transcript</h2>
             {sortedTurns.length === 0 ? (

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
+  getInterview,
   getReport,
   retryReport,
   type InterviewFeedback,
 } from '../api/interviews';
+import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
 import './InterviewPages.css';
 
@@ -24,9 +26,13 @@ export default function ReportPage() {
 
   const [feedback, setFeedback] = useState<InterviewFeedback | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState('');
+  const [savingToBank, setSavingToBank] = useState(false);
+  const [bankMessage, setBankMessage] = useState('');
+  const [bankError, setBankError] = useState('');
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
@@ -41,8 +47,12 @@ export default function ReportPage() {
       setLoading(true);
       setError('');
       try {
-        const result = await getReport(interviewId);
+        const [result, interview] = await Promise.all([
+          getReport(interviewId),
+          getInterview(interviewId),
+        ]);
         if (cancelled) return;
+        setQuestionCount(interview.questions.length);
         if (result.available) {
           setFeedback(result.feedback);
           setAvailable(true);
@@ -66,6 +76,20 @@ export default function ReportPage() {
       cancelled = true;
     };
   }, [interviewId]);
+
+  async function handleSaveToBank() {
+    setSavingToBank(true);
+    setBankMessage('');
+    setBankError('');
+    try {
+      const { imported } = await importQuestionsFromSession(interviewId);
+      setBankMessage(`已存入 ${imported} 题`);
+    } catch (err) {
+      setBankError(err instanceof ApiError ? err.message : '存入题库失败');
+    } finally {
+      setSavingToBank(false);
+    }
+  }
 
   async function handleRetry() {
     setRetrying(true);
@@ -111,6 +135,21 @@ export default function ReportPage() {
         </Link>
 
         <h1>Interview report</h1>
+
+        {questionCount > 0 && !loading && (
+          <div className="interview-list-links" style={{ marginBottom: 'var(--space-md)' }}>
+            <button
+              type="button"
+              className="interview-inline-link"
+              onClick={() => void handleSaveToBank()}
+              disabled={savingToBank}
+            >
+              {savingToBank ? '存入中…' : '存入题库'}
+            </button>
+          </div>
+        )}
+        {bankMessage && <p className="interview-success">{bankMessage}</p>}
+        {bankError && <p className="interview-error">{bankError}</p>}
 
         {loading ? (
           <p className="interview-loading">Loading report…</p>

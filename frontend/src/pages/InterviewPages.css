@@ -82,6 +82,15 @@
   border-radius: var(--rounded-sm);
 }
 
+.interview-success {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  font: var(--text-body-sm);
+  color: var(--color-success);
+  background: var(--color-link-bg-soft);
+  border-radius: var(--rounded-sm);
+}
+
 .interview-loading {
   margin: 0;
   font: var(--text-body-md);
