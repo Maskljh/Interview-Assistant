@@ -7,7 +7,7 @@ import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import ReportPageStub from './pages/ReportPageStub';
+import ReportPage from './pages/ReportPage';
 
 export default function App() {
   return (
@@ -52,7 +52,7 @@ export default function App() {
             path="/interviews/:id/report"
             element={
               <ProtectedRoute>
-                <ReportPageStub />
+                <ReportPage />
               </ProtectedRoute>
             }
           />

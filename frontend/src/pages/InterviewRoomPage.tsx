@@ -1,10 +1,145 @@
-import { Link, useParams } from 'react-router-dom';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ApiError, getToken } from '../api/client';
+import { endInterview } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
+import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
+
+interface Turn {
+  id: number;
+  role: 'interviewer' | 'candidate';
+  content: string;
+}
 
 export default function InterviewRoomPage() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const interviewId = Number(id);
+
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+  const [thinking, setThinking] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
+  const [statusLine, setStatusLine] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [ending, setEnding] = useState(false);
+  const [error, setError] = useState('');
+
+  const turnIdRef = useRef(0);
+  const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
+  const doneRef = useRef(false);
+
+  const appendTurn = useCallback((role: Turn['role'], content: string) => {
+    turnIdRef.current += 1;
+    setTurns((prev) => [...prev, { id: turnIdRef.current, role, content }]);
+  }, []);
+
+  const handleMessage = useCallback(
+    (msg: ServerMsg) => {
+      if (msg.progress) {
+        setProgress(msg.progress);
+      }
+
+      switch (msg.type) {
+        case 'session_started':
+          setDisconnected(false);
+          setStatusLine('');
+          break;
+        case 'question':
+        case 'follow_up':
+          setThinking(false);
+          if (msg.content) {
+            appendTurn('interviewer', msg.content);
+          }
+          break;
+        case 'status':
+          if (msg.content === 'thinking') {
+            setThinking(true);
+            setStatusLine('');
+          } else {
+            setThinking(false);
+            if (msg.content) {
+              setStatusLine(msg.content);
+            }
+          }
+          break;
+        case 'done':
+          doneRef.current = true;
+          setThinking(false);
+          navigate(`/interviews/${interviewId}/report`, { replace: true });
+          break;
+      }
+    },
+    [appendTurn, interviewId, navigate],
+  );
+
+  const connect = useCallback(() => {
+    const token = getToken();
+    if (!token || !Number.isFinite(interviewId)) {
+      setError('Missing authentication');
+      return;
+    }
+
+    socketRef.current?.close();
+    setDisconnected(false);
+    setError('');
+
+    socketRef.current = connectInterviewWS(interviewId, token, {
+      onMessage: handleMessage,
+      onClose: () => {
+        if (!doneRef.current) {
+          setDisconnected(true);
+          setThinking(false);
+        }
+      },
+    });
+  }, [handleMessage, interviewId]);
+
+  useEffect(() => {
+    if (!Number.isFinite(interviewId)) {
+      setError('Invalid interview id');
+      return;
+    }
+
+    doneRef.current = false;
+    connect();
+
+    return () => {
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [connect, interviewId]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = answer.trim();
+    if (!trimmed || thinking || disconnected) return;
+
+    appendTurn('candidate', trimmed);
+    setAnswer('');
+    socketRef.current?.sendAnswer(trimmed);
+  }
+
+  async function handleForceEnd() {
+    if (ending || doneRef.current) return;
+    setEnding(true);
+    setError('');
+    try {
+      await endInterview(interviewId);
+      if (!doneRef.current) {
+        doneRef.current = true;
+        navigate(`/interviews/${interviewId}/report`, { replace: true });
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not end interview');
+    } finally {
+      setEnding(false);
+    }
+  }
 
   return (
     <div className="interview-page">
@@ -21,16 +156,82 @@ export default function InterviewRoomPage() {
           </button>
         </div>
       </header>
-      <main className="interview-main">
-        <h1>Interview room</h1>
-        <div className="interview-stub">
-          <p>
-            Live interview UI for session #{id} will be implemented in the next task.
-          </p>
-          <Link className="interview-header-link" to="/">
-            Back to list
-          </Link>
+      <main className="interview-main interview-room">
+        <div className="interview-room-header">
+          <h1>Interview room</h1>
+          {progress && (
+            <span className="interview-room-progress">
+              Question {progress.current} of {progress.total}
+            </span>
+          )}
         </div>
+
+        {error && <p className="interview-error">{error}</p>}
+        {statusLine && <p className="interview-room-status">{statusLine}</p>}
+
+        <div className="interview-transcript interview-room-transcript">
+          {turns.length === 0 ? (
+            <p className="interview-loading">Connecting to interview…</p>
+          ) : (
+            turns.map((turn) => (
+              <article
+                key={turn.id}
+                className={`transcript-turn${
+                  turn.role === 'interviewer' ? ' transcript-turn--interviewer' : ''
+                }`}
+              >
+                <div className="transcript-turn-header">
+                  <span className="transcript-role">
+                    {turn.role === 'interviewer' ? 'Interviewer' : 'You'}
+                  </span>
+                </div>
+                <p className="transcript-content">{turn.content}</p>
+              </article>
+            ))
+          )}
+          {thinking && (
+            <p className="interview-room-thinking">Interviewer is thinking…</p>
+          )}
+        </div>
+
+        {disconnected && (
+          <div className="interview-room-disconnect">
+            <p>Connection lost.</p>
+            <button type="button" className="interview-submit" onClick={connect}>
+              Reconnect
+            </button>
+          </div>
+        )}
+
+        <form className="interview-room-form" onSubmit={handleSubmit}>
+          <div className="interview-field">
+            <label htmlFor="answer">Your answer</label>
+            <textarea
+              id="answer"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Type your answer…"
+              disabled={thinking || disconnected || ending}
+            />
+          </div>
+          <div className="interview-room-actions">
+            <button
+              className="interview-submit"
+              type="submit"
+              disabled={thinking || disconnected || ending || !answer.trim()}
+            >
+              Send answer
+            </button>
+            <button
+              type="button"
+              className="interview-room-end"
+              onClick={handleForceEnd}
+              disabled={ending || disconnected}
+            >
+              {ending ? 'Ending…' : 'End interview'}
+            </button>
+          </div>
+        </form>
       </main>
     </div>
   );

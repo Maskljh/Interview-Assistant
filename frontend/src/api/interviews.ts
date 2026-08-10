@@ -77,3 +77,51 @@ export async function startInterview(id: number): Promise<Interview> {
     method: 'POST',
   });
 }
+
+export interface InterviewFeedback {
+  total_score: number;
+  dimensions: {
+    expression: number;
+    logic: number;
+    content: number;
+    job_match: number;
+  };
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  model_version: string;
+}
+
+export type ReportResult =
+  | { available: true; feedback: InterviewFeedback }
+  | { available: false };
+
+function parseReportResponse(
+  data: InterviewFeedback | { available: false },
+): ReportResult {
+  if ('available' in data && data.available === false) {
+    return { available: false };
+  }
+  return { available: true, feedback: data as InterviewFeedback };
+}
+
+export async function endInterview(id: number): Promise<void> {
+  await fetchJSON<{ status: string }>(`/api/interviews/${id}/end`, {
+    method: 'POST',
+  });
+}
+
+export async function getReport(id: number): Promise<ReportResult> {
+  const data = await fetchJSON<InterviewFeedback | { available: false }>(
+    `/api/interviews/${id}/report`,
+  );
+  return parseReportResponse(data);
+}
+
+export async function retryReport(id: number): Promise<ReportResult> {
+  const data = await fetchJSON<InterviewFeedback | { available: false }>(
+    `/api/interviews/${id}/report/retry`,
+    { method: 'POST' },
+  );
+  return parseReportResponse(data);
+}
