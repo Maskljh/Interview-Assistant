@@ -82,12 +82,16 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	id, hash, err := h.repo.GetByEmail(req.Email)
-	if errors.Is(err, sql.ErrNoRows) || !auth.CheckPassword(hash, req.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not look up user"})
 		return
 	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not look up user"})
+	if !auth.CheckPassword(hash, req.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	h.respondWithToken(c, id, req.Email)
