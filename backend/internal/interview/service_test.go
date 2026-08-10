@@ -2,6 +2,7 @@ package interview_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
+	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/user"
 )
 
@@ -47,7 +49,7 @@ func testDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-func testRouter(t *testing.T, sqlDB *sql.DB) *gin.Engine {
+func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	t.Helper()
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
@@ -56,8 +58,34 @@ func testRouter(t *testing.T, sqlDB *sql.DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	user.RegisterRoutes(r, sqlDB, secret)
-	interview.RegisterRoutes(r, sqlDB, secret)
+	interview.RegisterRoutes(r, sqlDB, secret, llmClient)
 	return r
+}
+
+type fakeLLM struct {
+	fn func(system, user string, out any) error
+}
+
+func (f fakeLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	return f.fn(system, user, out)
+}
+
+func fakeQuestionsLLM(n int) llm.Client {
+	return fakeLLM{fn: func(system, user string, out any) error {
+		gen, ok := out.(*llm.GenQuestionsOut)
+		if !ok {
+			return fmt.Errorf("unexpected out type")
+		}
+		gen.Questions = make([]llm.GenQuestion, n)
+		for i := 0; i < n; i++ {
+			gen.Questions[i] = llm.GenQuestion{
+				Seq:      i + 1,
+				Question: fmt.Sprintf("Question %d?", i+1),
+				Intent:   "assessment",
+			}
+		}
+		return nil
+	}}
 }
 
 func registerUser(t *testing.T, r *gin.Engine, email string) string {
@@ -107,7 +135,7 @@ func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int
 
 func TestGetForeignSessionReturnsNotFound(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
+	r := testRouter(t, sqlDB, nil)
 
 	tokenA := registerUser(t, r, "test-interview-a@example.com")
 	tokenB := registerUser(t, r, "test-interview-b@example.com")
@@ -125,7 +153,7 @@ func TestGetForeignSessionReturnsNotFound(t *testing.T) {
 
 func TestCreateRequiresJDAndValidMode(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
+	r := testRouter(t, sqlDB, nil)
 	token := registerUser(t, r, "test-interview-validate@example.com")
 
 	body, _ := json.Marshal(map[string]string{
@@ -152,5 +180,62 @@ func TestCreateRequiresJDAndValidMode(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid mode status = %d, want 400", w.Code)
+	}
+}
+
+func TestStartPersistsQuestions(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
+
+	token := registerUser(t, r, "test-interview-start@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Status    string `json:"status"`
+		Questions []struct {
+			Seq      int    `json:"seq"`
+			Question string `json:"question"`
+			Asked    bool   `json:"asked"`
+		} `json:"questions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode start: %v", err)
+	}
+	if resp.Status != "ready" {
+		t.Fatalf("status = %q, want ready", resp.Status)
+	}
+	if len(resp.Questions) != 6 {
+		t.Fatalf("len(questions) = %d, want 6", len(resp.Questions))
+	}
+	for _, q := range resp.Questions {
+		if q.Asked {
+			t.Fatalf("question seq %d should not be asked", q.Seq)
+		}
+	}
+}
+
+func TestStartRejectsNonOwner(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
+
+	tokenA := registerUser(t, r, "test-interview-start-a@example.com")
+	tokenB := registerUser(t, r, "test-interview-start-b@example.com")
+	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("foreign start status = %d, want 404, body = %s", w.Code, w.Body.String())
 	}
 }

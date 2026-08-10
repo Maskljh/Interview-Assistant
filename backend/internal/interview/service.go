@@ -5,16 +5,23 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+
+	"github.com/interview-assistant/backend/internal/llm"
 )
 
-var ErrNotFound = errors.New("session not found")
+var (
+	ErrNotFound     = errors.New("session not found")
+	ErrLLMFailure   = errors.New("llm failure")
+	ErrInvalidState = errors.New("invalid session state")
+)
 
 type Service struct {
 	repo *Repo
+	llm  llm.Client
 }
 
-func NewService(db *sql.DB) *Service {
-	return &Service{repo: NewRepo(db)}
+func NewService(db *sql.DB, llmClient llm.Client) *Service {
+	return &Service{repo: NewRepo(db), llm: llmClient}
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode) (*Session, error) {
@@ -62,6 +69,58 @@ func (s *Service) Get(ctx context.Context, userID, id int64) (*Session, []Questi
 		turns = []Turn{}
 	}
 	return session, questions, turns, nil
+}
+
+func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session, []Question, error) {
+	session, err := s.repo.GetByID(sessionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, ErrNotFound
+		}
+		return nil, nil, err
+	}
+	if session.UserID != userID {
+		return nil, nil, ErrNotFound
+	}
+	if session.Status != StatusDraft && session.Status != StatusFailed {
+		return nil, nil, ErrInvalidState
+	}
+	if s.llm == nil {
+		return nil, nil, ErrLLMFailure
+	}
+
+	resume := "none"
+	if session.ResumeText != nil && strings.TrimSpace(*session.ResumeText) != "" {
+		resume = *session.ResumeText
+	}
+
+	var out llm.GenQuestionsOut
+	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode)), &out); err != nil {
+		return nil, nil, ErrLLMFailure
+	}
+	if len(out.Questions) < 5 || len(out.Questions) > 8 {
+		return nil, nil, ErrLLMFailure
+	}
+
+	toInsert := make([]struct {
+		Seq      int
+		Question string
+		Intent   string
+	}, len(out.Questions))
+	for i, q := range out.Questions {
+		toInsert[i] = struct {
+			Seq      int
+			Question string
+			Intent   string
+		}{Seq: q.Seq, Question: q.Question, Intent: q.Intent}
+	}
+
+	questions, err := s.repo.StartSession(sessionID, toInsert)
+	if err != nil {
+		return nil, nil, err
+	}
+	session.Status = StatusReady
+	return session, questions, nil
 }
 
 var ErrInvalidInput = errors.New("invalid input")

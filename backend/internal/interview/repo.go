@@ -160,3 +160,38 @@ func nullString(s *string) sql.NullString {
 	}
 	return sql.NullString{String: *s, Valid: true}
 }
+
+func (r *Repo) StartSession(sessionID int64, questions []struct {
+	Seq      int
+	Question string
+	Intent   string
+}) ([]Question, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM interview_questions WHERE session_id = ?`, sessionID); err != nil {
+		return nil, err
+	}
+	for _, q := range questions {
+		var intentPtr *string
+		if q.Intent != "" {
+			intentPtr = &q.Intent
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent, asked) VALUES (?, ?, ?, ?, 0)`,
+			sessionID, q.Seq, q.Question, nullString(intentPtr),
+		); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.Exec(`UPDATE interview_sessions SET status = ? WHERE id = ?`, string(StatusReady), sessionID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return r.ListQuestions(sessionID)
+}
