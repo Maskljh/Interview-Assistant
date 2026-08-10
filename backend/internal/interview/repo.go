@@ -263,3 +263,19 @@ func (r *Repo) CompleteSession(sessionID int64) error {
 	)
 	return err
 }
+
+func (r *Repo) SaveEvaluationSuccess(sessionID int64, score int, feedbackJSON []byte) error {
+	_, err := r.db.Exec(
+		`UPDATE interview_sessions SET score = ?, feedback_json = ?, raw_feedback = NULL WHERE id = ?`,
+		score, feedbackJSON, sessionID,
+	)
+	return err
+}
+
+func (r *Repo) SaveEvaluationFailure(sessionID int64, rawFeedback string) error {
+	_, err := r.db.Exec(
+		`UPDATE interview_sessions SET raw_feedback = ? WHERE id = ?`,
+		rawFeedback, sessionID,
+	)
+	return err
+}

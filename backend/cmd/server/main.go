@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/interview-assistant/backend/internal/analysis"
 	"github.com/interview-assistant/backend/internal/config"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
@@ -41,12 +42,15 @@ func main() {
 	}
 
 	svc := interview.NewService(sqlDB, llmClient, store)
+	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
+	svc.SetEvaluator(analysisSvc)
 
 	r := gin.Default()
 	r.Use(corsMiddleware())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, store)
+	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }

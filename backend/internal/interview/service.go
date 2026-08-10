@@ -34,11 +34,16 @@ type SessionNotifier interface {
 	BroadcastDone(sessionID int64)
 }
 
+type SessionEvaluator interface {
+	Evaluate(ctx context.Context, sessionID int64) (score int, feedbackJSON []byte, err error)
+}
+
 type Service struct {
-	repo   *Repo
-	llm    llm.Client
-	store  sessionredis.Store
-	notify SessionNotifier
+	repo      *Repo
+	llm       llm.Client
+	store     sessionredis.Store
+	notify    SessionNotifier
+	evaluator SessionEvaluator
 }
 
 func NewService(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Service {
@@ -47,6 +52,10 @@ func NewService(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Ser
 
 func (s *Service) SetSessionNotifier(n SessionNotifier) {
 	s.notify = n
+}
+
+func (s *Service) SetEvaluator(e SessionEvaluator) {
+	s.evaluator = e
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode) (*Session, error) {
@@ -344,6 +353,17 @@ func (s *Service) Finish(ctx context.Context, sessionID int64) error {
 		return err
 	}
 	_ = s.store.Delete(ctx, sessionID)
+
+	if s.evaluator != nil {
+		score, fbJSON, err := s.evaluator.Evaluate(ctx, sessionID)
+		if err != nil {
+			_ = s.repo.SaveEvaluationFailure(sessionID, err.Error())
+			return nil
+		}
+		if err := s.repo.SaveEvaluationSuccess(sessionID, score, fbJSON); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

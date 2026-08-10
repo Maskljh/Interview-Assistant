@@ -78,3 +78,67 @@ type TurnContext struct {
 	Kind    string
 	Content string
 }
+
+type QuestionContext struct {
+	Seq      int
+	Question string
+	Intent   string
+}
+
+type EvaluateOut struct {
+	TotalScore   int `json:"total_score"`
+	Dimensions   struct {
+		Expression int `json:"expression"`
+		Logic      int `json:"logic"`
+		Content    int `json:"content"`
+		JobMatch   int `json:"job_match"`
+	} `json:"dimensions"`
+	Strengths    []string `json:"strengths"`
+	Weaknesses   []string `json:"weaknesses"`
+	Suggestions  []string `json:"suggestions"`
+	ModelVersion string   `json:"model_version,omitempty"`
+}
+
+func EvaluateSessionSystem() string {
+	return `You are an expert interview coach. Evaluate the candidate's performance in a completed interview session.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"total_score":0,"dimensions":{"expression":0,"logic":0,"content":0,"job_match":0},"strengths":["..."],"weaknesses":["..."],"suggestions":["..."],"model_version":"..."}
+
+Rules:
+- total_score and each dimension score must be integers from 0 to 100
+- strengths, weaknesses, and suggestions must be non-empty arrays of specific, actionable strings
+- Avoid vague praise like "good communication" without evidence; cite what the candidate did well or poorly
+- suggestions must be concrete actions the candidate can take to improve
+- model_version may be omitted`
+}
+
+func EvaluateSessionUser(jobJD, resume, mode string, questions []QuestionContext, turns []TurnContext) string {
+	var qLines strings.Builder
+	for _, q := range questions {
+		if q.Intent != "" {
+			fmt.Fprintf(&qLines, "%d. %s (intent: %s)\n", q.Seq, q.Question, q.Intent)
+		} else {
+			fmt.Fprintf(&qLines, "%d. %s\n", q.Seq, q.Question)
+		}
+	}
+	var transcript strings.Builder
+	for _, t := range turns {
+		fmt.Fprintf(&transcript, "[%s/%s] %s\n", t.Role, t.Kind, t.Content)
+	}
+	return fmt.Sprintf(`Evaluate this completed interview session.
+
+Job description:
+%s
+
+Resume:
+%s
+
+Interview mode: %s
+
+Planned questions:
+%s
+
+Full transcript:
+%s`, jobJD, resume, mode, qLines.String(), transcript.String())
+}
