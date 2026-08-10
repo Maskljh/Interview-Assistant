@@ -7,6 +7,7 @@ import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import QuestionBankPage from './pages/QuestionBankPage';
 import ReportPage from './pages/ReportPage';
 
 export default function App() {
@@ -21,6 +22,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <InterviewListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/questions"
+            element={
+              <ProtectedRoute>
+                <QuestionBankPage />
               </ProtectedRoute>
             }
           />

@@ -125,3 +125,17 @@ export async function retryReport(id: number): Promise<ReportResult> {
   );
   return parseReportResponse(data);
 }
+
+export interface CreateFromBankInput {
+  question_ids: number[];
+  mode: InterviewMode;
+}
+
+export async function createInterviewFromBank(
+  input: CreateFromBankInput,
+): Promise<Interview> {
+  return fetchJSON<Interview>('/api/interviews/from-bank', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

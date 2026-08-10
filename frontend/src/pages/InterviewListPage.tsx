@@ -109,6 +109,9 @@ export default function InterviewListPage() {
           Interview Assistant
         </Link>
         <div className="interview-header-actions">
+          <Link className="interview-header-link" to="/questions">
+            题库
+          </Link>
           <Link className="interview-header-cta" to="/interviews/new">
             New interview
           </Link>
