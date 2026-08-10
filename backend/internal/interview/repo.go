@@ -162,6 +162,62 @@ func nullString(s *string) sql.NullString {
 	return sql.NullString{String: *s, Valid: true}
 }
 
+func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
+	var text string
+	err := r.db.QueryRow(
+		`SELECT question FROM question_bank WHERE id = ? AND user_id = ?`,
+		bankID, userID,
+	).Scan(&text)
+	if err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, texts []string) (*Session, []Question, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
+		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, status)
+		 VALUES (?, ?, NULL, ?, ?)`,
+		userID, jobJD, string(mode), string(StatusReady),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	sessionID, err := res.LastInsertId()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i, text := range texts {
+		if _, err := tx.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent, asked) VALUES (?, ?, ?, NULL, 0)`,
+			sessionID, i+1, text,
+		); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+
+	session, err := r.GetByID(sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	questions, err := r.ListQuestions(sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return session, questions, nil
+}
+
 func (r *Repo) StartSession(sessionID int64, questions []struct {
 	Seq      int
 	Question string

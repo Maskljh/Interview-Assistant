@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -67,6 +68,30 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 		return nil, err
 	}
 	return s.repo.Create(userID, jobJD, resume, mode)
+}
+
+func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode) (*Session, []Question, error) {
+	if len(questionIDs) == 0 {
+		return nil, nil, ErrInvalidInput
+	}
+	if err := ValidateMode(mode); err != nil {
+		return nil, nil, err
+	}
+
+	texts := make([]string, 0, len(questionIDs))
+	for _, id := range questionIDs {
+		text, err := s.repo.GetBankQuestionText(userID, id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil, ErrNotFound
+			}
+			return nil, nil, err
+		}
+		texts = append(texts, text)
+	}
+
+	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
+	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, texts)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {

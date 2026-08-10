@@ -46,6 +46,10 @@ func testDB(t *testing.T) *sql.DB {
 			DELETE s FROM interview_sessions s
 			INNER JOIN users u ON u.id = s.user_id
 			WHERE u.email LIKE 'test-interview-%@example.com'`)
+		_, _ = sqlDB.Exec(`
+			DELETE qb FROM question_bank qb
+			INNER JOIN users u ON u.id = qb.user_id
+			WHERE u.email LIKE 'test-interview-%@example.com'`)
 		_, _ = sqlDB.Exec("DELETE FROM users WHERE email LIKE 'test-interview-%@example.com'")
 		sqlDB.Close()
 	})
@@ -417,6 +421,162 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 	}
 	if got := lastOutboundType(msgs); got != "question" {
 		t.Fatalf("answer 3 last type = %q, want question (forced next_question after follow-up cap)", got)
+	}
+}
+
+func insertBankQuestion(t *testing.T, sqlDB *sql.DB, userID int64, text string) int64 {
+	t.Helper()
+	res, err := sqlDB.Exec(
+		`INSERT INTO question_bank (user_id, question, source, starred) VALUES (?, ?, 'manual', 0)`,
+		userID, text,
+	)
+	if err != nil {
+		t.Fatalf("insert bank question: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	return id
+}
+
+func userIDByEmail(t *testing.T, sqlDB *sql.DB, email string) int64 {
+	t.Helper()
+	var id int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, email).Scan(&id); err != nil {
+		t.Fatalf("query user id: %v", err)
+	}
+	return id
+}
+
+func createFromBank(t *testing.T, r *gin.Engine, token string, questionIDs []int64, mode string) map[string]any {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{
+		"question_ids": questionIDs,
+		"mode":         mode,
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("from-bank status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode from-bank: %v", err)
+	}
+	return resp
+}
+
+func TestCreateFromBankOrdersQuestions(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, r, "test-interview-frombank-order@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-order@example.com")
+
+	idA := insertBankQuestion(t, sqlDB, userID, "text-a")
+	idB := insertBankQuestion(t, sqlDB, userID, "text-b")
+	idC := insertBankQuestion(t, sqlDB, userID, "text-c")
+
+	resp := createFromBank(t, r, token, []int64{idC, idA, idB}, "mixed")
+
+	if resp["status"] != "ready" {
+		t.Fatalf("status = %v, want ready", resp["status"])
+	}
+	if resp["job_jd"] != "题库练习（3题）" {
+		t.Fatalf("job_jd = %v, want 题库练习（3题）", resp["job_jd"])
+	}
+	questions, ok := resp["questions"].([]any)
+	if !ok || len(questions) != 3 {
+		t.Fatalf("questions = %v, want 3 items", resp["questions"])
+	}
+	wantTexts := []string{"text-c", "text-a", "text-b"}
+	for i, q := range questions {
+		qm, ok := q.(map[string]any)
+		if !ok {
+			t.Fatalf("question %d: unexpected type %T", i, q)
+		}
+		if int(qm["seq"].(float64)) != i+1 {
+			t.Fatalf("question %d seq = %v, want %d", i, qm["seq"], i+1)
+		}
+		if qm["question"] != wantTexts[i] {
+			t.Fatalf("question %d text = %v, want %q", i, qm["question"], wantTexts[i])
+		}
+		if qm["asked"].(bool) {
+			t.Fatalf("question %d should not be asked", i)
+		}
+	}
+}
+
+func TestCreateFromBankEmptyIDs400(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-frombank-empty@example.com")
+
+	body, _ := json.Marshal(map[string]any{
+		"question_ids": []int64{},
+		"mode":         "mixed",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("empty ids status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateFromBankForeignID404(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	_ = registerUser(t, r, "test-interview-frombank-foreign-a@example.com")
+	tokenB := registerUser(t, r, "test-interview-frombank-foreign-b@example.com")
+	userIDA := userIDByEmail(t, sqlDB, "test-interview-frombank-foreign-a@example.com")
+	bankID := insertBankQuestion(t, sqlDB, userIDA, "foreign question")
+
+	body, _ := json.Marshal(map[string]any{
+		"question_ids": []int64{bankID},
+		"mode":         "mixed",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("foreign id status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateFromBankBeginLiveWorks(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, r, "test-interview-frombank-begin@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-begin@example.com")
+
+	idA := insertBankQuestion(t, sqlDB, userID, "Q1?")
+	idB := insertBankQuestion(t, sqlDB, userID, "Q2?")
+
+	resp := createFromBank(t, r, token, []int64{idA, idB}, "behavioral")
+	sessionID := int64(resp["id"].(float64))
+
+	svc := interview.NewService(sqlDB, nil, store)
+	msgs, err := svc.BeginLive(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+	if lastOutboundType(msgs) != "question" {
+		t.Fatalf("BeginLive last type = %q, want question", lastOutboundType(msgs))
 	}
 }
 

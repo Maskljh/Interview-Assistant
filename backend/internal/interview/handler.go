@@ -20,6 +20,11 @@ type createRequest struct {
 	Mode       Mode    `json:"mode"`
 }
 
+type fromBankRequest struct {
+	QuestionIDs []int64 `json:"question_ids"`
+	Mode        Mode    `json:"mode"`
+}
+
 type listItemResponse struct {
 	ID        int64     `json:"id"`
 	Mode      Mode      `json:"mode"`
@@ -70,6 +75,7 @@ func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
 	protected.Use(auth.Middleware(secret))
 	protected.POST("", h.Create)
 	protected.GET("", h.List)
+	protected.POST("/from-bank", h.CreateFromBank)
 	protected.GET("/:id", h.Get)
 	protected.POST("/:id/start", h.Start)
 	protected.POST("/:id/end", h.End)
@@ -96,6 +102,33 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, toSessionResponse(session, nil, nil))
+}
+
+func (h *Handler) CreateFromBank(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req fromBankRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode)
+	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if errors.Is(err, ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create interview from bank"})
+		return
+	}
+	c.JSON(http.StatusCreated, toSessionResponse(session, questions, nil))
 }
 
 func (h *Handler) List(c *gin.Context) {
