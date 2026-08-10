@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'auth_user';
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8080';
 
 export function getApiBase(): string {
@@ -50,6 +51,7 @@ export async function fetchJSON<T>(
 
   if (res.status === 401) {
     setToken(null);
+    localStorage.removeItem(USER_KEY);
     const text = await res.text();
     const data = text ? (JSON.parse(text) as unknown) : null;
     const message =
