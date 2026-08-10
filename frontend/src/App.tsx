@@ -1,9 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
-import HomePage from './pages/HomePage';
+import CreateInterviewPage from './pages/CreateInterviewPage';
+import InterviewDetailPage from './pages/InterviewDetailPage';
+import InterviewListPage from './pages/InterviewListPage';
+import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ReportPageStub from './pages/ReportPageStub';
 
 export default function App() {
   return (
@@ -16,7 +20,39 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <HomePage />
+                <InterviewListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviews/new"
+            element={
+              <ProtectedRoute>
+                <CreateInterviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviews/:id"
+            element={
+              <ProtectedRoute>
+                <InterviewDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviews/:id/room"
+            element={
+              <ProtectedRoute>
+                <InterviewRoomPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviews/:id/report"
+            element={
+              <ProtectedRoute>
+                <ReportPageStub />
               </ProtectedRoute>
             }
           />

@@ -1,0 +1,79 @@
+import { fetchJSON } from './client';
+
+export type InterviewMode = 'behavioral' | 'technical' | 'mixed';
+
+export type InterviewStatus =
+  | 'draft'
+  | 'ready'
+  | 'in_progress'
+  | 'completed'
+  | 'failed';
+
+export interface InterviewListItem {
+  id: number;
+  mode: InterviewMode;
+  status: InterviewStatus;
+  created_at: string;
+  score: number | null;
+}
+
+export interface InterviewTurn {
+  id: number;
+  seq: number;
+  role: string;
+  kind: string;
+  content: string;
+  created_at: string;
+}
+
+export interface InterviewQuestion {
+  id: number;
+  seq: number;
+  question: string;
+  intent: string | null;
+  asked: boolean;
+}
+
+export interface Interview {
+  id: number;
+  job_jd: string;
+  resume_text: string | null;
+  mode: InterviewMode;
+  status: InterviewStatus;
+  score: number | null;
+  feedback_json: unknown;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  questions: InterviewQuestion[];
+  turns: InterviewTurn[];
+}
+
+export interface CreateInterviewInput {
+  job_jd: string;
+  resume_text?: string;
+  mode: InterviewMode;
+}
+
+export async function createInterview(
+  input: CreateInterviewInput,
+): Promise<Interview> {
+  return fetchJSON<Interview>('/api/interviews', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listInterviews(): Promise<InterviewListItem[]> {
+  return fetchJSON<InterviewListItem[]>('/api/interviews');
+}
+
+export async function getInterview(id: number): Promise<Interview> {
+  return fetchJSON<Interview>(`/api/interviews/${id}`);
+}
+
+export async function startInterview(id: number): Promise<Interview> {
+  return fetchJSON<Interview>(`/api/interviews/${id}/start`, {
+    method: 'POST',
+  });
+}

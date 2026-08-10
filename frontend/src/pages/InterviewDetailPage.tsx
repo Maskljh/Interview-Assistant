@@ -1,0 +1,164 @@
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ApiError } from '../api/client';
+import {
+  getInterview,
+  type Interview,
+  type InterviewMode,
+  type InterviewStatus,
+} from '../api/interviews';
+import { useAuth } from '../auth/AuthContext';
+import './InterviewPages.css';
+
+const MODE_LABELS: Record<InterviewMode, string> = {
+  behavioral: 'Behavioral',
+  technical: 'Technical',
+  mixed: 'Mixed',
+};
+
+const STATUS_LABELS: Record<InterviewStatus, string> = {
+  draft: 'Draft',
+  ready: 'Ready',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  failed: 'Failed',
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+function roleLabel(role: string): string {
+  if (role === 'interviewer') return 'Interviewer';
+  if (role === 'candidate') return 'You';
+  return role;
+}
+
+export default function InterviewDetailPage() {
+  const { logout } = useAuth();
+  const { id } = useParams<{ id: string }>();
+  const interviewId = Number(id);
+  const [interview, setInterview] = useState<Interview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!Number.isFinite(interviewId)) {
+      setError('Invalid interview id');
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await getInterview(interviewId);
+        if (!cancelled) {
+          setInterview(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof ApiError ? err.message : 'Failed to load interview');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [interviewId]);
+
+  const sortedTurns = interview
+    ? [...interview.turns].sort((a, b) => a.seq - b.seq)
+    : [];
+
+  return (
+    <div className="interview-page">
+      <header className="interview-header">
+        <Link className="interview-brand" to="/">
+          Interview Assistant
+        </Link>
+        <div className="interview-header-actions">
+          <Link className="interview-header-link" to="/">
+            Back to list
+          </Link>
+          <button type="button" className="interview-header-link" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+      </header>
+      <main className="interview-main">
+        <Link className="interview-back-link" to="/">
+          ← All interviews
+        </Link>
+
+        {loading ? (
+          <p className="interview-loading">Loading interview…</p>
+        ) : error ? (
+          <p className="interview-error">{error}</p>
+        ) : interview ? (
+          <>
+            <h1>Interview #{interview.id}</h1>
+            <div className="interview-detail-meta">
+              <span className={`status-pill status-pill--${interview.status}`}>
+                {STATUS_LABELS[interview.status]}
+              </span>
+              <span className="mode-pill">{MODE_LABELS[interview.mode]}</span>
+              {interview.score != null && (
+                <span className="mode-pill">Score {interview.score}</span>
+              )}
+            </div>
+
+            <div className="interview-list-links" style={{ marginBottom: 'var(--space-xl)' }}>
+              {interview.status === 'in_progress' && (
+                <Link className="interview-inline-link" to={`/interviews/${interview.id}/room`}>
+                  Continue in room
+                </Link>
+              )}
+              {interview.status === 'completed' && (
+                <Link className="interview-inline-link" to={`/interviews/${interview.id}/report`}>
+                  View report
+                </Link>
+              )}
+            </div>
+
+            <h2 className="interview-section-title">Transcript</h2>
+            {sortedTurns.length === 0 ? (
+              <p className="interview-subtitle">No turns recorded yet.</p>
+            ) : (
+              <div className="interview-transcript">
+                {sortedTurns.map((turn) => (
+                  <article
+                    key={turn.id}
+                    className={`transcript-turn${
+                      turn.role === 'interviewer' ? ' transcript-turn--interviewer' : ''
+                    }`}
+                  >
+                    <div className="transcript-turn-header">
+                      <span className="transcript-role">{roleLabel(turn.role)}</span>
+                      <time className="transcript-time" dateTime={turn.created_at}>
+                        {formatDate(turn.created_at)}
+                      </time>
+                    </div>
+                    <p className="transcript-content">{turn.content}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </>
+        ) : null}
+      </main>
+    </div>
+  );
+}
