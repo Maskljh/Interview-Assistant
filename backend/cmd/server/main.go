@@ -10,6 +10,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/user"
 	"github.com/interview-assistant/backend/internal/ws"
@@ -50,6 +51,7 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
+	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
