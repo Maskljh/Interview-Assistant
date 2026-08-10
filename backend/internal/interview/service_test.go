@@ -239,3 +239,84 @@ func TestStartRejectsNonOwner(t *testing.T) {
 		t.Fatalf("foreign start status = %d, want 404, body = %s", w.Code, w.Body.String())
 	}
 }
+
+func assertSessionDraft(t *testing.T, sqlDB *sql.DB, r *gin.Engine, token string, sessionID int64) {
+	t.Helper()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/interviews/%d", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Status    string `json:"status"`
+		Questions []any  `json:"questions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode get: %v", err)
+	}
+	if resp.Status != "draft" {
+		t.Fatalf("GET status = %q, want draft", resp.Status)
+	}
+	if len(resp.Questions) != 0 {
+		t.Fatalf("GET questions = %d, want 0", len(resp.Questions))
+	}
+
+	var dbStatus string
+	if err := sqlDB.QueryRow(`SELECT status FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbStatus); err != nil {
+		t.Fatalf("query session status: %v", err)
+	}
+	if dbStatus != "draft" {
+		t.Fatalf("DB status = %q, want draft", dbStatus)
+	}
+	var qCount int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM interview_questions WHERE session_id = ?`, sessionID).Scan(&qCount); err != nil {
+		t.Fatalf("query question count: %v", err)
+	}
+	if qCount != 0 {
+		t.Fatalf("DB question count = %d, want 0", qCount)
+	}
+}
+
+func TestStartLLMFailureKeepsDraft(t *testing.T) {
+	cases := []struct {
+		name  string
+		email string
+		llm   llm.Client
+	}{
+		{
+			name:  "llm error",
+			email: "test-interview-llm-fail-error@example.com",
+			llm: fakeLLM{fn: func(system, user string, out any) error {
+				return fmt.Errorf("llm unavailable")
+			}},
+		},
+		{
+			name:  "invalid question count",
+			email: "test-interview-llm-fail-badcount@example.com",
+			llm:   fakeQuestionsLLM(4),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sqlDB := testDB(t)
+			r := testRouter(t, sqlDB, tc.llm)
+
+			token := registerUser(t, r, tc.email)
+			sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadGateway {
+				t.Fatalf("start status = %d, want 502, body = %s", w.Code, w.Body.String())
+			}
+			assertSessionDraft(t, sqlDB, r, token, sessionID)
+		})
+	}
+}
