@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/sessionredis"
 )
 
 var (
@@ -15,13 +17,27 @@ var (
 	ErrInvalidState = errors.New("invalid session state")
 )
 
-type Service struct {
-	repo *Repo
-	llm  llm.Client
+const liveStateTTL = 48 * time.Hour
+
+type Progress struct {
+	Current int
+	Total   int
 }
 
-func NewService(db *sql.DB, llmClient llm.Client) *Service {
-	return &Service{repo: NewRepo(db), llm: llmClient}
+type OutboundMessage struct {
+	Type     string
+	Content  string
+	Progress *Progress
+}
+
+type Service struct {
+	repo  *Repo
+	llm   llm.Client
+	store sessionredis.Store
+}
+
+func NewService(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Service {
+	return &Service{repo: NewRepo(db), llm: llmClient, store: store}
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode) (*Session, error) {
@@ -120,6 +136,255 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 		return nil, nil, err
 	}
 	session.Status = StatusReady
+	return session, questions, nil
+}
+
+func (s *Service) BeginLive(ctx context.Context, userID, sessionID int64) ([]OutboundMessage, error) {
+	session, questions, err := s.loadOwnedSession(ctx, userID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	total := len(questions)
+	if total == 0 {
+		return nil, ErrInvalidState
+	}
+
+	switch session.Status {
+	case StatusReady:
+		if err := s.repo.BeginSession(sessionID); err != nil {
+			return nil, err
+		}
+		q, err := s.repo.GetQuestionByIndex(sessionID, 0)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
+			return nil, err
+		}
+		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
+			return nil, err
+		}
+		state := &sessionredis.LiveState{
+			SessionID:          sessionID,
+			QuestionIndex:      0,
+			FollowUpsOnCurrent: 0,
+			TurnCount:          1,
+			PendingKind:        "question",
+			PendingText:        q.Question,
+		}
+		if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
+			return nil, err
+		}
+		progress := &Progress{Current: 1, Total: total}
+		return []OutboundMessage{
+			{Type: "session_started", Progress: progress},
+			{Type: "question", Content: q.Question, Progress: progress},
+		}, nil
+
+	case StatusInProgress:
+		state, err := s.store.Get(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if state == nil {
+			return nil, ErrInvalidState
+		}
+		progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
+		msgType := state.PendingKind
+		if msgType == "" {
+			msgType = "question"
+		}
+		return []OutboundMessage{
+			{Type: "session_started", Progress: progress},
+			{Type: msgType, Content: state.PendingText, Progress: progress},
+		}, nil
+
+	default:
+		return nil, ErrInvalidState
+	}
+}
+
+func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, content string) ([]OutboundMessage, error) {
+	session, questions, err := s.loadOwnedSession(ctx, userID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != StatusInProgress {
+		return nil, ErrInvalidState
+	}
+	state, err := s.store.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
+		return nil, ErrInvalidState
+	}
+
+	total := len(questions)
+	progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
+	msgs := []OutboundMessage{{Type: "status", Content: "thinking"}}
+
+	if _, err := s.repo.AppendTurn(sessionID, "candidate", "answer", content); err != nil {
+		return nil, err
+	}
+	state.TurnCount++
+
+	decide, err := s.decideNext(ctx, session, questions, state, content)
+	if err != nil {
+		return nil, err
+	}
+
+	switch decide.Action {
+	case "follow_up":
+		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "follow_up", decide.FollowUpText); err != nil {
+			return nil, err
+		}
+		state.FollowUpsOnCurrent++
+		state.TurnCount++
+		state.PendingKind = "follow_up"
+		state.PendingText = decide.FollowUpText
+		if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, OutboundMessage{Type: "follow_up", Content: decide.FollowUpText, Progress: progress})
+		return msgs, nil
+
+	case "next_question":
+		nextIndex := state.QuestionIndex + 1
+		if nextIndex >= total {
+			doneMsgs, err := s.finishSession(ctx, sessionID, state)
+			if err != nil {
+				return nil, err
+			}
+			return append(msgs, doneMsgs...), nil
+		}
+		q, err := s.repo.GetQuestionByIndex(sessionID, nextIndex)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
+			return nil, err
+		}
+		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
+			return nil, err
+		}
+		state.QuestionIndex = nextIndex
+		state.FollowUpsOnCurrent = 0
+		state.TurnCount++
+		state.PendingKind = "question"
+		state.PendingText = q.Question
+		if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
+			return nil, err
+		}
+		progress.Current = nextIndex + 1
+		msgs = append(msgs, OutboundMessage{Type: "question", Content: q.Question, Progress: progress})
+		return msgs, nil
+
+	case "finish":
+		doneMsgs, err := s.finishSession(ctx, sessionID, state)
+		if err != nil {
+			return nil, err
+		}
+		return append(msgs, doneMsgs...), nil
+
+	default:
+		return nil, ErrLLMFailure
+	}
+}
+
+func (s *Service) ForceEnd(ctx context.Context, userID, sessionID int64) error {
+	session, _, err := s.loadOwnedSession(ctx, userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if session.Status != StatusInProgress {
+		return ErrInvalidState
+	}
+	state, _ := s.store.Get(ctx, sessionID)
+	if state != nil {
+		_, err = s.finishSession(ctx, sessionID, state)
+		return err
+	}
+	return s.Finish(ctx, sessionID)
+}
+
+func (s *Service) Finish(ctx context.Context, sessionID int64) error {
+	if err := s.repo.CompleteSession(sessionID); err != nil {
+		return err
+	}
+	_ = s.store.Delete(ctx, sessionID)
+	return nil
+}
+
+func (s *Service) finishSession(ctx context.Context, sessionID int64, state *sessionredis.LiveState) ([]OutboundMessage, error) {
+	if err := s.Finish(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	return []OutboundMessage{{Type: "done"}}, nil
+}
+
+func (s *Service) decideNext(ctx context.Context, session *Session, questions []Question, state *sessionredis.LiveState, answer string) (DecideResult, error) {
+	var modelAction DecideAction
+	var modelFollowUp string
+
+	if s.llm != nil {
+		currentQ := questions[state.QuestionIndex].Question
+		turns, _ := s.repo.ListTurns(session.ID)
+		var turnCtx []llm.TurnContext
+		for _, t := range turns {
+			turnCtx = append(turnCtx, llm.TurnContext{Role: t.Role, Kind: t.Kind, Content: t.Content})
+		}
+		var out llm.DecideNextOut
+		err := s.llm.ChatJSON(ctx,
+			llm.DecideNextSystem(),
+			llm.DecideNextUser(session.JobJD, string(session.Mode), currentQ, state.FollowUpsOnCurrent, turnCtx, answer),
+			&out,
+		)
+		if err == nil {
+			modelAction = DecideAction(out.Action)
+			modelFollowUp = out.FollowUpText
+		}
+	}
+
+	startedAt := time.Now()
+	if session.StartedAt != nil {
+		startedAt = *session.StartedAt
+	}
+
+	result := ApplyDecideRules(DecideInput{
+		MainQuestionCount:    len(questions),
+		CurrentQuestionIndex: state.QuestionIndex,
+		FollowUpsOnCurrent:   state.FollowUpsOnCurrent,
+		TurnCount:            state.TurnCount,
+		StartedAt:            startedAt,
+		Now:                  time.Now(),
+		ModelAction:          modelAction,
+		ModelFollowUpText:    modelFollowUp,
+	})
+	if result.Action == "follow_up" && result.FollowUpText == "" {
+		result.FollowUpText = "Could you tell me more about that?"
+	}
+	return result, nil
+}
+
+func (s *Service) loadOwnedSession(ctx context.Context, userID, sessionID int64) (*Session, []Question, error) {
+	session, err := s.repo.GetByID(sessionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, ErrNotFound
+		}
+		return nil, nil, err
+	}
+	if session.UserID != userID {
+		return nil, nil, ErrNotFound
+	}
+	questions, err := s.repo.ListQuestions(sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if questions == nil {
+		questions = []Question{}
+	}
 	return session, questions, nil
 }
 

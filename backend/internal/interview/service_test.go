@@ -11,11 +11,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/user"
+	"github.com/redis/go-redis/v9"
 )
 
 func testDB(t *testing.T) *sql.DB {
@@ -49,8 +52,19 @@ func testDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
+func testStore(t *testing.T) sessionredis.Store {
+	t.Helper()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	return sessionredis.NewRedisStore(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
+}
+
 func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	t.Helper()
+	store := testStore(t)
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "test-secret"
@@ -58,7 +72,7 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	user.RegisterRoutes(r, sqlDB, secret)
-	interview.RegisterRoutes(r, sqlDB, secret, llmClient)
+	interview.RegisterRoutes(r, sqlDB, secret, llmClient, store)
 	return r
 }
 
@@ -86,6 +100,37 @@ func fakeQuestionsLLM(n int) llm.Client {
 		}
 		return nil
 	}}
+}
+
+func fakeAlwaysFollowUpLLM(n int) llm.Client {
+	return fakeLLM{fn: func(system, user string, out any) error {
+		if gen, ok := out.(*llm.GenQuestionsOut); ok {
+			gen.Questions = make([]llm.GenQuestion, n)
+			for i := 0; i < n; i++ {
+				gen.Questions[i] = llm.GenQuestion{
+					Seq:      i + 1,
+					Question: fmt.Sprintf("Question %d?", i+1),
+					Intent:   "assessment",
+				}
+			}
+			return nil
+		}
+		if decide, ok := out.(*llm.DecideNextOut); ok {
+			decide.Action = "follow_up"
+			decide.FollowUpText = "Can you elaborate?"
+			return nil
+		}
+		return fmt.Errorf("unexpected out type %T", out)
+	}}
+}
+
+func lastOutboundType(msgs []interview.OutboundMessage) string {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Type != "status" {
+			return msgs[i].Type
+		}
+	}
+	return ""
 }
 
 func registerUser(t *testing.T, r *gin.Engine, email string) string {
@@ -318,5 +363,58 @@ func TestStartLLMFailureKeepsDraft(t *testing.T) {
 			}
 			assertSessionDraft(t, sqlDB, r, token, sessionID)
 		})
+	}
+}
+
+func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeAlwaysFollowUpLLM(6))
+	token := registerUser(t, r, "test-interview-followup-cap@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	svc := interview.NewService(sqlDB, fakeAlwaysFollowUpLLM(6), store)
+
+	var userID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-interview-followup-cap@example.com").Scan(&userID); err != nil {
+		t.Fatalf("query user: %v", err)
+	}
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "first answer")
+	if err != nil {
+		t.Fatalf("HandleAnswer 1: %v", err)
+	}
+	if lastOutboundType(msgs) != "follow_up" {
+		t.Fatalf("answer 1 last type = %q, want follow_up", lastOutboundType(msgs))
+	}
+
+	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "second answer")
+	if err != nil {
+		t.Fatalf("HandleAnswer 2: %v", err)
+	}
+	if lastOutboundType(msgs) != "follow_up" {
+		t.Fatalf("answer 2 last type = %q, want follow_up", lastOutboundType(msgs))
+	}
+
+	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "third answer")
+	if err != nil {
+		t.Fatalf("HandleAnswer 3: %v", err)
+	}
+	if got := lastOutboundType(msgs); got != "question" {
+		t.Fatalf("answer 3 last type = %q, want question (forced next_question after follow-up cap)", got)
 	}
 }

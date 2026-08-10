@@ -3,6 +3,7 @@ package interview
 import (
 	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 type Repo struct {
@@ -194,4 +195,64 @@ func (r *Repo) StartSession(sessionID int64, questions []struct {
 		return nil, err
 	}
 	return r.ListQuestions(sessionID)
+}
+
+func (r *Repo) BeginSession(sessionID int64) error {
+	_, err := r.db.Exec(
+		`UPDATE interview_sessions SET status = ?, started_at = COALESCE(started_at, NOW()) WHERE id = ?`,
+		string(StatusInProgress), sessionID,
+	)
+	return err
+}
+
+func (r *Repo) AppendTurn(sessionID int64, role, kind, content string) (int, error) {
+	var maxSeq sql.NullInt64
+	if err := r.db.QueryRow(`SELECT MAX(seq) FROM interview_turns WHERE session_id = ?`, sessionID).Scan(&maxSeq); err != nil {
+		return 0, err
+	}
+	seq := 1
+	if maxSeq.Valid {
+		seq = int(maxSeq.Int64) + 1
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, ?, ?, ?, ?)`,
+		sessionID, seq, role, kind, content,
+	)
+	return seq, err
+}
+
+func (r *Repo) MarkQuestionAsked(sessionID int64, questionSeq int) error {
+	_, err := r.db.Exec(`UPDATE interview_questions SET asked = 1 WHERE session_id = ? AND seq = ?`, sessionID, questionSeq)
+	return err
+}
+
+func (r *Repo) GetQuestionByIndex(sessionID int64, index int) (*Question, error) {
+	row := r.db.QueryRow(
+		`SELECT id, session_id, seq, question, intent, asked
+		 FROM interview_questions
+		 WHERE session_id = ?
+		 ORDER BY seq
+		 LIMIT 1 OFFSET ?`,
+		sessionID, index,
+	)
+	var q Question
+	var intent sql.NullString
+	var asked int
+	if err := row.Scan(&q.ID, &q.SessionID, &q.Seq, &q.Question, &intent, &asked); err != nil {
+		return nil, err
+	}
+	if intent.Valid {
+		s := intent.String
+		q.Intent = &s
+	}
+	q.Asked = asked != 0
+	return &q, nil
+}
+
+func (r *Repo) CompleteSession(sessionID int64) error {
+	_, err := r.db.Exec(
+		`UPDATE interview_sessions SET status = ?, ended_at = ? WHERE id = ?`,
+		string(StatusCompleted), time.Now(), sessionID,
+	)
+	return err
 }

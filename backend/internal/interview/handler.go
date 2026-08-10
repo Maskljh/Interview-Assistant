@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/auth"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/sessionredis"
 )
 
 type Handler struct {
@@ -62,18 +63,19 @@ type turnResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func NewHandler(db *sql.DB, llmClient llm.Client) *Handler {
-	return &Handler{svc: NewService(db, llmClient)}
+func NewHandler(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Handler {
+	return &Handler{svc: NewService(db, llmClient, store)}
 }
 
-func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client) {
-	h := NewHandler(db, llmClient)
+func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client, store sessionredis.Store) {
+	h := NewHandler(db, llmClient, store)
 	protected := r.Group("/api/interviews")
 	protected.Use(auth.Middleware(secret))
 	protected.POST("", h.Create)
 	protected.GET("", h.List)
 	protected.GET("/:id", h.Get)
 	protected.POST("/:id/start", h.Start)
+	protected.POST("/:id/end", h.End)
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -175,6 +177,32 @@ func (h *Handler) Start(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, toSessionResponse(session, questions, nil))
+}
+
+func (h *Handler) End(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if err := h.svc.ForceEnd(c.Request.Context(), userID.(int64), id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		if errors.Is(err, ErrInvalidState) {
+			c.JSON(http.StatusConflict, gin.H{"error": "session cannot be ended"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not end interview"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "completed"})
 }
 
 func toSessionResponse(session *Session, questions []Question, turns []Turn) sessionResponse {
