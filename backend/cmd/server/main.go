@@ -12,6 +12,7 @@ import (
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
+	"github.com/interview-assistant/backend/internal/speech"
 	"github.com/interview-assistant/backend/internal/user"
 	"github.com/interview-assistant/backend/internal/ws"
 	"github.com/redis/go-redis/v9"
@@ -42,6 +43,22 @@ func main() {
 		log.Println("warning: DEEPSEEK_API_KEY not set; interview start will return 502")
 	}
 
+	var speechClient speech.Client
+	if cfg.AliyunAccessKeyID != "" && cfg.AliyunAccessKeySecret != "" && cfg.AliyunNLSAppKey != "" {
+		sc, err := speech.NewAliyunClient(speech.AliyunConfig{
+			AccessKeyID:     cfg.AliyunAccessKeyID,
+			AccessKeySecret: cfg.AliyunAccessKeySecret,
+			NLSAppKey:       cfg.AliyunNLSAppKey,
+		})
+		if err != nil {
+			log.Fatalf("aliyun speech client: %v", err)
+		}
+		speechClient = sc
+		log.Println("Aliyun NLS speech client enabled")
+	} else {
+		log.Println("warning: Aliyun speech keys not set; /api/speech/asr and /api/speech/tts return 502")
+	}
+
 	svc := interview.NewService(sqlDB, llmClient, store)
 	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
 	svc.SetEvaluator(analysisSvc)
@@ -52,6 +69,7 @@ func main() {
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
