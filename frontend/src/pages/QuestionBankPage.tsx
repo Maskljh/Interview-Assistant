@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   createInterviewFromBank,
+  type InputMode,
   type InterviewMode,
 } from '../api/interviews';
 import {
@@ -18,6 +19,11 @@ const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
   { value: 'technical', label: '技术面试' },
   { value: 'mixed', label: '综合' },
+];
+
+const INPUT_MODE_OPTIONS: { value: InputMode; label: string }[] = [
+  { value: 'text', label: '文本' },
+  { value: 'voice', label: '语音' },
 ];
 
 function toggleSelected(ids: number[], id: number): number[] {
@@ -42,6 +48,7 @@ export default function QuestionBankPage() {
   const [jobTag, setJobTag] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [mode, setMode] = useState<InterviewMode>('mixed');
+  const [inputMode, setInputMode] = useState<InputMode>('text');
 
   const loadQuestions = useCallback(async () => {
     setLoading(true);
@@ -107,6 +114,7 @@ export default function QuestionBankPage() {
       const interview = await createInterviewFromBank({
         question_ids: selectedIds,
         mode,
+        input_mode: inputMode,
       });
       navigate(`/interviews/${interview.id}/room`, { replace: true });
     } catch (err) {
@@ -234,6 +242,20 @@ export default function QuestionBankPage() {
               onChange={(e) => setMode(e.target.value as InterviewMode)}
             >
               {MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="interview-field question-bank-mode">
+            <label htmlFor="practice-input-mode">作答方式</label>
+            <select
+              id="practice-input-mode"
+              value={inputMode}
+              onChange={(e) => setInputMode(e.target.value as InputMode)}
+            >
+              {INPUT_MODE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

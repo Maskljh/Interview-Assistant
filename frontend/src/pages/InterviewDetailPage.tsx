@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import {
   getInterview,
   type Interview,
+  type InputMode,
   type InterviewMode,
   type InterviewStatus,
 } from '../api/interviews';
@@ -15,6 +16,11 @@ const MODE_LABELS: Record<InterviewMode, string> = {
   behavioral: 'Behavioral',
   technical: 'Technical',
   mixed: 'Mixed',
+};
+
+const INPUT_MODE_LABELS: Record<InputMode, string> = {
+  text: '文本作答',
+  voice: '语音作答',
 };
 
 const STATUS_LABELS: Record<InterviewStatus, string> = {
@@ -136,6 +142,9 @@ export default function InterviewDetailPage() {
                 {STATUS_LABELS[interview.status]}
               </span>
               <span className="mode-pill">{MODE_LABELS[interview.mode]}</span>
+              <span className="mode-pill">
+                {INPUT_MODE_LABELS[interview.input_mode]}
+              </span>
               {interview.score != null && (
                 <span className="mode-pill">Score {interview.score}</span>
               )}

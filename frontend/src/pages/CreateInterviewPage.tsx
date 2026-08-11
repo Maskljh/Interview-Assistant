@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import {
   createInterview,
   startInterview,
+  type InputMode,
   type InterviewMode,
 } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
@@ -15,12 +16,18 @@ const MODES: { value: InterviewMode; label: string }[] = [
   { value: 'mixed', label: 'Mixed' },
 ];
 
+const INPUT_MODES: { value: InputMode; label: string }[] = [
+  { value: 'text', label: '文本' },
+  { value: 'voice', label: '语音' },
+];
+
 export default function CreateInterviewPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [jobJd, setJobJd] = useState('');
   const [resumeText, setResumeText] = useState('');
   const [mode, setMode] = useState<InterviewMode>('mixed');
+  const [inputMode, setInputMode] = useState<InputMode>('text');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,6 +41,7 @@ export default function CreateInterviewPage() {
       const created = await createInterview({
         job_jd: trimmedJd,
         mode,
+        input_mode: inputMode,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
       });
       await startInterview(created.id);
@@ -101,6 +109,21 @@ export default function CreateInterviewPage() {
               onChange={(e) => setMode(e.target.value as InterviewMode)}
             >
               {MODES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="interview-field">
+            <label htmlFor="input-mode">作答方式</label>
+            <select
+              id="input-mode"
+              value={inputMode}
+              onChange={(e) => setInputMode(e.target.value as InputMode)}
+            >
+              {INPUT_MODES.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

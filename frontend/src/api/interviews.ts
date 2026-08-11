@@ -9,6 +9,8 @@ export type InterviewStatus =
   | 'completed'
   | 'failed';
 
+export type InputMode = 'text' | 'voice';
+
 export interface InterviewListItem {
   id: number;
   mode: InterviewMode;
@@ -39,6 +41,7 @@ export interface Interview {
   job_jd: string;
   resume_text: string | null;
   mode: InterviewMode;
+  input_mode: InputMode;
   status: InterviewStatus;
   score: number | null;
   feedback_json: unknown;
@@ -53,6 +56,7 @@ export interface CreateInterviewInput {
   job_jd: string;
   resume_text?: string;
   mode: InterviewMode;
+  input_mode?: InputMode;
 }
 
 export async function createInterview(
@@ -129,6 +133,7 @@ export async function retryReport(id: number): Promise<ReportResult> {
 export interface CreateFromBankInput {
   question_ids: number[];
   mode: InterviewMode;
+  input_mode?: InputMode;
 }
 
 export async function createInterviewFromBank(
