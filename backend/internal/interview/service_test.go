@@ -580,6 +580,132 @@ func TestCreateFromBankBeginLiveWorks(t *testing.T) {
 	}
 }
 
+func TestCreateDefaultsInputModeText(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-inputmode-default@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd": "Backend engineer JD",
+		"mode":   "mixed",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if resp["input_mode"] != "text" {
+		t.Fatalf("input_mode = %v, want text", resp["input_mode"])
+	}
+	sessionID := int64(resp["id"].(float64))
+	var dbInputMode string
+	if err := sqlDB.QueryRow(`SELECT input_mode FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbInputMode); err != nil {
+		t.Fatalf("query input_mode: %v", err)
+	}
+	if dbInputMode != "text" {
+		t.Fatalf("DB input_mode = %q, want text", dbInputMode)
+	}
+}
+
+func TestCreateVoiceInputMode(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-inputmode-voice@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd":     "Backend engineer JD",
+		"mode":       "mixed",
+		"input_mode": "voice",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if resp["input_mode"] != "voice" {
+		t.Fatalf("input_mode = %v, want voice", resp["input_mode"])
+	}
+	sessionID := int64(resp["id"].(float64))
+	var dbInputMode string
+	if err := sqlDB.QueryRow(`SELECT input_mode FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbInputMode); err != nil {
+		t.Fatalf("query input_mode: %v", err)
+	}
+	if dbInputMode != "voice" {
+		t.Fatalf("DB input_mode = %q, want voice", dbInputMode)
+	}
+}
+
+func TestCreateInvalidInputMode400(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-inputmode-invalid@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd":     "Backend engineer JD",
+		"mode":       "mixed",
+		"input_mode": "foo",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid input_mode status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateFromBankVoiceInputMode(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-frombank-voice@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-voice@example.com")
+	bankID := insertBankQuestion(t, sqlDB, userID, "voice question?")
+
+	body, _ := json.Marshal(map[string]any{
+		"question_ids": []int64{bankID},
+		"mode":         "mixed",
+		"input_mode":   "voice",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("from-bank status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode from-bank: %v", err)
+	}
+	if resp["input_mode"] != "voice" {
+		t.Fatalf("input_mode = %v, want voice", resp["input_mode"])
+	}
+	sessionID := int64(resp["id"].(float64))
+	var dbInputMode string
+	if err := sqlDB.QueryRow(`SELECT input_mode FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbInputMode); err != nil {
+		t.Fatalf("query input_mode: %v", err)
+	}
+	if dbInputMode != "voice" {
+		t.Fatalf("DB input_mode = %q, want voice", dbInputMode)
+	}
+}
+
 func TestBeginLiveIdempotent(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)

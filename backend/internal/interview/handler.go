@@ -15,14 +15,16 @@ type Handler struct {
 }
 
 type createRequest struct {
-	JobJD      string  `json:"job_jd"`
-	ResumeText *string `json:"resume_text"`
-	Mode       Mode    `json:"mode"`
+	JobJD      string    `json:"job_jd"`
+	ResumeText *string   `json:"resume_text"`
+	Mode       Mode      `json:"mode"`
+	InputMode  InputMode `json:"input_mode"`
 }
 
 type fromBankRequest struct {
-	QuestionIDs []int64 `json:"question_ids"`
-	Mode        Mode    `json:"mode"`
+	QuestionIDs []int64   `json:"question_ids"`
+	Mode        Mode      `json:"mode"`
+	InputMode   InputMode `json:"input_mode"`
 }
 
 type listItemResponse struct {
@@ -34,11 +36,12 @@ type listItemResponse struct {
 }
 
 type sessionResponse struct {
-	ID           int64           `json:"id"`
-	JobJD        string          `json:"job_jd"`
-	ResumeText   *string         `json:"resume_text"`
-	Mode         Mode            `json:"mode"`
-	Status       Status          `json:"status"`
+	ID           int64              `json:"id"`
+	JobJD        string             `json:"job_jd"`
+	ResumeText   *string            `json:"resume_text"`
+	Mode         Mode               `json:"mode"`
+	InputMode    InputMode          `json:"input_mode"`
+	Status       Status             `json:"status"`
 	Score        *int            `json:"score"`
 	FeedbackJSON any             `json:"feedback_json"`
 	StartedAt    *time.Time      `json:"started_at"`
@@ -92,7 +95,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode)
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -115,7 +118,7 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode)
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -245,6 +248,7 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 		JobJD:        session.JobJD,
 		ResumeText:   session.ResumeText,
 		Mode:         session.Mode,
+		InputMode:    session.InputMode,
 		Status:       session.Status,
 		Score:        session.Score,
 		FeedbackJSON: feedback,

@@ -26,12 +26,20 @@ const (
 
 var ErrInvalidMode = errors.New("invalid mode")
 
+type InputMode string
+
+const (
+	InputModeText  InputMode = "text"
+	InputModeVoice InputMode = "voice"
+)
+
 type Session struct {
 	ID           int64
 	UserID       int64
 	JobJD        string
 	ResumeText   *string
 	Mode         Mode
+	InputMode    InputMode
 	Status       Status
 	Score        *int
 	FeedbackJSON json.RawMessage
@@ -65,5 +73,14 @@ func ValidateMode(mode Mode) error {
 		return nil
 	default:
 		return ErrInvalidMode
+	}
+}
+
+func ValidateInputMode(m InputMode) error {
+	switch m {
+	case InputModeText, InputModeVoice:
+		return nil
+	default:
+		return ErrInvalidInput
 	}
 }
