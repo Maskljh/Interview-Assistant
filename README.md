@@ -64,8 +64,13 @@ The server reads **process environment only** (`os.Getenv`); it does not load a 
 | `DEEPSEEK_API_KEY` | no* | — | DeepSeek API key for question generation and reports |
 | `DEEPSEEK_BASE_URL` | no | `https://api.deepseek.com` | DeepSeek API base URL |
 | `DEEPSEEK_MODEL` | no | `deepseek-chat` | Model name for LLM calls |
+| `ALIYUN_ACCESS_KEY_ID` | no** | — | Aliyun access key for speech ASR/TTS |
+| `ALIYUN_ACCESS_KEY_SECRET` | no** | — | Aliyun access key secret for speech ASR/TTS |
+| `ALIYUN_NLS_APP_KEY` | no** | — | Aliyun Intelligent Speech (NLS) app key |
 
 \* Without `DEEPSEEK_API_KEY`, **start interview** returns `502` and reports stay unavailable. Auth, CRUD, and ownership checks still work.
+
+\*\* Without the three Aliyun variables, text-mode interviews work normally; the speech routes `/api/speech/asr` and `/api/speech/tts` return `502` with `{"error":"speech service unavailable"}`. Voice rooms still show the question text and keep typing as a fallback.
 
 **PowerShell (Windows):**
 
@@ -75,6 +80,10 @@ $env:MYSQL_DSN = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset
 $env:REDIS_ADDR = "127.0.0.1:6379"
 # Optional — required for full interview flow:
 # $env:DEEPSEEK_API_KEY = "sk-..."
+# Optional — required for voice interviews:
+# $env:ALIYUN_ACCESS_KEY_ID = "LTAI..."
+# $env:ALIYUN_ACCESS_KEY_SECRET = "..."
+# $env:ALIYUN_NLS_APP_KEY = "..."
 ```
 
 **bash / zsh:**
@@ -84,6 +93,10 @@ export JWT_SECRET=dev-change-me
 export MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
 export REDIS_ADDR=127.0.0.1:6379
 # export DEEPSEEK_API_KEY=sk-...
+# Voice interviews (optional):
+# export ALIYUN_ACCESS_KEY_ID=LTAI...
+# export ALIYUN_ACCESS_KEY_SECRET=...
+# export ALIYUN_NLS_APP_KEY=...
 ```
 
 ## 4. Run the API server
@@ -129,8 +142,9 @@ Open [http://localhost:5173](http://localhost:5173).
 2. **Create interview** — paste a job description, pick mode (`behavioral`, `technical`, or `mixed`), optional resume text.
 3. **Start** from the interview detail page (requires `DEEPSEEK_API_KEY` on the server).
 4. **Interview room** — WebSocket delivers questions; type answers and submit. Reconnect preserves pending state from Redis.
-5. **End** — finish normally via WS or force end from the UI.
-6. **Report** — view scores (expression, logic, content, job match), strengths, weaknesses, suggestions. Retry if generation failed.
+5. **Voice interviews (optional)** — when creating an interview or starting a question-bank practice, choose **text** or **voice** as the input mode. Voice rooms read questions aloud via TTS, and you can hold the record button to speak an answer that is transcribed and auto-sent; typing remains available as a fallback. This requires the three Aliyun speech environment variables.
+6. **End** — finish normally via WS or force end from the UI.
+7. **Report** — view scores (expression, logic, content, job match), strengths, weaknesses, suggestions. Retry if generation failed.
 
 ### Quick API smoke test
 
