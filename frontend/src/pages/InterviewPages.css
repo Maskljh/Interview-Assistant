@@ -427,6 +427,50 @@
   gap: var(--space-md);
 }
 
+.voice-room-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.voice-record-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  padding: var(--space-sm) var(--space-lg);
+  font: var(--text-button-md);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--rounded-pill);
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.voice-record-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.voice-record-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.voice-record-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.voice-record-button--recording {
+  background: var(--color-error-deep);
+}
+
+.voice-room-phase {
+  font: var(--text-body-sm);
+  color: var(--color-mute);
+}
+
 .interview-room-actions {
   display: flex;
   flex-wrap: wrap;
