@@ -137,9 +137,9 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-summary@example.com")
 
-	s1 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 72, fmt.Sprintf(fb, 72, 70, 75, 80, 85), 3)
-	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 80, fmt.Sprintf(fb, 80, 80, 78, 82, 90), 2)
-	s3 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 90, fmt.Sprintf(fb, 90, 88, 85, 90, 95), 1)
+	s1 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 72, fmt.Sprintf(fb, 72, 70, 75, 80, 85), 3)
+	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 78, 82, 90), 2)
+	s3 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", 90, fmt.Sprintf(fb, 90, 88, 85, 90, 95), 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
 	if err != nil {
@@ -175,10 +175,11 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 		id                             int64
 		total                          int
 		expression, logic, content, jm int
+		mode                           string
 	}{
-		{id: s1, total: 72, expression: 70, logic: 75, content: 80, jm: 85},
-		{id: s2, total: 80, expression: 80, logic: 78, content: 82, jm: 90},
-		{id: s3, total: 90, expression: 88, logic: 85, content: 90, jm: 95},
+		{id: s1, total: 72, expression: 70, logic: 75, content: 80, jm: 85, mode: "technical"},
+		{id: s2, total: 80, expression: 80, logic: 78, content: 82, jm: 90, mode: "behavioral"},
+		{id: s3, total: 90, expression: 88, logic: 85, content: 90, jm: 95, mode: "mixed"},
 	}
 	for i, w := range want {
 		p := tr.Points[i]
@@ -193,8 +194,8 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 				i, p.Expression, p.Logic, p.Content, p.JobMatch,
 				w.expression, w.logic, w.content, w.jm)
 		}
-		if p.JobTag != "Backend Engineer JD" || p.Mode != "text" {
-			t.Fatalf("points[%d] tag/mode = %q/%q, want Backend Engineer JD/text", i, p.JobTag, p.Mode)
+		if p.JobTag != "Backend Engineer JD" || p.Mode != w.mode {
+			t.Fatalf("points[%d] tag/mode = %q/%q, want Backend Engineer JD/%s", i, p.JobTag, p.Mode, w.mode)
 		}
 		if p.Date == "" {
 			t.Fatalf("points[%d].date is empty", i)
@@ -211,11 +212,11 @@ func TestTrendsSkipsNonCompletedAndNullScore(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-skipstatus@example.com")
 
-	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
+	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
 
 	score85 := 85
-	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "text", "draft", &score85, fmt.Sprintf(fb, 85, 85, 85, 85, 85), 2)
-	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "text", "completed", nil, nil, 1)
+	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", "draft", &score85, fmt.Sprintf(fb, 85, 85, 85, 85, 85), 2)
+	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", "completed", nil, nil, 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
 	if err != nil {
@@ -241,13 +242,13 @@ func TestTrendsSkipsBadFeedbackJSON(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-badjson@example.com")
 
-	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 2)
+	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 2)
 
 	// The feedback_json column is MySQL JSON, which rejects a literal
 	// 'not json' at insert time. Seed a valid JSON document that fails to
 	// unmarshal into the service's dims struct (string where int expected)
 	// so the service's skip-on-parse-error path is exercised.
-	bad := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 90,
+	bad := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", 90,
 		`{"total_score":90,"dimensions":{"expression":"not-a-number","logic":90,"content":90,"job_match":90}}`, 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
@@ -276,9 +277,9 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-filter@example.com")
 
-	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
-	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "voice", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)
-	insertCompletedSession(t, sqlDB, userID, "Frontend Engineer JD", "text", 90, fmt.Sprintf(fb, 90, 90, 90, 90, 90), 1)
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)
+	insertCompletedSession(t, sqlDB, userID, "Frontend Engineer JD", "technical", 90, fmt.Sprintf(fb, 90, 90, 90, 90, 90), 1)
 
 	svc := analytics.NewService(sqlDB)
 	ctx := context.Background()
@@ -297,7 +298,7 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 		t.Fatalf("by tag summary = %+v, want avg75 max80 min70", byTag.Summary)
 	}
 
-	byMode, err := svc.Trends(ctx, userID, "", "text")
+	byMode, err := svc.Trends(ctx, userID, "", "technical")
 	if err != nil {
 		t.Fatalf("trends by mode: %v", err)
 	}
@@ -308,7 +309,7 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 		t.Fatalf("by mode totals = %d,%d, want 70,90", byMode.Points[0].Total, byMode.Points[1].Total)
 	}
 
-	both, err := svc.Trends(ctx, userID, "Frontend Engineer JD", "text")
+	both, err := svc.Trends(ctx, userID, "Frontend Engineer JD", "technical")
 	if err != nil {
 		t.Fatalf("trends by tag+mode: %v", err)
 	}
@@ -326,9 +327,9 @@ func TestTrendsIsolation(t *testing.T) {
 	userA, _ := registerUser(t, r, "test-trends-iso-a@example.com")
 	userB, _ := registerUser(t, r, "test-trends-iso-b@example.com")
 
-	a1 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 60, fmt.Sprintf(fb, 60, 60, 60, 60, 60), 2)
-	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 1)
-	b1 := insertCompletedSession(t, sqlDB, userB, "Frontend Engineer JD", "text", 95, fmt.Sprintf(fb, 95, 95, 95, 95, 95), 1)
+	a1 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "technical", 60, fmt.Sprintf(fb, 60, 60, 60, 60, 60), 2)
+	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "mixed", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 1)
+	b1 := insertCompletedSession(t, sqlDB, userB, "Frontend Engineer JD", "behavioral", 95, fmt.Sprintf(fb, 95, 95, 95, 95, 95), 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userA, "", "")
 	if err != nil {

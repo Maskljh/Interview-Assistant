@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { fetchTrends, type TrendsData } from '../api/analytics';
+import { fetchTrends, type TrendsData, type TrendsPoint } from '../api/analytics';
 import type { InterviewMode } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
@@ -35,6 +35,26 @@ const DIM_COLORS: Record<string, string> = {
   logic: '#7928ca',
   content: '#f5a623',
   job_match: '#50e3c2',
+};
+
+const MODE_LABELS: Record<string, string> = {
+  behavioral: '行为面试',
+  technical: '技术面试',
+  mixed: '综合面试',
+};
+
+// Spec §6: the 总分趋势 tooltip must show 日期/分数/岗位标签/模式.
+const totalTooltip = {
+  formatter: (value: number | string | readonly (number | string)[] | undefined) => [
+    `${value} 分`,
+    '总分',
+  ],
+  labelFormatter: (label: ReactNode, payload: readonly { payload?: TrendsPoint }[]) => {
+    const point = payload?.[0]?.payload;
+    return point
+      ? `${label} · ${point.job_tag} · ${MODE_LABELS[point.mode] ?? '综合面试'}`
+      : label;
+  },
 };
 
 export default function TrendsPage() {
@@ -156,7 +176,7 @@ export default function TrendsPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 100]} />
-                <Tooltip />
+                <Tooltip {...totalTooltip} />
                 <Line type="monotone" dataKey="total" name="总分" stroke="#171717" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
