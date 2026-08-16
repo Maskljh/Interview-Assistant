@@ -58,6 +58,8 @@ func main() {
 var allowedOrigins = map[string]bool{
 	"http://localhost:5173": true,
 	"http://127.0.0.1:5173": true,
+	"http://localhost:5174": true,
+	"http://127.0.0.1:5174": true,
 }
 
 func corsMiddleware() gin.HandlerFunc {

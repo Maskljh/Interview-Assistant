@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/labels';
 import './AuthPages.css';
 
 export default function RegisterPage() {
@@ -24,7 +25,7 @@ export default function RegisterPage() {
       await register(email, password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Registration failed');
+      setError(err instanceof ApiError ? err.message : '注册失败');
     } finally {
       setLoading(false);
     }
@@ -33,12 +34,12 @@ export default function RegisterPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Create account</h1>
-        <p className="subtitle">Interview Assistant</p>
+        <h1>注册</h1>
+        <p className="subtitle">{APP_NAME}</p>
         <form className="auth-form" onSubmit={handleSubmit}>
           {error && <p className="auth-error">{error}</p>}
           <div className="auth-field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">邮箱</label>
             <input
               id="email"
               type="email"
@@ -49,7 +50,7 @@ export default function RegisterPage() {
             />
           </div>
           <div className="auth-field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">密码（至少 8 位）</label>
             <input
               id="password"
               type="password"
@@ -61,11 +62,11 @@ export default function RegisterPage() {
             />
           </div>
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Creating account…' : 'Create account'}
+            {loading ? '创建中…' : '创建账号'}
           </button>
         </form>
         <p className="auth-footer">
-          Already have an account? <Link to="/login">Sign in</Link>
+          已有账号？ <Link to="/login">登录</Link>
         </p>
       </div>
     </div>

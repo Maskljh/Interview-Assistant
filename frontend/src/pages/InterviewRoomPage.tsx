@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
 import { endInterview } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
 
@@ -80,7 +81,7 @@ export default function InterviewRoomPage() {
   const connect = useCallback(() => {
     const token = getToken();
     if (!token || !Number.isFinite(interviewId)) {
-      setError('Missing authentication');
+      setError('未登录或登录已失效');
       return;
     }
 
@@ -101,7 +102,7 @@ export default function InterviewRoomPage() {
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
-      setError('Invalid interview id');
+      setError('无效的面试 ID');
       return;
     }
 
@@ -135,7 +136,7 @@ export default function InterviewRoomPage() {
         navigate(`/interviews/${interviewId}/report`, { replace: true });
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not end interview');
+      setError(err instanceof ApiError ? err.message : '结束面试失败');
     } finally {
       setEnding(false);
     }
@@ -145,23 +146,23 @@ export default function InterviewRoomPage() {
     <div className="interview-page">
       <header className="interview-header">
         <Link className="interview-brand" to="/">
-          Interview Assistant
+          {APP_NAME}
         </Link>
         <div className="interview-header-actions">
           <Link className="interview-header-link" to={`/interviews/${id}`}>
-            Detail
+            详情
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
-            Sign out
+            退出登录
           </button>
         </div>
       </header>
       <main className="interview-main interview-room">
         <div className="interview-room-header">
-          <h1>Interview room</h1>
+          <h1>面试进行中</h1>
           {progress && (
             <span className="interview-room-progress">
-              Question {progress.current} of {progress.total}
+              第 {progress.current} / {progress.total} 题
             </span>
           )}
         </div>
@@ -171,7 +172,7 @@ export default function InterviewRoomPage() {
 
         <div className="interview-transcript interview-room-transcript">
           {turns.length === 0 ? (
-            <p className="interview-loading">Connecting to interview…</p>
+            <p className="interview-loading">正在连接面试间…</p>
           ) : (
             turns.map((turn) => (
               <article
@@ -182,7 +183,7 @@ export default function InterviewRoomPage() {
               >
                 <div className="transcript-turn-header">
                   <span className="transcript-role">
-                    {turn.role === 'interviewer' ? 'Interviewer' : 'You'}
+                    {turn.role === 'interviewer' ? '面试官' : '我'}
                   </span>
                 </div>
                 <p className="transcript-content">{turn.content}</p>
@@ -190,27 +191,27 @@ export default function InterviewRoomPage() {
             ))
           )}
           {thinking && (
-            <p className="interview-room-thinking">Interviewer is thinking…</p>
+            <p className="interview-room-thinking">面试官思考中…</p>
           )}
         </div>
 
         {disconnected && (
           <div className="interview-room-disconnect">
-            <p>Connection lost.</p>
+            <p>连接已断开。</p>
             <button type="button" className="interview-submit" onClick={connect}>
-              Reconnect
+              重新连接
             </button>
           </div>
         )}
 
         <form className="interview-room-form" onSubmit={handleSubmit}>
           <div className="interview-field">
-            <label htmlFor="answer">Your answer</label>
+            <label htmlFor="answer">你的回答</label>
             <textarea
               id="answer"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Type your answer…"
+              placeholder="在此输入回答…"
               disabled={thinking || disconnected || ending}
             />
           </div>
@@ -220,7 +221,7 @@ export default function InterviewRoomPage() {
               type="submit"
               disabled={thinking || disconnected || ending || !answer.trim()}
             >
-              Send answer
+              发送回答
             </button>
             <button
               type="button"
@@ -228,7 +229,7 @@ export default function InterviewRoomPage() {
               onClick={handleForceEnd}
               disabled={ending}
             >
-              {ending ? 'Ending…' : 'End interview'}
+              {ending ? '结束中…' : '结束面试'}
             </button>
           </div>
         </form>
