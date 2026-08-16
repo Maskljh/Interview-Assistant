@@ -928,3 +928,63 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 		t.Fatalf("prompt missing persona directive: %s", capLLM.userPrompts[0])
 	}
 }
+
+func TestListReturnsPersona(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-persona-list@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd": "Backend engineer JD",
+		"mode":   "mixed",
+		"persona": "strict_tech",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/interviews", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var items []struct {
+		Persona string `json:"persona"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].Persona != "strict_tech" {
+		t.Fatalf("persona = %q, want strict_tech", items[0].Persona)
+	}
+}
+
+func TestCreateRejectsInvalidPersonaHTTP(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-persona-badhttp@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd":  "Backend engineer JD",
+		"mode":    "mixed",
+		"persona": "evil",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid persona status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+}

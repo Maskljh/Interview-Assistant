@@ -33,6 +33,7 @@ type listItemResponse struct {
 	ID        int64     `json:"id"`
 	Mode      Mode      `json:"mode"`
 	Status    Status    `json:"status"`
+	Persona   string    `json:"persona"`
 	CreatedAt time.Time `json:"created_at"`
 	Score     *int      `json:"score"`
 }
@@ -154,6 +155,7 @@ func (h *Handler) List(c *gin.Context) {
 			ID:        s.ID,
 			Mode:      s.Mode,
 			Status:    s.Status,
+			Persona:   s.Persona,
 			CreatedAt: s.CreatedAt,
 			Score:     s.Score,
 		})

@@ -73,3 +73,29 @@ func TestDecideNextUserInjectsPersona(t *testing.T) {
 		t.Fatalf("stress directive missing: %s", got)
 	}
 }
+
+func TestPersonaLabelsConsistent(t *testing.T) {
+	personaSet := make(map[string]bool, len(Personas))
+	for _, p := range Personas {
+		personaSet[p] = true
+	}
+
+	for key := range PersonaLabels {
+		if !personaSet[key] {
+			t.Fatalf("PersonaLabels key %q not in Personas", key)
+		}
+	}
+	for _, p := range Personas {
+		if label, ok := PersonaLabels[p]; !ok || label == "" {
+			t.Fatalf("persona %q has no non-empty label", p)
+		}
+	}
+	for _, p := range []string{"strict_tech", "warm_hr", "stress"} {
+		if _, ok := PersonaPrompts[p]; !ok {
+			t.Fatalf("persona %q missing prompt in PersonaPrompts", p)
+		}
+	}
+	if _, ok := PersonaPrompts[StandardPersona]; ok {
+		t.Fatalf("standard persona must not have a prompt in PersonaPrompts")
+	}
+}
