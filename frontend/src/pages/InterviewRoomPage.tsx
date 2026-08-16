@@ -40,6 +40,8 @@ export default function InterviewRoomPage() {
   const [inputMode, setInputMode] = useState<InputMode | null>(null);
   const [loadingInterview, setLoadingInterview] = useState(true);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
+  const [ttsMuted, setTtsMuted] = useState(false);
+  const [reading, setReading] = useState(false);
 
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
@@ -48,6 +50,8 @@ export default function InterviewRoomPage() {
   const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
   const voicePlayerRef = useRef<ReturnType<typeof createVoicePlayer> | null>(null);
   const speechVersionRef = useRef(0);
+  const ttsMutedRef = useRef(false);
+  const currentQuestionRef = useRef('');
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
@@ -64,6 +68,7 @@ export default function InterviewRoomPage() {
   );
 
   const playQuestion = useCallback(async (content: string) => {
+    if (ttsMutedRef.current) return;
     const version = ++speechVersionRef.current;
     setStatusLine('正在朗读问题...');
     try {
@@ -72,18 +77,46 @@ export default function InterviewRoomPage() {
       if (!voicePlayerRef.current) {
         voicePlayerRef.current = createVoicePlayer();
       }
+      setReading(true);
       await voicePlayerRef.current.play(blob);
       if (version === speechVersionRef.current) {
         setStatusLine('');
+        setReading(false);
       }
     } catch (err) {
       if (version !== speechVersionRef.current) return;
+      setReading(false);
       setStatusLine(
         err instanceof ApiError && err.status === 502
           ? '语音服务暂不可用，请使用文字作答'
           : '播放失败，请阅读文字',
       );
     }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const next = !ttsMutedRef.current;
+    ttsMutedRef.current = next;
+    setTtsMuted(next);
+    if (next) {
+      speechVersionRef.current += 1;
+      voicePlayerRef.current?.stop();
+      setReading(false);
+      setStatusLine('');
+    }
+  }, []);
+
+  const handleReplay = useCallback(() => {
+    if (currentQuestionRef.current && !ttsMutedRef.current) {
+      void playQuestion(currentQuestionRef.current);
+    }
+  }, [playQuestion]);
+
+  const handleSkipPlayback = useCallback(() => {
+    speechVersionRef.current += 1;
+    voicePlayerRef.current?.stop();
+    setReading(false);
+    setStatusLine('');
   }, []);
 
   const handleMessage = useCallback(
@@ -104,6 +137,7 @@ export default function InterviewRoomPage() {
           setVoicePhase('idle');
           if (msg.content) {
             appendTurn('interviewer', msg.content);
+            currentQuestionRef.current = msg.content;
             if (inputModeRef.current === 'voice') {
               void playQuestion(msg.content);
             }
@@ -416,6 +450,31 @@ export default function InterviewRoomPage() {
                   {voicePhase === 'sending' && (
                     <span className="voice-room-phase">正在发送…</span>
                   )}
+                  <div className="voice-room-tts-controls">
+                    <button
+                      type="button"
+                      className={`voice-room-tts-btn${ttsMuted ? ' is-active' : ''}`}
+                      onClick={toggleMute}
+                    >
+                      {ttsMuted ? '取消静音' : '静音'}
+                    </button>
+                    <button
+                      type="button"
+                      className="voice-room-tts-btn"
+                      onClick={handleReplay}
+                      disabled={!currentQuestionRef.current || ttsMuted}
+                    >
+                      重播
+                    </button>
+                    <button
+                      type="button"
+                      className="voice-room-tts-btn"
+                      onClick={handleSkipPlayback}
+                      disabled={!reading}
+                    >
+                      跳过
+                    </button>
+                  </div>
                 </div>
               )}
 

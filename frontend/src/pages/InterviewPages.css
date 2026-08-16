@@ -516,6 +516,38 @@
   color: var(--color-mute);
 }
 
+.voice-room-tts-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.voice-room-tts-btn {
+  padding: var(--space-xxs) var(--space-sm);
+  font: var(--text-button-md);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.voice-room-tts-btn:hover:not(:disabled) {
+  border-color: var(--color-hairline-strong);
+}
+
+.voice-room-tts-btn.is-active {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.voice-room-tts-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .interview-room-actions {
   display: flex;
   flex-wrap: wrap;
