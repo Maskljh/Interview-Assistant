@@ -35,7 +35,7 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 	}
 	var cands []candidate
 	seenTags := make(map[string]bool)
-	var jobTags []string
+	jobTags := []string{}
 
 	for _, row := range rows {
 		tag := question.JobTagFromJD(row.JobJD)
@@ -69,7 +69,7 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 		})
 	}
 
-	t := &Trends{JobTags: jobTags}
+	t := &Trends{Points: []TrendPoint{}, JobTags: jobTags}
 	if len(cands) == 0 {
 		return t, nil
 	}
