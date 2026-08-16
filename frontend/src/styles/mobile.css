@@ -143,6 +143,12 @@
     flex-wrap: wrap;
   }
 
+  /* --- Score cards / summary grids: single-column stack (spec §4) --- */
+  .interview-page .report-dimensions,
+  .interview-page .trends-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
   .interview-page .interview-inline-link {
     display: inline-flex;
     align-items: center;
