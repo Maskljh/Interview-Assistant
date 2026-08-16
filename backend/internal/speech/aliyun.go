@@ -80,15 +80,15 @@ func (c *aliyunClient) Transcribe(ctx context.Context, audio []byte, format stri
 	}
 
 	var out struct {
-		Status string `json:"status"`
+		Status int64  `json:"status"`
 		Result string `json:"result"`
 		Msg    string `json:"message"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", err
 	}
-	if out.Status != "20000000" {
-		return "", fmt.Errorf("aliyun asr status %s: %s", out.Status, out.Msg)
+	if out.Status != 20000000 {
+		return "", fmt.Errorf("aliyun asr status %d: %s", out.Status, out.Msg)
 	}
 	return strings.TrimSpace(out.Result), nil
 }
@@ -223,7 +223,7 @@ func popSignature(params map[string]string, secret string) string {
 
 	mac := hmac.New(sha1.New, []byte(secret+"&"))
 	_, _ = mac.Write([]byte(stringToSign))
-	return percentEncode(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func percentEncode(s string) string {

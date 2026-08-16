@@ -1,6 +1,7 @@
 package speech
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -62,6 +63,7 @@ func (h *handler) ASR(c *gin.Context) {
 	format := strings.TrimSpace(c.PostForm("format"))
 	text, err := h.client.Transcribe(c.Request.Context(), audio, format)
 	if err != nil {
+		fmt.Printf("speech asr error: %v\n", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "speech service unavailable"})
 		return
 	}
