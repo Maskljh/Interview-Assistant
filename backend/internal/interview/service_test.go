@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -16,6 +17,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/user"
 	"github.com/redis/go-redis/v9"
@@ -760,5 +762,88 @@ func TestBeginLiveIdempotent(t *testing.T) {
 	}
 	if turnCountAfter != 1 {
 		t.Fatalf("turn count after second BeginLive = %d, want 1 (no duplicate Q0)", turnCountAfter)
+	}
+}
+
+type capturingLLM struct {
+	userPrompts []string
+}
+
+func (c *capturingLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	c.userPrompts = append(c.userPrompts, user)
+	gen, ok := out.(*llm.GenQuestionsOut)
+	if !ok {
+		return fmt.Errorf("unexpected out type")
+	}
+	gen.Questions = make([]llm.GenQuestion, 5)
+	for i := range gen.Questions {
+		gen.Questions[i] = llm.GenQuestion{Seq: i + 1, Question: "Q?", Intent: "assessment"}
+	}
+	return nil
+}
+
+type fixedProfileProvider struct {
+	p profile.Profile
+}
+
+func (f fixedProfileProvider) Weaknesses(ctx context.Context, userID int64, maxSessions int) (profile.Profile, error) {
+	return f.p, nil
+}
+
+func TestStartInjectsWeakDimensions(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-weak-inject@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-weak-inject@example.com")
+
+	capLLM := &capturingLLM{}
+	svc := interview.NewService(sqlDB, capLLM, store)
+	svc.SetProfileProvider(fixedProfileProvider{p: profile.Profile{WeakDimensions: []string{"logic"}, BasedOnSessions: 3}})
+
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if len(capLLM.userPrompts) != 1 {
+		t.Fatalf("captured %d user prompts, want 1", len(capLLM.userPrompts))
+	}
+	prompt := capLLM.userPrompts[0]
+	if !strings.Contains(prompt, "Targeted focus") || !strings.Contains(prompt, "逻辑结构") {
+		t.Fatalf("prompt missing targeted focus directive: %s", prompt)
+	}
+}
+
+func TestStartNoInjectionWithoutProvider(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-weak-none@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-weak-none@example.com")
+
+	capLLM := &capturingLLM{}
+	svc := interview.NewService(sqlDB, capLLM, store)
+
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if len(capLLM.userPrompts) != 1 {
+		t.Fatalf("captured %d user prompts, want 1", len(capLLM.userPrompts))
+	}
+	if strings.Contains(capLLM.userPrompts[0], "Targeted focus") {
+		t.Fatalf("prompt should not contain targeted focus: %s", capLLM.userPrompts[0])
 	}
 }

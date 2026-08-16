@@ -64,6 +64,7 @@ func main() {
 	svc := interview.NewService(sqlDB, llmClient, store)
 	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
 	svc.SetEvaluator(analysisSvc)
+	svc.SetProfileProvider(profile.NewService(sqlDB))
 
 	r := gin.Default()
 	r.Use(corsMiddleware())
