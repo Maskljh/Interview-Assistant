@@ -11,6 +11,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/precheck"
 	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
@@ -74,6 +75,7 @@ func main() {
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
