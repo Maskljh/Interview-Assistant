@@ -20,7 +20,8 @@ func NewService(db *sql.DB) *Service {
 	return &Service{repo: NewRepo(db)}
 }
 
-func jobTagFromJD(jd string) string {
+// JobTagFromJD derives the job tag from a JD: trim, truncate to 40 runes, append "…".
+func JobTagFromJD(jd string) string {
 	jd = strings.TrimSpace(jd)
 	runes := []rune(jd)
 	if len(runes) <= 40 {
@@ -49,7 +50,7 @@ func (s *Service) ImportFromSession(ctx context.Context, userID, sessionID int64
 		return 0, ErrInvalidInput
 	}
 
-	jobTag := jobTagFromJD(session.JobJD)
+	jobTag := JobTagFromJD(session.JobJD)
 	return s.repo.InsertBatch(userID, questions, sessionID, jobTag)
 }
 

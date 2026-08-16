@@ -17,9 +17,9 @@ func TestJobTagFromJD(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := jobTagFromJD(tc.in)
+			got := JobTagFromJD(tc.in)
 			if got != tc.want {
-				t.Fatalf("jobTagFromJD(%q) = %q, want %q", tc.in, got, tc.want)
+				t.Fatalf("JobTagFromJD(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
