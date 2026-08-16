@@ -11,9 +11,12 @@ export type InterviewStatus =
 
 export type InputMode = 'text' | 'voice';
 
+export type Persona = 'standard' | 'strict_tech' | 'warm_hr' | 'stress';
+
 export interface InterviewListItem {
   id: number;
   mode: InterviewMode;
+  persona: Persona;
   status: InterviewStatus;
   created_at: string;
   score: number | null;
@@ -42,6 +45,7 @@ export interface Interview {
   resume_text: string | null;
   mode: InterviewMode;
   input_mode: InputMode;
+  persona: Persona;
   status: InterviewStatus;
   score: number | null;
   feedback_json: unknown;
@@ -57,6 +61,7 @@ export interface CreateInterviewInput {
   resume_text?: string;
   mode: InterviewMode;
   input_mode?: InputMode;
+  persona?: Persona;
 }
 
 export async function createInterview(
@@ -134,6 +139,7 @@ export interface CreateFromBankInput {
   question_ids: number[];
   mode: InterviewMode;
   input_mode?: InputMode;
+  persona?: Persona;
 }
 
 export async function createInterviewFromBank(

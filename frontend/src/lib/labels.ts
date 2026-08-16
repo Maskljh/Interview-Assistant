@@ -22,3 +22,11 @@ export function formatDateZh(iso: string): string {
     timeStyle: 'short',
   });
 }
+
+// Single source of truth for persona labels is backend llm.PersonaLabels.
+export const PERSONA_LABELS: Record<string, string> = {
+  standard: '标准',
+  strict_tech: '严厉技术面',
+  warm_hr: '温和 HR 面',
+  stress: '压力面',
+};
