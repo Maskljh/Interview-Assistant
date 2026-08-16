@@ -197,7 +197,7 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 	}
 
 	var out llm.GenQuestionsOut
-	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak, session.Persona), &out); err != nil {
+	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak, session.Persona, nil), &out); err != nil {
 		return nil, nil, ErrLLMFailure
 	}
 	if len(out.Questions) < 5 || len(out.Questions) > 8 {
