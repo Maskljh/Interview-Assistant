@@ -1,7 +1,7 @@
 # V3 针对性出题（用户画像）— 设计规格
 
 **Date:** 2026-08-16  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v3-profile
 **Parent:** V1 MVP + V2-A 题库 + V2-B 语音 + V2-C 成长分析  
 **Approach:** 独立 `internal/profile` 画像模块 + JD 出题时按薄弱维度定向分配
 
