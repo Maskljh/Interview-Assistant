@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/labels';
 import './AuthPages.css';
 
 export default function LoginPage() {
@@ -24,7 +25,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
+      setError(err instanceof ApiError ? err.message : '登录失败');
     } finally {
       setLoading(false);
     }
@@ -33,12 +34,12 @@ export default function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Sign in</h1>
-        <p className="subtitle">Interview Assistant</p>
+        <h1>登录</h1>
+        <p className="subtitle">{APP_NAME}</p>
         <form className="auth-form" onSubmit={handleSubmit}>
           {error && <p className="auth-error">{error}</p>}
           <div className="auth-field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">邮箱</label>
             <input
               id="email"
               type="email"
@@ -49,7 +50,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="auth-field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">密码</label>
             <input
               id="password"
               type="password"
@@ -61,11 +62,11 @@ export default function LoginPage() {
             />
           </div>
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? '登录中…' : '登录'}
           </button>
         </form>
         <p className="auth-footer">
-          No account? <Link to="/register">Create one</Link>
+          还没有账号？ <Link to="/register">注册</Link>
         </p>
       </div>
     </div>

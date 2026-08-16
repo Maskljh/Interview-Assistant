@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -19,6 +21,10 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	// Load repo-root .env when present (cwd may be backend/ or repo root).
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
+
 	cfg := &Config{
 		HTTPAddr:              getenv("HTTP_ADDR", ":8080"),
 		MySQLDSN:              getenv("MYSQL_DSN", "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"),

@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -8,13 +8,11 @@ import {
   type InterviewMode,
 } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME, MODE_LABELS } from '../lib/labels';
+import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
 
-const MODES: { value: InterviewMode; label: string }[] = [
-  { value: 'behavioral', label: 'Behavioral' },
-  { value: 'technical', label: 'Technical' },
-  { value: 'mixed', label: 'Mixed' },
-];
+const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
 
 const INPUT_MODES: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
@@ -26,17 +24,52 @@ export default function CreateInterviewPage() {
   const navigate = useNavigate();
   const [jobJd, setJobJd] = useState('');
   const [resumeText, setResumeText] = useState('');
+  const [resumeFileName, setResumeFileName] = useState('');
+  const [resumeParsing, setResumeParsing] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  async function handleResumeFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setResumeText('');
+      setResumeFileName('');
+      return;
+    }
+
+    setError('');
+    setResumeParsing(true);
+    try {
+      const text = await extractResumeText(file);
+      setResumeText(text);
+      setResumeFileName(file.name);
+    } catch (err) {
+      setResumeText('');
+      setResumeFileName('');
+      setError(err instanceof Error ? err.message : '简历解析失败');
+      e.target.value = '';
+    } finally {
+      setResumeParsing(false);
+    }
+  }
+
+  function clearResume() {
+    setResumeText('');
+    setResumeFileName('');
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    const trimmedJd = jobJd.trim();
+    if (!trimmedJd) {
+      setError('请填写职位描述');
+      return;
+    }
     setLoading(true);
     try {
-      const trimmedJd = jobJd.trim();
       const trimmedResume = resumeText.trim();
       const created = await createInterview({
         job_jd: trimmedJd,
@@ -47,7 +80,7 @@ export default function CreateInterviewPage() {
       await startInterview(created.id);
       navigate(`/interviews/${created.id}/room`, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create interview');
+      setError(err instanceof ApiError ? err.message : '创建面试失败');
     } finally {
       setLoading(false);
     }
@@ -57,60 +90,83 @@ export default function CreateInterviewPage() {
     <div className="interview-page">
       <header className="interview-header">
         <Link className="interview-brand" to="/">
-          Interview Assistant
+          {APP_NAME}
         </Link>
         <div className="interview-header-actions">
           <Link className="interview-header-link" to="/questions">
             题库
           </Link>
           <Link className="interview-header-link" to="/">
-            Back to list
+            返回列表
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
-            Sign out
+            退出登录
           </button>
         </div>
       </header>
       <main className="interview-main">
-        <h1>New interview</h1>
-        <p className="interview-subtitle">
-          Paste the job description and choose a practice mode.
-        </p>
+        <h1>新建面试</h1>
+        <p className="interview-subtitle">粘贴职位描述，可选上传简历，并选择练习模式。</p>
 
         <form className="interview-form" onSubmit={handleSubmit}>
           {error && <p className="interview-error">{error}</p>}
 
           <div className="interview-field">
-            <label htmlFor="job-jd">Job description</label>
+            <label htmlFor="job-jd">职位描述</label>
             <textarea
               id="job-jd"
               required
               value={jobJd}
               onChange={(e) => setJobJd(e.target.value)}
-              placeholder="Paste the job description here…"
+              placeholder="请粘贴岗位 JD…"
             />
           </div>
 
           <div className="interview-field">
-            <label htmlFor="resume">Resume (optional)</label>
-            <textarea
-              id="resume"
-              value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
-              placeholder="Paste your resume for tailored questions…"
-            />
+            <label htmlFor="resume">简历（可选）</label>
+            <div className="interview-file-row">
+              <input
+                id="resume"
+                type="file"
+                accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleResumeFile}
+                disabled={resumeParsing || loading}
+              />
+              {resumeFileName && (
+                <div className="interview-file-meta">
+                  <span className="interview-file-name">
+                    已解析：{resumeFileName}
+                    {resumeText ? `（约 ${resumeText.length} 字）` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="interview-file-clear"
+                    onClick={clearResume}
+                    disabled={resumeParsing || loading}
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="interview-field-hint">
+              支持 .txt、.md、.pdf、.docx；扫描版 PDF 可能无法提取文字。
+            </p>
+            {resumeParsing && (
+              <p className="interview-loading">正在解析简历…</p>
+            )}
           </div>
 
           <div className="interview-field">
-            <label htmlFor="mode">Mode</label>
+            <label htmlFor="mode">面试类型</label>
             <select
               id="mode"
               value={mode}
               onChange={(e) => setMode(e.target.value as InterviewMode)}
             >
-              {MODES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              {MODES.map((value) => (
+                <option key={value} value={value}>
+                  {MODE_LABELS[value]}
                 </option>
               ))}
             </select>
@@ -131,8 +187,12 @@ export default function CreateInterviewPage() {
             </select>
           </div>
 
-          <button className="interview-submit" type="submit" disabled={loading}>
-            {loading ? 'Starting interview…' : 'Start interview'}
+          <button
+            className="interview-submit"
+            type="submit"
+            disabled={loading || resumeParsing}
+          >
+            {loading ? '正在开始面试…' : '开始面试'}
           </button>
         </form>
       </main>

@@ -9,14 +9,15 @@ import {
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
 
 const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: string }[] =
   [
-    { key: 'expression', label: 'Expression' },
-    { key: 'logic', label: 'Logic' },
-    { key: 'content', label: 'Content' },
-    { key: 'job_match', label: 'Job match' },
+    { key: 'expression', label: '表达能力' },
+    { key: 'logic', label: '逻辑结构' },
+    { key: 'content', label: '内容质量' },
+    { key: 'job_match', label: '岗位匹配' },
   ];
 
 export default function ReportPage() {
@@ -36,7 +37,7 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
-      setError('Invalid interview id');
+      setError('无效的面试 ID');
       setLoading(false);
       return;
     }
@@ -62,7 +63,7 @@ export default function ReportPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : 'Failed to load report');
+          setError(err instanceof ApiError ? err.message : '加载报告失败');
         }
       } finally {
         if (!cancelled) {
@@ -102,10 +103,10 @@ export default function ReportPage() {
       } else {
         setFeedback(null);
         setAvailable(false);
-        setError('Report is still unavailable. Please try again later.');
+        setError('报告仍不可用，请稍后再试。');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not retry report');
+      setError(err instanceof ApiError ? err.message : '重试生成报告失败');
     } finally {
       setRetrying(false);
     }
@@ -115,26 +116,26 @@ export default function ReportPage() {
     <div className="interview-page">
       <header className="interview-header">
         <Link className="interview-brand" to="/">
-          Interview Assistant
+          {APP_NAME}
         </Link>
         <div className="interview-header-actions">
           <Link className="interview-header-link" to="/questions">
             题库
           </Link>
           <Link className="interview-header-link" to={`/interviews/${id}`}>
-            Detail
+            详情
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
-            Sign out
+            退出登录
           </button>
         </div>
       </header>
       <main className="interview-main">
         <Link className="interview-back-link" to="/">
-          ← All interviews
+          ← 全部面试
         </Link>
 
-        <h1>Interview report</h1>
+        <h1>面试报告</h1>
 
         {questionCount > 0 && !loading && (
           <div className="interview-list-links" style={{ marginBottom: 'var(--space-md)' }}>
@@ -152,12 +153,12 @@ export default function ReportPage() {
         {bankError && <p className="interview-error">{bankError}</p>}
 
         {loading ? (
-          <p className="interview-loading">Loading report…</p>
+          <p className="interview-loading">加载报告中…</p>
         ) : error && !feedback ? (
           <p className="interview-error">{error}</p>
         ) : available === false ? (
           <div className="interview-stub">
-            <p>Your report is not ready yet. Analysis may still be running or failed.</p>
+            <p>报告尚未就绪，可能仍在分析或上次生成失败。</p>
             {error && <p className="interview-error">{error}</p>}
             <button
               type="button"
@@ -165,17 +166,17 @@ export default function ReportPage() {
               onClick={handleRetry}
               disabled={retrying}
             >
-              {retrying ? 'Retrying…' : 'Retry report'}
+              {retrying ? '重试中…' : '重新生成报告'}
             </button>
           </div>
         ) : feedback ? (
           <>
             <div className="report-score-card">
-              <span className="report-score-label">Total score</span>
+              <span className="report-score-label">总分</span>
               <span className="report-score-value">{feedback.total_score}</span>
             </div>
 
-            <h2 className="interview-section-title">Dimensions</h2>
+            <h2 className="interview-section-title">维度评分</h2>
             <div className="report-dimensions">
               {DIMENSION_LABELS.map(({ key, label }) => (
                 <div key={key} className="report-dimension">
@@ -187,13 +188,11 @@ export default function ReportPage() {
               ))}
             </div>
 
-            <ReportList title="Strengths" items={feedback.strengths} />
-            <ReportList title="Weaknesses" items={feedback.weaknesses} />
-            <ReportList title="Suggestions" items={feedback.suggestions} />
+            <ReportList title="优点" items={feedback.strengths} />
+            <ReportList title="问题" items={feedback.weaknesses} />
+            <ReportList title="改进建议" items={feedback.suggestions} />
 
-            <p className="report-model-version">
-              Model: {feedback.model_version}
-            </p>
+            <p className="report-model-version">模型：{feedback.model_version}</p>
           </>
         ) : null}
       </main>

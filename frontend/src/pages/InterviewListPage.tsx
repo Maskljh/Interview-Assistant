@@ -4,63 +4,41 @@ import { ApiError } from '../api/client';
 import {
   listInterviews,
   type InterviewListItem,
-  type InterviewMode,
-  type InterviewStatus,
 } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
+import { APP_NAME, MODE_LABELS, STATUS_LABELS, formatDateZh } from '../lib/labels';
 import './InterviewPages.css';
-
-const MODE_LABELS: Record<InterviewMode, string> = {
-  behavioral: 'Behavioral',
-  technical: 'Technical',
-  mixed: 'Mixed',
-};
-
-const STATUS_LABELS: Record<InterviewStatus, string> = {
-  draft: 'Draft',
-  ready: 'Ready',
-  in_progress: 'In progress',
-  completed: 'Completed',
-  failed: 'Failed',
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
 
 function InterviewRow({ item }: { item: InterviewListItem }) {
   return (
     <li className="interview-list-item">
       <div className="interview-list-meta">
         <Link className="interview-list-title" to={`/interviews/${item.id}`}>
-          Interview #{item.id}
+          面试 #{item.id}
         </Link>
-        <span className="interview-list-date">{formatDate(item.created_at)}</span>
+        <span className="interview-list-date">{formatDateZh(item.created_at)}</span>
         <div className="interview-list-badges">
           <span className={`status-pill status-pill--${item.status}`}>
             {STATUS_LABELS[item.status]}
           </span>
           <span className="mode-pill">{MODE_LABELS[item.mode]}</span>
           {item.score != null && (
-            <span className="mode-pill">Score {item.score}</span>
+            <span className="mode-pill">得分 {item.score}</span>
           )}
         </div>
       </div>
       <div className="interview-list-links">
         <Link className="interview-inline-link" to={`/interviews/${item.id}`}>
-          Detail
+          详情
         </Link>
         {item.status === 'in_progress' && (
           <Link className="interview-inline-link" to={`/interviews/${item.id}/room`}>
-            Room
+            进入面试
           </Link>
         )}
         {item.status === 'completed' && (
           <Link className="interview-inline-link" to={`/interviews/${item.id}/report`}>
-            Report
+            报告
           </Link>
         )}
       </div>
@@ -87,7 +65,7 @@ export default function InterviewListPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : 'Failed to load interviews');
+          setError(err instanceof ApiError ? err.message : '加载面试列表失败');
         }
       } finally {
         if (!cancelled) {
@@ -106,33 +84,33 @@ export default function InterviewListPage() {
     <div className="interview-page">
       <header className="interview-header">
         <Link className="interview-brand" to="/">
-          Interview Assistant
+          {APP_NAME}
         </Link>
         <div className="interview-header-actions">
           <Link className="interview-header-link" to="/questions">
             题库
           </Link>
           <Link className="interview-header-cta" to="/interviews/new">
-            New interview
+            新建面试
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
-            Sign out
+            退出登录
           </button>
         </div>
       </header>
       <main className="interview-main">
-        <h1>Interviews</h1>
-        <p className="interview-subtitle">Practice sessions and history</p>
+        <h1>我的面试</h1>
+        <p className="interview-subtitle">练习记录与历史回看</p>
 
         {error && <p className="interview-error">{error}</p>}
 
         {loading ? (
-          <p className="interview-loading">Loading interviews…</p>
+          <p className="interview-loading">加载中…</p>
         ) : interviews.length === 0 ? (
           <div className="interview-empty">
-            <p>No interviews yet. Start your first practice session.</p>
+            <p>还没有面试记录，开始你的第一场练习吧。</p>
             <Link className="interview-header-cta" to="/interviews/new">
-              New interview
+              新建面试
             </Link>
           </div>
         ) : (

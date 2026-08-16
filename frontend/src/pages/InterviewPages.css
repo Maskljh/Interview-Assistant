@@ -73,6 +73,51 @@
   color: var(--color-body);
 }
 
+.interview-field-hint {
+  margin: var(--space-xs) 0 0;
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
+.interview-file-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.interview-file-row input[type='file'] {
+  font: var(--text-body-sm);
+  color: var(--color-body);
+}
+
+.interview-file-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+}
+
+.interview-file-name {
+  font: var(--text-body-sm);
+  color: var(--color-ink);
+  word-break: break-all;
+}
+
+.interview-file-clear {
+  flex-shrink: 0;
+  font: var(--text-button-md);
+  padding: var(--space-xxs) var(--space-sm);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+  cursor: pointer;
+}
+
 .interview-error {
   margin: 0 0 var(--space-md);
   padding: var(--space-sm) var(--space-md);
