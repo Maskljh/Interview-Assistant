@@ -1,7 +1,7 @@
 # 手机端 App（移动端 Web/PWA）— 设计规格
 
 **Date:** 2026-08-16  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v4-mobile-pwa  
 **Parent:** V1–V3（main HEAD）  
 **Approach:** 现有 React 前端响应式适配 + PWA 化，复用同一后端与登录态，数据天然互通
 
