@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 )
 
@@ -39,12 +40,19 @@ type SessionEvaluator interface {
 	Evaluate(ctx context.Context, sessionID int64) (score int, feedbackJSON []byte, err error)
 }
 
+// SessionProfileProvider supplies a user's weak dimensions for targeted
+// question generation. Implemented by *profile.Service.
+type SessionProfileProvider interface {
+	Weaknesses(ctx context.Context, userID int64, maxSessions int) (profile.Profile, error)
+}
+
 type Service struct {
-	repo      *Repo
-	llm       llm.Client
-	store     sessionredis.Store
-	notify    SessionNotifier
-	evaluator SessionEvaluator
+	repo            *Repo
+	llm             llm.Client
+	store           sessionredis.Store
+	notify          SessionNotifier
+	evaluator       SessionEvaluator
+	profileProvider SessionProfileProvider
 }
 
 func NewService(db *sql.DB, llmClient llm.Client, store sessionredis.Store) *Service {
@@ -57,6 +65,10 @@ func (s *Service) SetSessionNotifier(n SessionNotifier) {
 
 func (s *Service) SetEvaluator(e SessionEvaluator) {
 	s.evaluator = e
+}
+
+func (s *Service) SetProfileProvider(p SessionProfileProvider) {
+	s.profileProvider = p
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode) (*Session, error) {
@@ -165,8 +177,15 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 		resume = *session.ResumeText
 	}
 
+	var weak []string
+	if s.profileProvider != nil {
+		if p, err := s.profileProvider.Weaknesses(ctx, session.UserID, 5); err == nil {
+			weak = p.WeakDimensions
+		} // on error, fall back to no injection (never block generation)
+	}
+
 	var out llm.GenQuestionsOut
-	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode)), &out); err != nil {
+	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak), &out); err != nil {
 		return nil, nil, ErrLLMFailure
 	}
 	if len(out.Questions) < 5 || len(out.Questions) > 8 {

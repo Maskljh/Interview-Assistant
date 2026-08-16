@@ -11,6 +11,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/speech"
@@ -63,6 +64,7 @@ func main() {
 	svc := interview.NewService(sqlDB, llmClient, store)
 	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
 	svc.SetEvaluator(analysisSvc)
+	svc.SetProfileProvider(profile.NewService(sqlDB))
 
 	r := gin.Default()
 	r.Use(corsMiddleware())
@@ -71,6 +73,7 @@ func main() {
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)

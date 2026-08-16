@@ -19,8 +19,16 @@ Rules:
 - Match the interview mode: behavioral (soft skills, past experience), technical (skills, problem-solving), or mixed`
 }
 
-func GenerateQuestionsUser(jobJD, resume, mode string) string {
-	return fmt.Sprintf(`Generate interview questions for this session.
+// DimensionLabels maps dimension keys to Chinese labels for prompt text.
+var DimensionLabels = map[string]string{
+	"expression": "表达能力",
+	"logic":      "逻辑结构",
+	"content":    "内容质量",
+	"job_match":  "岗位匹配",
+}
+
+func GenerateQuestionsUser(jobJD, resume, mode string, weak []string) string {
+	base := fmt.Sprintf(`Generate interview questions for this session.
 
 Job description:
 %s
@@ -29,6 +37,22 @@ Resume:
 %s
 
 Interview mode: %s`, jobJD, resume, mode)
+
+	if len(weak) == 0 {
+		return base
+	}
+	labels := make([]string, 0, len(weak))
+	for _, w := range weak {
+		if label, ok := DimensionLabels[w]; ok {
+			labels = append(labels, label)
+		}
+	}
+	if len(labels) == 0 {
+		return base
+	}
+	return base + fmt.Sprintf(`
+	
+Targeted focus: this user's weak dimensions are %s. Generate at least half of the questions to assess these weak dimensions.`, strings.Join(labels, ", "))
 }
 
 type DecideNextOut struct {
