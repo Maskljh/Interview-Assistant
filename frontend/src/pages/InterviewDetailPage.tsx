@@ -8,7 +8,13 @@ import {
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
-import { APP_NAME, MODE_LABELS, STATUS_LABELS, formatDateZh } from '../lib/labels';
+import {
+  APP_NAME,
+  MODE_LABELS,
+  PERSONA_LABELS,
+  STATUS_LABELS,
+  formatDateZh,
+} from '../lib/labels';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 
@@ -127,6 +133,11 @@ export default function InterviewDetailPage() {
               <span className="mode-pill">
                 {INPUT_MODE_LABELS[interview.input_mode]}
               </span>
+              {interview.persona !== 'standard' && (
+                <span className="mode-pill">
+                  {PERSONA_LABELS[interview.persona]}
+                </span>
+              )}
               {interview.score != null && (
                 <span className="mode-pill">得分 {interview.score}</span>
               )}

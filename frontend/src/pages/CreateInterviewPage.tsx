@@ -6,15 +6,18 @@ import {
   startInterview,
   type InputMode,
   type InterviewMode,
+  type Persona,
 } from '../api/interviews';
 import { fetchProfile, type Profile } from '../api/profile';
 import { useAuth } from '../auth/AuthContext';
-import { APP_NAME, MODE_LABELS } from '../lib/labels';
+import { APP_NAME, MODE_LABELS, PERSONA_LABELS } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 
 const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
+
+const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
 
 const DIMENSION_LABELS: Record<string, string> = {
   expression: '表达能力',
@@ -37,6 +40,7 @@ export default function CreateInterviewPage() {
   const [resumeParsing, setResumeParsing] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
+  const [persona, setPersona] = useState<Persona>('standard');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -99,6 +103,7 @@ export default function CreateInterviewPage() {
         job_jd: trimmedJd,
         mode,
         input_mode: inputMode,
+        persona,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
       });
       await startInterview(created.id);
@@ -225,6 +230,21 @@ export default function CreateInterviewPage() {
               {INPUT_MODES.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="interview-field">
+            <label htmlFor="persona">面试官风格</label>
+            <select
+              id="persona"
+              value={persona}
+              onChange={(e) => setPersona(e.target.value as Persona)}
+            >
+              {PERSONAS.map((value) => (
+                <option key={value} value={value}>
+                  {PERSONA_LABELS[value]}
                 </option>
               ))}
             </select>

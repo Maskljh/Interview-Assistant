@@ -6,7 +6,13 @@ import {
   type InterviewListItem,
 } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
-import { APP_NAME, MODE_LABELS, STATUS_LABELS, formatDateZh } from '../lib/labels';
+import {
+  APP_NAME,
+  MODE_LABELS,
+  PERSONA_LABELS,
+  STATUS_LABELS,
+  formatDateZh,
+} from '../lib/labels';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 
@@ -23,6 +29,9 @@ function InterviewRow({ item }: { item: InterviewListItem }) {
             {STATUS_LABELS[item.status]}
           </span>
           <span className="mode-pill">{MODE_LABELS[item.mode]}</span>
+          {item.persona !== 'standard' && (
+            <span className="mode-pill">{PERSONA_LABELS[item.persona]}</span>
+          )}
           {item.score != null && (
             <span className="mode-pill">得分 {item.score}</span>
           )}

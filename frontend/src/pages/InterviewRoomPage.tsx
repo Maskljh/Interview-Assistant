@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
-import { endInterview, getInterview, type InputMode } from '../api/interviews';
+import { endInterview, getInterview, type InputMode, type Persona } from '../api/interviews';
 import { synthesizeSpeech, transcribeAudio } from '../api/speech';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -9,7 +9,7 @@ import {
   type VoiceRecorder,
 } from '../lib/voiceRecorder';
 import { createVoicePlayer } from '../lib/voicePlayer';
-import { APP_NAME } from '../lib/labels';
+import { APP_NAME, PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
@@ -39,6 +39,7 @@ export default function InterviewRoomPage() {
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState('');
   const [inputMode, setInputMode] = useState<InputMode | null>(null);
+  const [persona, setPersona] = useState<Persona | null>(null);
   const [loadingInterview, setLoadingInterview] = useState(true);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
   const [ttsMuted, setTtsMuted] = useState(false);
@@ -209,6 +210,7 @@ export default function InterviewRoomPage() {
         if (cancelled) return;
         inputModeRef.current = data.input_mode;
         setInputMode(data.input_mode);
+        setPersona(data.persona);
         doneRef.current = false;
         connect();
       } catch (err) {
@@ -360,6 +362,9 @@ export default function InterviewRoomPage() {
           <>
             <div className="interview-room-header">
               <h1>面试进行中</h1>
+              {persona && persona !== 'standard' && (
+                <span className="mode-pill">{PERSONA_LABELS[persona]}</span>
+              )}
               {progress && (
                 <span className="interview-room-progress">
                   第 {progress.current} / {progress.total} 题

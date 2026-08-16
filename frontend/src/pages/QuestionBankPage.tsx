@@ -5,6 +5,7 @@ import {
   createInterviewFromBank,
   type InputMode,
   type InterviewMode,
+  type Persona,
 } from '../api/interviews';
 import {
   deleteQuestion,
@@ -13,6 +14,7 @@ import {
   type Question,
 } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
+import { PERSONA_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 
@@ -26,6 +28,8 @@ const INPUT_MODE_OPTIONS: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
   { value: 'voice', label: '语音' },
 ];
+
+const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
 
 function toggleSelected(ids: number[], id: number): number[] {
   const index = ids.indexOf(id);
@@ -50,6 +54,7 @@ export default function QuestionBankPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
+  const [persona, setPersona] = useState<Persona>('standard');
 
   const loadQuestions = useCallback(async () => {
     setLoading(true);
@@ -116,6 +121,7 @@ export default function QuestionBankPage() {
         question_ids: selectedIds,
         mode,
         input_mode: inputMode,
+        persona,
       });
       navigate(`/interviews/${interview.id}/room`, { replace: true });
     } catch (err) {
@@ -262,6 +268,20 @@ export default function QuestionBankPage() {
               {INPUT_MODE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="interview-field question-bank-mode">
+            <label htmlFor="practice-persona">面试官风格</label>
+            <select
+              id="practice-persona"
+              value={persona}
+              onChange={(e) => setPersona(e.target.value as Persona)}
+            >
+              {PERSONAS.map((value) => (
+                <option key={value} value={value}>
+                  {PERSONA_LABELS[value]}
                 </option>
               ))}
             </select>

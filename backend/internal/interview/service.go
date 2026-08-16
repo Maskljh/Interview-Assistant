@@ -71,7 +71,7 @@ func (s *Service) SetProfileProvider(p SessionProfileProvider) {
 	s.profileProvider = p
 }
 
-func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode) (*Session, error) {
+func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona string) (*Session, error) {
 	jobJD = strings.TrimSpace(jobJD)
 	if jobJD == "" {
 		return nil, ErrInvalidInput
@@ -85,10 +85,16 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 	if err := ValidateInputMode(inputMode); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(userID, jobJD, resume, mode, inputMode)
+	if persona == "" {
+		persona = llm.StandardPersona
+	}
+	if err := validatePersona(persona); err != nil {
+		return nil, err
+	}
+	return s.repo.Create(userID, jobJD, resume, mode, inputMode, persona)
 }
 
-func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode) (*Session, []Question, error) {
+func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona string) (*Session, []Question, error) {
 	if len(questionIDs) == 0 {
 		return nil, nil, ErrInvalidInput
 	}
@@ -99,6 +105,12 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 		inputMode = InputModeText
 	}
 	if err := ValidateInputMode(inputMode); err != nil {
+		return nil, nil, err
+	}
+	if persona == "" {
+		persona = llm.StandardPersona
+	}
+	if err := validatePersona(persona); err != nil {
 		return nil, nil, err
 	}
 
@@ -115,7 +127,7 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	}
 
 	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, texts)
+	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, texts)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {
@@ -185,7 +197,7 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 	}
 
 	var out llm.GenQuestionsOut
-	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak), &out); err != nil {
+	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak, session.Persona), &out); err != nil {
 		return nil, nil, ErrLLMFailure
 	}
 	if len(out.Questions) < 5 || len(out.Questions) > 8 {
@@ -458,7 +470,7 @@ func (s *Service) decideNext(ctx context.Context, session *Session, questions []
 		var out llm.DecideNextOut
 		err := s.llm.ChatJSON(ctx,
 			llm.DecideNextSystem(),
-			llm.DecideNextUser(session.JobJD, string(session.Mode), currentQ, state.FollowUpsOnCurrent, turnCtx, answer),
+			llm.DecideNextUser(session.JobJD, string(session.Mode), currentQ, state.FollowUpsOnCurrent, turnCtx, answer, session.Persona),
 			&out,
 		)
 		if err == nil {

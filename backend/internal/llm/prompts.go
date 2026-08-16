@@ -27,7 +27,38 @@ var DimensionLabels = map[string]string{
 	"job_match":  "岗位匹配",
 }
 
-func GenerateQuestionsUser(jobJD, resume, mode string, weak []string) string {
+// StandardPersona is the default persona; it never alters prompts.
+const StandardPersona = "standard"
+
+// Personas lists all selectable interviewer personas (single source of truth).
+var Personas = []string{StandardPersona, "strict_tech", "warm_hr", "stress"}
+
+// PersonaLabels maps persona keys to Chinese labels for UI display.
+var PersonaLabels = map[string]string{
+	StandardPersona: "标准",
+	"strict_tech":   "严厉技术面",
+	"warm_hr":       "温和 HR 面",
+	"stress":        "压力面",
+}
+
+// PersonaPrompts maps persona keys to interviewer-style instructions injected
+// into question-generation and follow-up prompts. standard has no entry.
+var PersonaPrompts = map[string]string{
+	"strict_tech": "You are a strict senior technical interviewer. Ask probing follow-ups, dig into details, challenge assumptions, and keep questions demanding.",
+	"warm_hr":     "You are a warm and supportive HR interviewer. Use a guiding tone, ask follow-ups that help candidates elaborate, focus on soft skills and past experience, and encourage them.",
+	"stress":      "You are a fast-paced stress interviewer. Ask rapid successive follow-ups, apply pressure, and keep the pace quick to test composure under stress.",
+}
+
+// personaInjection returns the persona instruction block, or "" when the
+// persona is standard/empty/unknown so prompts stay byte-identical to legacy.
+func personaInjection(persona string) string {
+	if persona == "" || persona == StandardPersona {
+		return ""
+	}
+	return PersonaPrompts[persona]
+}
+
+func GenerateQuestionsUser(jobJD, resume, mode string, weak []string, persona string) string {
 	base := fmt.Sprintf(`Generate interview questions for this session.
 
 Job description:
@@ -38,21 +69,24 @@ Resume:
 
 Interview mode: %s`, jobJD, resume, mode)
 
-	if len(weak) == 0 {
-		return base
-	}
-	labels := make([]string, 0, len(weak))
-	for _, w := range weak {
-		if label, ok := DimensionLabels[w]; ok {
-			labels = append(labels, label)
+	if len(weak) > 0 {
+		labels := make([]string, 0, len(weak))
+		for _, w := range weak {
+			if label, ok := DimensionLabels[w]; ok {
+				labels = append(labels, label)
+			}
 		}
-	}
-	if len(labels) == 0 {
-		return base
-	}
-	return base + fmt.Sprintf(`
+		if len(labels) > 0 {
+			base += fmt.Sprintf(`
 	
 Targeted focus: this user's weak dimensions are %s. Generate at least half of the questions to assess these weak dimensions.`, strings.Join(labels, ", "))
+		}
+	}
+
+	if inj := personaInjection(persona); inj != "" {
+		base += "\n\n" + inj
+	}
+	return base
 }
 
 type DecideNextOut struct {
@@ -73,12 +107,12 @@ Rules:
 - Keep follow-ups concise and interview-appropriate`
 }
 
-func DecideNextUser(jobJD, mode, currentQuestion string, followUpsOnCurrent int, turns []TurnContext, latestAnswer string) string {
+func DecideNextUser(jobJD, mode, currentQuestion string, followUpsOnCurrent int, turns []TurnContext, latestAnswer string, persona string) string {
 	var transcript strings.Builder
 	for _, t := range turns {
 		fmt.Fprintf(&transcript, "[%s/%s] %s\n", t.Role, t.Kind, t.Content)
 	}
-	return fmt.Sprintf(`Decide the next interview step.
+	prompt := fmt.Sprintf(`Decide the next interview step.
 
 Job description:
 %s
@@ -95,6 +129,11 @@ Transcript so far:
 
 Latest candidate answer:
 %s`, jobJD, mode, currentQuestion, followUpsOnCurrent, transcript.String(), latestAnswer)
+
+	if inj := personaInjection(persona); inj != "" {
+		prompt += "\n\n" + inj
+	}
+	return prompt
 }
 
 type TurnContext struct {
