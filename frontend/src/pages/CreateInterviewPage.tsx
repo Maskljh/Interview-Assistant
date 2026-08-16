@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -7,12 +7,20 @@ import {
   type InputMode,
   type InterviewMode,
 } from '../api/interviews';
+import { fetchProfile, type Profile } from '../api/profile';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, MODE_LABELS } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
 
 const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
+
+const DIMENSION_LABELS: Record<string, string> = {
+  expression: '表达能力',
+  logic: '逻辑结构',
+  content: '内容质量',
+  job_match: '岗位匹配',
+};
 
 const INPUT_MODES: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
@@ -28,8 +36,23 @@ export default function CreateInterviewPage() {
   const [resumeParsing, setResumeParsing] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProfile()
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch(() => {
+        /* silent fallback: hide card on error */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleResumeFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -110,6 +133,22 @@ export default function CreateInterviewPage() {
       <main className="interview-main">
         <h1>新建面试</h1>
         <p className="interview-subtitle">粘贴职位描述，可选上传简历，并选择练习模式。</p>
+
+        {profile && (
+          <div className="profile-card">
+            {profile.weak_dimensions.length > 0 ? (
+              <p>
+                针对性出题已开启：根据你最近 {profile.based_on_sessions} 场面试，薄弱点是
+                {profile.weak_dimensions
+                  .map((d) => DIMENSION_LABELS[d] ?? d)
+                  .map((label) => `【${label}】`)
+                  .join('、')}
+              </p>
+            ) : (
+              <p>暂无历史画像，将按通用方式出题</p>
+            )}
+          </div>
+        )}
 
         <form className="interview-form" onSubmit={handleSubmit}>
           {error && <p className="interview-error">{error}</p>}
