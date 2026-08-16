@@ -90,6 +90,9 @@ export default function InterviewListPage() {
           <Link className="interview-header-link" to="/questions">
             题库
           </Link>
+          <Link className="interview-header-link" to="/trends">
+            成长分析
+          </Link>
           <Link className="interview-header-cta" to="/interviews/new">
             新建面试
           </Link>

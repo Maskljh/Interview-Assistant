@@ -344,6 +344,9 @@ export default function InterviewRoomPage() {
           <Link className="interview-header-link" to={`/interviews/${id}`}>
             详情
           </Link>
+          <Link className="interview-header-link" to="/trends">
+            成长分析
+          </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
             退出登录
           </button>

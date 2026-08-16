@@ -137,6 +137,9 @@ export default function QuestionBankPage() {
           <span className="interview-header-link" aria-current="page">
             题库
           </span>
+          <Link className="interview-header-link" to="/trends">
+            成长分析
+          </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
             退出
           </button>

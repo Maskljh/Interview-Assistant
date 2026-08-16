@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import QuestionBankPage from './pages/QuestionBankPage';
 import ReportPage from './pages/ReportPage';
+import TrendsPage from './pages/TrendsPage';
 
 export default function App() {
   return (
@@ -62,6 +63,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ReportPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/trends"
+            element={
+              <ProtectedRoute>
+                <TrendsPage />
               </ProtectedRoute>
             }
           />

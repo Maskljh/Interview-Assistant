@@ -706,3 +706,54 @@
 .question-bank-mode {
   min-width: 160px;
 }
+
+.interview-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-lg);
+}
+
+.interview-filter-row select {
+  padding: var(--space-xs) var(--space-sm);
+  font: var(--text-body-sm);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+}
+
+.trends-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-xl);
+}
+
+.trends-summary-card {
+  padding: var(--space-md);
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.trends-summary-label {
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
+.trends-summary-value {
+  font: var(--text-display-sm);
+  color: var(--color-ink);
+}
+
+.trends-delta-up {
+  color: var(--color-success);
+}
+
+.trends-delta-down {
+  color: var(--color-error-deep);
+}

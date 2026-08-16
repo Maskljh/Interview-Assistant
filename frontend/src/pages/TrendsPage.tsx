@@ -1,0 +1,188 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ApiError } from '../api/client';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { fetchTrends, type TrendsData } from '../api/analytics';
+import type { InterviewMode } from '../api/interviews';
+import { useAuth } from '../auth/AuthContext';
+import { APP_NAME } from '../lib/labels';
+import './InterviewPages.css';
+
+const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
+  { value: 'behavioral', label: '行为面试' },
+  { value: 'technical', label: '技术面试' },
+  { value: 'mixed', label: '综合面试' },
+];
+
+const DIM_LINES: { key: 'expression' | 'logic' | 'content' | 'job_match'; label: string }[] = [
+  { key: 'expression', label: '表达能力' },
+  { key: 'logic', label: '逻辑结构' },
+  { key: 'content', label: '内容质量' },
+  { key: 'job_match', label: '岗位匹配' },
+];
+
+const DIM_COLORS: Record<string, string> = {
+  expression: '#0070f3',
+  logic: '#7928ca',
+  content: '#f5a623',
+  job_match: '#50e3c2',
+};
+
+export default function TrendsPage() {
+  const { logout } = useAuth();
+  const [data, setData] = useState<TrendsData | null>(null);
+  const [jobTag, setJobTag] = useState('');
+  const [mode, setMode] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await fetchTrends({
+        ...(jobTag ? { job_tag: jobTag } : {}),
+        ...(mode ? { mode: mode as InterviewMode } : {}),
+      });
+      setData(result);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '加载成长分析失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [jobTag, mode]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const s = data?.summary;
+
+  return (
+    <div className="interview-page">
+      <header className="interview-header">
+        <Link className="interview-brand" to="/">
+          {APP_NAME}
+        </Link>
+        <div className="interview-header-actions">
+          <Link className="interview-header-link" to="/">
+            面试列表
+          </Link>
+          <Link className="interview-header-link" to="/questions">
+            题库
+          </Link>
+          <Link className="interview-header-link" to="/trends">
+            成长分析
+          </Link>
+          <button type="button" className="interview-header-link" onClick={logout}>
+            退出登录
+          </button>
+        </div>
+      </header>
+      <main className="interview-main">
+        <h1>成长分析</h1>
+        <p className="interview-subtitle">查看历史面试的分数趋势与维度变化。</p>
+
+        {error && <p className="interview-error">{error}</p>}
+
+        <div className="interview-filter-row">
+          <select value={jobTag} onChange={(e) => setJobTag(e.target.value)}>
+            <option value="">全部岗位</option>
+            {data?.job_tags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="">全部模式</option>
+            {MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {loading ? (
+          <p className="interview-loading">加载中…</p>
+        ) : data && data.points.length === 0 ? (
+          <p className="interview-empty">
+            还没有已完成评分的面试，完成一场面试后再来看成长趋势吧。
+          </p>
+        ) : data ? (
+          <>
+            <div className="trends-summary-grid">
+              <div className="trends-summary-card">
+                <span className="trends-summary-label">面试场次</span>
+                <span className="trends-summary-value">{s?.total_sessions}</span>
+              </div>
+              <div className="trends-summary-card">
+                <span className="trends-summary-label">平均分</span>
+                <span className="trends-summary-value">{s?.avg_score}</span>
+              </div>
+              <div className="trends-summary-card">
+                <span className="trends-summary-label">最高分</span>
+                <span className="trends-summary-value">{s?.max_score}</span>
+              </div>
+              <div className="trends-summary-card">
+                <span className="trends-summary-label">最低分</span>
+                <span className="trends-summary-value">{s?.min_score}</span>
+              </div>
+              <div className="trends-summary-card">
+                <span className="trends-summary-label">最近 vs 最早</span>
+                <span
+                  className={`trends-summary-value${
+                    (s?.delta ?? 0) >= 0 ? ' trends-delta-up' : ' trends-delta-down'
+                  }`}
+                >
+                  {(s?.delta ?? 0) >= 0 ? `+${s?.delta}` : `${s?.delta}`}
+                </span>
+              </div>
+            </div>
+
+            <h2 className="interview-section-title">总分趋势</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.points}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Line type="monotone" dataKey="total" name="总分" stroke="#171717" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+
+            <h2 className="interview-section-title">维度趋势</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.points}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Legend />
+                {DIM_LINES.map((dim) => (
+                  <Line
+                    key={dim.key}
+                    type="monotone"
+                    dataKey={dim.key}
+                    name={dim.label}
+                    stroke={DIM_COLORS[dim.key]}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        ) : null}
+      </main>
+    </div>
+  );
+}
