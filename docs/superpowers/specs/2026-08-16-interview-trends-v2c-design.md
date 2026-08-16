@@ -1,7 +1,7 @@
 # V2-C 成长分析（面试对比）— 设计规格
 
 **Date:** 2026-08-16  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v2c-trends  
 **Parent:** V1 MVP + V2-A 题库 + V2-B 语音  
 **Approach:** 后端聚合接口 `internal/analytics` + 前端 recharts 趋势页
 
