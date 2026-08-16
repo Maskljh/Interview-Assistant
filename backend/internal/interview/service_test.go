@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -803,7 +804,7 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 	svc := interview.NewService(sqlDB, capLLM, store)
 	svc.SetProfileProvider(fixedProfileProvider{p: profile.Profile{WeakDimensions: []string{"logic"}, BasedOnSessions: 3}})
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -832,7 +833,7 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -845,5 +846,85 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	}
 	if strings.Contains(capLLM.userPrompts[0], "Targeted focus") {
 		t.Fatalf("prompt should not contain targeted focus: %s", capLLM.userPrompts[0])
+	}
+}
+
+func TestCreatePersistsPersona(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-persona-persist@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
+
+	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "strict_tech")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, _, _, err := svc.Get(ctx, userID, session.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Persona != "strict_tech" {
+		t.Fatalf("persona = %q, want strict_tech", got.Persona)
+	}
+}
+
+func TestCreateDefaultsStandardPersona(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-persona-default@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
+
+	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if session.Persona != llm.StandardPersona {
+		t.Fatalf("persona = %q, want %q", session.Persona, llm.StandardPersona)
+	}
+}
+
+func TestCreateRejectsInvalidPersona(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-persona-invalid@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
+
+	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "evil")
+	if !errors.Is(err, interview.ErrInvalidPersona) {
+		t.Fatalf("err = %v, want ErrInvalidPersona", err)
+	}
+}
+
+func TestStartUsesPersonaInPrompt(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-persona-start@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-persona-start@example.com")
+
+	capLLM := &capturingLLM{}
+	svc := interview.NewService(sqlDB, capLLM, store)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "warm_hr")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if len(capLLM.userPrompts) != 1 {
+		t.Fatalf("captured %d prompts, want 1", len(capLLM.userPrompts))
+	}
+	if !strings.Contains(capLLM.userPrompts[0], "warm and supportive HR interviewer") {
+		t.Fatalf("prompt missing persona directive: %s", capLLM.userPrompts[0])
 	}
 }

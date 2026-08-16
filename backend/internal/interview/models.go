@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/interview-assistant/backend/internal/llm"
 )
 
 type Mode string
@@ -40,6 +42,7 @@ type Session struct {
 	ResumeText   *string
 	Mode         Mode
 	InputMode    InputMode
+	Persona      string
 	Status       Status
 	Score        *int
 	FeedbackJSON json.RawMessage
@@ -83,4 +86,15 @@ func ValidateInputMode(m InputMode) error {
 	default:
 		return ErrInvalidInput
 	}
+}
+
+var ErrInvalidPersona = errors.New("invalid persona")
+
+func validatePersona(p string) error {
+	for _, k := range llm.Personas {
+		if p == k {
+			return nil
+		}
+	}
+	return ErrInvalidPersona
 }
