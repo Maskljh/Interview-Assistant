@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, MODE_LABELS, STATUS_LABELS, formatDateZh } from '../lib/labels';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 function InterviewRow({ item }: { item: InterviewListItem }) {
   return (
@@ -124,6 +125,7 @@ export default function InterviewListPage() {
           </ul>
         )}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

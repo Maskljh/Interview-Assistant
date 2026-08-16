@@ -10,6 +10,7 @@ import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, MODE_LABELS, STATUS_LABELS, formatDateZh } from '../lib/labels';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
   text: '文本作答',
@@ -188,6 +189,7 @@ export default function InterviewDetailPage() {
           </>
         ) : null}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

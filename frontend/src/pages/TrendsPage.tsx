@@ -16,6 +16,7 @@ import type { InterviewMode } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -203,6 +204,7 @@ export default function TrendsPage() {
           </>
         ) : null}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

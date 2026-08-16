@@ -11,6 +11,7 @@ import { importQuestionsFromSession } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: string }[] =
   [
@@ -199,6 +200,7 @@ export default function ReportPage() {
           </>
         ) : null}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

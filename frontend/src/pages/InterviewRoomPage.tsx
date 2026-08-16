@@ -12,6 +12,7 @@ import { createVoicePlayer } from '../lib/voicePlayer';
 import { APP_NAME } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 interface Turn {
   id: number;
@@ -524,6 +525,7 @@ export default function InterviewRoomPage() {
           </>
         )}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

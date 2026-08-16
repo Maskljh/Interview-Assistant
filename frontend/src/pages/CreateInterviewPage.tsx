@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, MODE_LABELS } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
 
@@ -238,6 +239,7 @@ export default function CreateInterviewPage() {
           </button>
         </form>
       </main>
+      <MobileTabBar />
     </div>
   );
 }

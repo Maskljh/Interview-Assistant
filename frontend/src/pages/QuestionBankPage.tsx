@@ -14,6 +14,7 @@ import {
 } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
 import './InterviewPages.css';
+import MobileTabBar from '../components/MobileTabBar';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -275,6 +276,7 @@ export default function QuestionBankPage() {
           </button>
         </div>
       </main>
+      <MobileTabBar />
     </div>
   );
 }
