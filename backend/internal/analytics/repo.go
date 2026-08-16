@@ -39,9 +39,11 @@ func (r *Repo) ListCompletedScored(ctx context.Context, userID int64) ([]Complet
 	var out []CompletedRow
 	for rows.Next() {
 		var row CompletedRow
-		if err := rows.Scan(&row.ID, &row.JobJD, &row.Mode, &row.Score, &row.FeedbackJSON, &row.CreatedAt); err != nil {
+		var ns sql.NullString
+		if err := rows.Scan(&row.ID, &row.JobJD, &row.Mode, &row.Score, &ns, &row.CreatedAt); err != nil {
 			return nil, err
 		}
+		row.FeedbackJSON = []byte(ns.String)
 		out = append(out, row)
 	}
 	return out, rows.Err()
