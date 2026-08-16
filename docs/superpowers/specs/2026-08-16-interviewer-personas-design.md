@@ -1,7 +1,7 @@
 # V5 多面试官人格 — 设计规格
 
 **Date:** 2026-08-16  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v5-persona
 **Parent:** V1 MVP + V2-A 题库 + V2-B 语音 + V2-C 成长分析 + V3 针对性出题 + V4 手机端 PWA  
 **Approach:** 预设人格注入 LLM 出题与追问 prompt，持久化到会话并在界面展示
 
