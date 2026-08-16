@@ -1,7 +1,7 @@
 # V2-B 语音面试 — 设计规格
 
 **Date:** 2026-08-11  
-**Status:** Implemented on `feat/v2b-voice` — implementation plan at `docs/superpowers/plans/2026-08-11-voice-interview-v2b.md`  
+**Status:** Approved — implementation plan at `docs/superpowers/plans/2026-08-11-voice-interview-v2b.md`  
 **Parent:** V1 MVP + V2-A question bank  
 **Approach:** A — REST 语音适配（阿里云 ASR/TTS）+ 现有文本 WebSocket
 

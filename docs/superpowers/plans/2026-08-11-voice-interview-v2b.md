@@ -184,7 +184,7 @@ AliyunNLSAppKey       string
 
 `main.go`: if all three set → `speech.NewAliyunClient`; else `client = nil` and handlers return 502 with `{"error":"speech service unavailable"}`.
 
-- [x] **Step 1: Write failing handler tests** (`handler_test.go` with `NewFakeClient`)
+- [ ] **Step 1: Write failing handler tests** (`handler_test.go` with `NewFakeClient`)
 
 ```go
 func TestASRReturnsText(t *testing.T) { /* upload bytes → 200 {"text":"你好"} */ }
@@ -194,19 +194,19 @@ func TestTTSEmptyText400(t *testing.T)
 func TestSpeechUnavailable502(t *testing.T) { /* nil client */ }
 ```
 
-- [x] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run — FAIL**
 
 ```bash
 cd backend && go test ./internal/speech/ -count=1
 ```
 
-- [x] **Step 3: Implement fake + handler + config + wire**
+- [ ] **Step 3: Implement fake + handler + config + wire**
 
 Fake returns deterministic text/audio. Aliyun client: HTTP calls only, no audio disk write.
 
-- [x] **Step 4: Run — PASS**
+- [ ] **Step 4: Run — PASS**
 
-- [x] **Step 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(v2b): speech ASR/TTS API with Aliyun client"
@@ -226,21 +226,21 @@ git commit -m "feat(v2b): speech ASR/TTS API with Aliyun client"
 - `synthesizeSpeech(text: string): Promise<Blob>` — POST `/api/speech/tts`, response blob
 - `createInterview` / `createInterviewFromBank` accept `input_mode?: InputMode`
 
-- [x] **Step 1: Add API types and helpers**
+- [ ] **Step 1: Add API types and helpers**
 
-- [x] **Step 2: CreateInterviewPage** — radio「作答方式」：文本 / 语音；pass `input_mode` to create
+- [ ] **Step 2: CreateInterviewPage** — radio「作答方式」：文本 / 语音；pass `input_mode` to create
 
-- [x] **Step 3: QuestionBankPage** — practice dialog adds same selector; pass to `createInterviewFromBank`
+- [ ] **Step 3: QuestionBankPage** — practice dialog adds same selector; pass to `createInterviewFromBank`
 
-- [x] **Step 4: InterviewDetailPage** — show badge「文本作答」/「语音作答」
+- [ ] **Step 4: InterviewDetailPage** — show badge「文本作答」/「语音作答」
 
-- [x] **Step 5: Build**
+- [ ] **Step 5: Build**
 
 ```bash
 cd frontend && npm run build
 ```
 
-- [x] **Step 6: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git commit -m "feat(v2b): input_mode on create and bank practice UI"
@@ -265,18 +265,18 @@ git commit -m "feat(v2b): input_mode on create and bank practice UI"
 
 `text` mode: **no changes** to current submit flow.
 
-- [x] **Step 1: Implement recorder/player helpers with cleanup on unmount**
+- [ ] **Step 1: Implement recorder/player helpers with cleanup on unmount**
 
-- [x] **Step 2: Branch InterviewRoomPage on `input_mode`**
+- [ ] **Step 2: Branch InterviewRoomPage on `input_mode`**
 
-- [x] **Step 3: Manual smoke checklist** (document in task report)
+- [ ] **Step 3: Manual smoke checklist** (document in task report)
 
 - Voice JD create → room → hear TTS (fake/key) → hold speak → auto next question
 - Text create unchanged
 
-- [x] **Step 4: `npm run build`**
+- [ ] **Step 4: `npm run build`**
 
-- [x] **Step 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(v2b): voice room TTS playback and ASR auto-send"
@@ -289,7 +289,7 @@ git commit -m "feat(v2b): voice room TTS playback and ASR auto-send"
 **Files:**
 - Modify: `README.md`, `.env.example`, spec status line
 
-- [x] **Step 1: `.env.example`**
+- [ ] **Step 1: `.env.example`**
 
 ```env
 ALIYUN_ACCESS_KEY_ID=
@@ -297,28 +297,28 @@ ALIYUN_ACCESS_KEY_SECRET=
 ALIYUN_NLS_APP_KEY=
 ```
 
-- [x] **Step 2: README** — voice mode section: env vars, text mode works without them, speech routes 502 without keys
+- [ ] **Step 2: README** — voice mode section: env vars, text mode works without them, speech routes 502 without keys
 
-- [x] **Step 3: Run full backend tests serially**
+- [ ] **Step 3: Run full backend tests serially**
 
 ```bash
 cd backend && go test ./... -count=1 -p 1
 ```
 
-- [x] **Step 4: Map acceptance V1–V6** in task report / brief comment
+- [ ] **Step 4: Map acceptance V1–V6** in task report / brief comment
 
 | ID | Verification |
 |----|----------------|
-| V1 | PASS: full backend suite green, text-room flow untouched in `InterviewRoomPage` |
-| V2 | PASS: fake ASR handler test; voice room PTT auto-sends ASR text |
-| V3 | PASS: nil client 502 test + frontend fallback copy |
-| V4 | PASS: `TestSpeechUnavailable502`; text create path unchanged |
-| V5 | PASS: `TestCreateFromBankVoiceInputMode` from Task 2 |
-| V6 | PASS: migration only adds `input_mode`; speech handlers use memory, no files |
+| V1 | Existing interview tests + text room unchanged |
+| V2 | Voice room manual + ASR fake test sends answer |
+| V3 | Handler 502 + frontend error string |
+| V4 | nil speech client 502; text create OK |
+| V5 | from-bank voice test from Task 2 |
+| V6 | No new audio columns/tables; handlers don't write files |
 
-- [x] **Step 5: Update spec status** → `Implemented on feat/v2b-voice` after merge-ready
+- [ ] **Step 5: Update spec status** → `Implemented on feat/v2b-voice` after merge-ready
 
-- [x] **Step 6: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git commit -m "docs(v2b): aliyun speech env and voice mode README"
