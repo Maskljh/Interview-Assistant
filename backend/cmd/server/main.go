@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/analysis"
+	"github.com/interview-assistant/backend/internal/analytics"
 	"github.com/interview-assistant/backend/internal/config"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
@@ -69,6 +70,7 @@ func main() {
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
