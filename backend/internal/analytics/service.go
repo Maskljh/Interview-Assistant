@@ -10,10 +10,13 @@ import (
 )
 
 type dims struct {
-	Expression int `json:"expression"`
-	Logic      int `json:"logic"`
-	Content    int `json:"content"`
-	JobMatch   int `json:"job_match"`
+	TotalScore int `json:"total_score"`
+	Dimensions struct {
+		Expression int `json:"expression"`
+		Logic      int `json:"logic"`
+		Content    int `json:"content"`
+		JobMatch   int `json:"job_match"`
+	} `json:"dimensions"`
 }
 
 type Service struct {
@@ -61,10 +64,10 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 				JobTag:     tag,
 				Mode:       row.Mode,
 				Total:      row.Score,
-				Expression: d.Expression,
-				Logic:      d.Logic,
-				Content:    d.Content,
-				JobMatch:   d.JobMatch,
+				Expression: d.Dimensions.Expression,
+				Logic:      d.Dimensions.Logic,
+				Content:    d.Dimensions.Content,
+				JobMatch:   d.Dimensions.JobMatch,
 			},
 		})
 	}

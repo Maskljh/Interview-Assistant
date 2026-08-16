@@ -90,15 +90,10 @@ func registerUser(t *testing.T, r *gin.Engine, email string) (int64, string) {
 	return resp.User.ID, resp.Token
 }
 
-// fb is the feedback_json template used to seed completed sessions.
-//
-// NOTE: the analytics service parses dimensions from FLAT top-level keys
-// (its dims struct is {Expression,Logic,Content,JobMatch} with top-level
-// json tags). The template therefore places the four dimension scores at the
-// top level so they actually land in TrendPoint.Expression/Logic/Content/
-// JobMatch. (Production feedback_json nests them under "dimensions"; see
-// report for that mismatch.)
-const fb = `{"expression":%d,"logic":%d,"content":%d,"job_match":%d}`
+// fb is the feedback_json template used to seed completed sessions. It matches
+// the production format written by analysis.Service, which nests the four
+// dimension scores under "dimensions".
+const fb = `{"total_score":%d,"dimensions":{"expression":%d,"logic":%d,"content":%d,"job_match":%d},"strengths":[],"weaknesses":[],"suggestions":[]}`
 
 // insertCompletedSession inserts a completed, scored session with a distinct
 // created_at (via daysAgo) so ordering is deterministic.
@@ -142,9 +137,9 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-summary@example.com")
 
-	s1 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 72, fmt.Sprintf(fb, 70, 75, 80, 85), 3)
-	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 80, fmt.Sprintf(fb, 80, 78, 82, 90), 2)
-	s3 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 90, fmt.Sprintf(fb, 88, 85, 90, 95), 1)
+	s1 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 72, fmt.Sprintf(fb, 72, 70, 75, 80, 85), 3)
+	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 80, fmt.Sprintf(fb, 80, 80, 78, 82, 90), 2)
+	s3 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 90, fmt.Sprintf(fb, 90, 88, 85, 90, 95), 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
 	if err != nil {
@@ -216,10 +211,10 @@ func TestTrendsSkipsNonCompletedAndNullScore(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-skipstatus@example.com")
 
-	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70), 3)
+	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
 
 	score85 := 85
-	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "text", "draft", &score85, fmt.Sprintf(fb, 85, 85, 85, 85), 2)
+	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "text", "draft", &score85, fmt.Sprintf(fb, 85, 85, 85, 85, 85), 2)
 	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "text", "completed", nil, nil, 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
@@ -246,14 +241,14 @@ func TestTrendsSkipsBadFeedbackJSON(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-badjson@example.com")
 
-	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70), 2)
+	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 2)
 
 	// The feedback_json column is MySQL JSON, which rejects a literal
 	// 'not json' at insert time. Seed a valid JSON document that fails to
 	// unmarshal into the service's dims struct (string where int expected)
 	// so the service's skip-on-parse-error path is exercised.
 	bad := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 90,
-		`{"expression":"not-a-number","logic":90,"content":90,"job_match":90}`, 1)
+		`{"total_score":90,"dimensions":{"expression":"not-a-number","logic":90,"content":90,"job_match":90}}`, 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
 	if err != nil {
@@ -281,9 +276,9 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-filter@example.com")
 
-	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70), 3)
-	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "voice", 80, fmt.Sprintf(fb, 80, 80, 80, 80), 2)
-	insertCompletedSession(t, sqlDB, userID, "Frontend Engineer JD", "text", 90, fmt.Sprintf(fb, 90, 90, 90, 90), 1)
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "voice", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)
+	insertCompletedSession(t, sqlDB, userID, "Frontend Engineer JD", "text", 90, fmt.Sprintf(fb, 90, 90, 90, 90, 90), 1)
 
 	svc := analytics.NewService(sqlDB)
 	ctx := context.Background()
@@ -331,9 +326,9 @@ func TestTrendsIsolation(t *testing.T) {
 	userA, _ := registerUser(t, r, "test-trends-iso-a@example.com")
 	userB, _ := registerUser(t, r, "test-trends-iso-b@example.com")
 
-	a1 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 60, fmt.Sprintf(fb, 60, 60, 60, 60), 2)
-	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70), 1)
-	b1 := insertCompletedSession(t, sqlDB, userB, "Frontend Engineer JD", "text", 95, fmt.Sprintf(fb, 95, 95, 95, 95), 1)
+	a1 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 60, fmt.Sprintf(fb, 60, 60, 60, 60, 60), 2)
+	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "text", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 1)
+	b1 := insertCompletedSession(t, sqlDB, userB, "Frontend Engineer JD", "text", 95, fmt.Sprintf(fb, 95, 95, 95, 95, 95), 1)
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userA, "", "")
 	if err != nil {
