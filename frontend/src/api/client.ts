@@ -6,7 +6,9 @@ const USER_KEY = 'auth_user';
 // 2. Capacitor 原生 App 内：window.location.hostname 是 localhost（手机自己），
 //    必须用注入的地址，否则回退到当前 hostname
 // 3. 浏览器环境：跟随当前页面的 hostname（桌面 localhost、手机经局域网访问时自动用局域网 IP）
-const isNative = typeof window !== 'undefined' && 'Capacitor' in window;
+import { Capacitor } from '@capacitor/core';
+
+const isNative = Capacitor.isNativePlatform();
 const API_BASE = import.meta.env.VITE_API_BASE
   ? import.meta.env.VITE_API_BASE
   : isNative
