@@ -12,6 +12,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- pdfjs-dist 引用 Iterator 全局（iterator helpers 提案特性），旧版 Android
+         WebView 无此对象会在模块加载时抛 ReferenceError 导致白屏。
+         最小 polyfill：仅保证 Iterator 存在；pdfjs 检测到 join 缺失会自行安装实现。 -->
+    <script>
+      if (typeof Iterator === 'undefined') {
+        window.Iterator = { prototype: {} };
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
