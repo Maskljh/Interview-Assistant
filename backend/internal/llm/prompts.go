@@ -251,3 +251,34 @@ Job description:
 Resume:
 %s`, jobJD, resume)
 }
+
+type ClassifyOut struct {
+	Classifications []struct {
+		Question  string `json:"question"`
+		Dimension string `json:"dimension"`
+	} `json:"classifications"`
+}
+
+// ClassifyDimensionsSystem instructs the model to tag each question with one
+// of the four interview assessment dimensions.
+func ClassifyDimensionsSystem() string {
+	return `You are an interview coach. Tag each question with the interview dimension it assesses.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"classifications":[{"question":"...","dimension":"..."}]}
+
+Rules:
+- The question field must echo the original question text exactly, verbatim
+- dimension must be one of: expression, logic, content, job_match
+- expression: communication, delivery, wording; logic: structure, reasoning; content: depth, substance, knowledge; job_match: fit with the role's requirements
+- If a question fits no dimension clearly, pick the closest one`
+}
+
+// ClassifyDimensionsUser builds the user prompt with the questions to classify.
+func ClassifyDimensionsUser(questions []string) string {
+	var sb strings.Builder
+	for _, q := range questions {
+		fmt.Fprintf(&sb, "- %s\n", q)
+	}
+	return fmt.Sprintf("Classify each of these interview questions into one dimension.\n\nQuestions:\n%s", sb.String())
+}
