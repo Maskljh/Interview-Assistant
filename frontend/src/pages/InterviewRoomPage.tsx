@@ -54,11 +54,21 @@ export default function InterviewRoomPage() {
   const speechVersionRef = useRef(0);
   const ttsMutedRef = useRef(false);
   const currentQuestionRef = useRef('');
+  const lastInterviewerMsgRef = useRef<string | null>(null);
   const recordStartRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const attemptRef = useRef(0);
+  const voiceReadyRef = useRef(false);
+  const voiceCancelRef = useRef(false);
+  const voiceActiveRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
     setTurns((prev) => [...prev, { id: turnIdRef.current, role, content }]);
+    if (role === 'interviewer') {
+      lastInterviewerMsgRef.current = content;
+    }
   }, []);
 
   const submitAnswer = useCallback(
@@ -139,7 +149,9 @@ export default function InterviewRoomPage() {
           setThinking(false);
           setVoicePhase('idle');
           if (msg.content) {
-            appendTurn('interviewer', msg.content);
+            if (msg.content !== lastInterviewerMsgRef.current) {
+              appendTurn('interviewer', msg.content);
+            }
             currentQuestionRef.current = msg.content;
             if (inputModeRef.current === 'voice') {
               void playQuestion(msg.content);
@@ -170,31 +182,58 @@ export default function InterviewRoomPage() {
     [appendTurn, interviewId, navigate, playQuestion],
   );
 
-  const connect = useCallback(() => {
-    const token = getToken();
-    if (!token || !Number.isFinite(interviewId)) {
-      setError('未登录或登录已失效');
-      return;
-    }
+  const RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
 
-    socketRef.current?.close();
-    setDisconnected(false);
-    setError('');
+  const connectWithRetry = useCallback(
+    (attempt: number) => {
+      if (!mountedRef.current) return;
+      attemptRef.current = attempt;
+      const token = getToken();
+      if (!token || !Number.isFinite(interviewId)) {
+        setError('未登录或登录已失效');
+        return;
+      }
+      socketRef.current?.close();
+      setDisconnected(false);
+      setError('');
 
-    socketRef.current = connectInterviewWS(interviewId, token, {
-      onMessage: handleMessage,
-      onClose: () => {
-        if (!doneRef.current) {
-          setDisconnected(true);
+      socketRef.current = connectInterviewWS(interviewId, token, {
+        onMessage: (msg) => {
+          if (msg.type === 'session_started') {
+            attemptRef.current = 0; // 重连成功，重置退避
+          }
+          handleMessage(msg);
+        },
+        onClose: () => {
+          if (!mountedRef.current || doneRef.current) return;
           setThinking(false);
           setVoicePhase('idle');
           voicePlayerRef.current?.stop();
-        }
-      },
-    });
-  }, [handleMessage, interviewId]);
+          if (attemptRef.current >= RETRY_DELAYS.length) {
+            setDisconnected(true); // 退避耗尽，降级手动按钮
+            return;
+          }
+          const delay = RETRY_DELAYS[attemptRef.current];
+          attemptRef.current += 1;
+          setStatusLine(`连接中断，正在重连（第 ${attemptRef.current} 次）…`);
+          if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = window.setTimeout(
+            () => connectWithRetry(attemptRef.current),
+            delay,
+          );
+        },
+      });
+    },
+    [handleMessage, interviewId],
+  );
+
+  const connect = useCallback(() => {
+    attemptRef.current = 0;
+    connectWithRetry(0);
+  }, [connectWithRetry]);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!Number.isFinite(interviewId)) {
       setError('无效的面试 ID');
       setLoadingInterview(false);
@@ -213,6 +252,23 @@ export default function InterviewRoomPage() {
         setInputMode(data.input_mode);
         setPersona(data.persona);
         doneRef.current = false;
+        let lastInterviewerContent: string | null = null;
+        if (data.turns.length > 0) {
+          const initial: Turn[] = data.turns.map((t) => ({
+            id: t.id,
+            role: t.role === 'interviewer' ? 'interviewer' : 'candidate',
+            content: t.content,
+          }));
+          setTurns(initial);
+          turnIdRef.current = Math.max(0, ...data.turns.map((t) => t.id));
+          const lastInterviewerTurn = [...initial]
+            .reverse()
+            .find((t) => t.role === 'interviewer');
+          lastInterviewerContent = lastInterviewerTurn
+            ? lastInterviewerTurn.content
+            : null;
+        }
+        lastInterviewerMsgRef.current = lastInterviewerContent;
         connect();
       } catch (err) {
         if (!cancelled) {
@@ -231,10 +287,18 @@ export default function InterviewRoomPage() {
 
     return () => {
       cancelled = true;
+      mountedRef.current = false;
       speechVersionRef.current += 1;
       voiceRecorderRef.current?.cancel();
       voiceRecorderRef.current = null;
       recordStartRef.current = null;
+      voiceReadyRef.current = false;
+      voiceCancelRef.current = false;
+      voiceActiveRef.current = false;
+      if (retryTimerRef.current != null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
@@ -242,29 +306,43 @@ export default function InterviewRoomPage() {
   }, [connect, interviewId]);
 
   async function handleStartRecording() {
+    if (voiceActiveRef.current) {
+      return;
+    }
     if (
       disconnected ||
       thinking ||
       ending ||
-      voicePhase === 'recording' ||
       voicePhase === 'transcribing' ||
       voicePhase === 'sending'
     ) {
       return;
     }
+    voiceActiveRef.current = true;
     speechVersionRef.current += 1;
     voicePlayerRef.current?.stop();
     setError('');
-    setStatusLine('');
+    voiceCancelRef.current = false;
+    voiceReadyRef.current = false;
+    setVoicePhase('recording');
+    setStatusLine('正在准备录音…');
     try {
-      recordStartRef.current = Date.now();
       const recorder = await startRecordingSession();
-      voiceRecorderRef.current?.cancel();
+      if (voiceCancelRef.current) {
+        voiceActiveRef.current = false;
+        recorder.cancel();
+        voiceRecorderRef.current = null;
+        setVoicePhase('idle');
+        setStatusLine('录音未开始，请重试');
+        return;
+      }
+      recordStartRef.current = Date.now(); // 计时点后移：录音真正开始
+      voiceReadyRef.current = true;
       voiceRecorderRef.current = recorder;
-      setVoicePhase('recording');
       setStatusLine('正在录音，松开发送');
     } catch {
-      recordStartRef.current = null;
+      voiceActiveRef.current = false;
+      voiceCancelRef.current = false;
       setVoicePhase('idle');
       setStatusLine('无法访问麦克风，请使用文字作答');
     }
@@ -272,8 +350,13 @@ export default function InterviewRoomPage() {
 
   async function handleStopRecording() {
     const recorder = voiceRecorderRef.current;
-    if (!recorder) return;
+    if (!recorder) {
+      voiceCancelRef.current = true; // 麦克风未就绪已松手：就绪后释放
+      return;
+    }
     voiceRecorderRef.current = null;
+    voiceReadyRef.current = false;
+    voiceActiveRef.current = false;
     setVoicePhase('transcribing');
     setStatusLine('正在识别语音...');
     try {
@@ -330,6 +413,9 @@ export default function InterviewRoomPage() {
     voiceRecorderRef.current?.cancel();
     voiceRecorderRef.current = null;
     recordStartRef.current = null;
+    voiceReadyRef.current = false;
+    voiceCancelRef.current = false;
+    voiceActiveRef.current = false;
     setVoicePhase('idle');
     try {
       await endInterview(interviewId);

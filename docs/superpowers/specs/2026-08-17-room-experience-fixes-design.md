@@ -1,7 +1,7 @@
 # V10 面试房间体验修复 — 设计规格
 
 **Date:** 2026-08-17  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v10-room-experience-fixes
 **Parent:** 全功能（V1–V9）体验审查后的 P0 修复  
 **Approach:** 修复断线重连体验（自动重连 + 心跳 + 对话恢复）、语音短按竞态、首条语速失真
 
