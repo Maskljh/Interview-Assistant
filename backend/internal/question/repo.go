@@ -101,9 +101,13 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 		clauses = append(clauses, "question LIKE ?")
 		args = append(args, "%"+f.Query+"%")
 	}
+	if f.Dimension != "" {
+		clauses = append(clauses, "dimension = ?")
+		args = append(args, f.Dimension)
+	}
 
 	query := fmt.Sprintf(
-		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, starred, created_at
+		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
 		 FROM question_bank
 		 WHERE %s
 		 ORDER BY created_at DESC`,
@@ -128,11 +132,54 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 
 func (r *Repo) GetByID(id int64) (*Item, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, starred, created_at
+		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
 		 FROM question_bank WHERE id = ?`,
 		id,
 	)
 	return scanItem(row)
+}
+
+// UpdateDimension sets a bank question's dimension tag (empty clears it).
+func (r *Repo) UpdateDimension(id int64, dimension string) error {
+	if dimension == "" {
+		_, err := r.db.Exec(`UPDATE question_bank SET dimension = NULL WHERE id = ?`, id)
+		return err
+	}
+	_, err := r.db.Exec(`UPDATE question_bank SET dimension = ? WHERE id = ?`, dimension, id)
+	return err
+}
+
+// UpdateDimensionByText sets dimension for the user's bank question whose text
+// matches exactly (used to apply LLM classification by echoed text).
+func (r *Repo) UpdateDimensionByText(userID int64, questionText, dimension string) error {
+	_, err := r.db.Exec(`UPDATE question_bank SET dimension = ? WHERE user_id = ? AND question = ?`, dimension, userID, questionText)
+	return err
+}
+
+// ListByDimensionForFocused returns starred-first, newest-first questions for
+// one dimension, capped at limit, belonging to the user.
+func (r *Repo) ListByDimensionForFocused(userID int64, dimension string, limit int) ([]Item, error) {
+	rows, err := r.db.Query(
+		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
+		 FROM question_bank
+		 WHERE user_id = ? AND dimension = ?
+		 ORDER BY starred DESC, created_at DESC
+		 LIMIT ?`,
+		userID, dimension, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		item, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
 }
 
 func (r *Repo) UpdateStarred(id int64, starred bool) error {
@@ -158,10 +205,11 @@ func scanItem(row scanner) (*Item, error) {
 	var answer sql.NullString
 	var sourceSessionID sql.NullInt64
 	var jobTag sql.NullString
+	var dimension sql.NullString
 	var starred int
 	if err := row.Scan(
 		&item.ID, &item.UserID, &item.Question, &answer,
-		&item.Source, &sourceSessionID, &jobTag, &starred, &item.CreatedAt,
+		&item.Source, &sourceSessionID, &jobTag, &dimension, &starred, &item.CreatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -174,6 +222,9 @@ func scanItem(row scanner) (*Item, error) {
 	}
 	if jobTag.Valid {
 		item.JobTag = &jobTag.String
+	}
+	if dimension.Valid {
+		item.Dimension = &dimension.String
 	}
 	item.Starred = starred != 0
 	return &item, nil

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -80,7 +81,7 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
-	question.RegisterRoutes(r, sqlDB, secret)
+	question.RegisterRoutes(r, sqlDB, secret, llmClient)
 	return r
 }
 
@@ -108,6 +109,25 @@ func fakeQuestionsLLM(n int) llm.Client {
 		}
 		return nil
 	}}
+}
+
+type classifyingLLM struct {
+	out llm.ClassifyOut
+}
+
+func (c *classifyingLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	dest, ok := out.(*llm.ClassifyOut)
+	if !ok {
+		return fmt.Errorf("unexpected out type")
+	}
+	*dest = c.out
+	return nil
+}
+
+type failingLLM struct{}
+
+func (failingLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	return fmt.Errorf("classification failed")
 }
 
 func registerUser(t *testing.T, r *gin.Engine, email string) string {
@@ -190,6 +210,7 @@ type bankItem struct {
 	Source          string  `json:"source"`
 	SourceSessionID *int64  `json:"source_session_id"`
 	JobTag          *string `json:"job_tag"`
+	Dimension       *string `json:"dimension"`
 	Starred         bool    `json:"starred"`
 }
 
@@ -211,6 +232,41 @@ func listQuestions(t *testing.T, r *gin.Engine, token, query string) []bankItem 
 		t.Fatalf("decode list: %v", err)
 	}
 	return items
+}
+
+func userIDByEmail(t *testing.T, sqlDB *sql.DB, email string) int64 {
+	t.Helper()
+	var id int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, email).Scan(&id); err != nil {
+		t.Fatalf("get user id: %v", err)
+	}
+	return id
+}
+
+// insertBankQuestion inserts a bank question directly. dimension "" maps to NULL.
+func insertBankQuestion(t *testing.T, sqlDB *sql.DB, userID int64, question string, starred bool, dimension string) int64 {
+	t.Helper()
+	starVal := 0
+	if starred {
+		starVal = 1
+	}
+	var dim any
+	if dimension != "" {
+		dim = dimension
+	}
+	res, err := sqlDB.Exec(
+		`INSERT INTO question_bank (user_id, question, source, source_session_id, job_tag, dimension, starred)
+		 VALUES (?, ?, 'practice', NULL, NULL, ?, ?)`,
+		userID, question, dim, starVal,
+	)
+	if err != nil {
+		t.Fatalf("insert bank question: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	return id
 }
 
 func TestImportFromSessionCopiesMainQuestions(t *testing.T) {
@@ -387,5 +443,160 @@ func TestListIsolation(t *testing.T) {
 	itemsB := listQuestions(t, r, tokenB, "")
 	if len(itemsB) != 0 {
 		t.Fatalf("user B list len = %d, want 0", len(itemsB))
+	}
+}
+
+func TestImportClassifiesDimensions(t *testing.T) {
+	sqlDB := testDB(t)
+	classOut := llm.ClassifyOut{}
+	classOut.Classifications = append(classOut.Classifications, struct {
+		Question  string `json:"question"`
+		Dimension string `json:"dimension"`
+	}{Question: "Q1", Dimension: "logic"})
+	r := testRouter(t, sqlDB, &classifyingLLM{out: classOut})
+
+	const email = "test-question-classify@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	for i, q := range []string{"Q1", "Q2"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
+			sessionID, i+1, q,
+		); err != nil {
+			t.Fatalf("seed question: %v", err)
+		}
+	}
+
+	imported := importFromSession(t, r, token, sessionID)
+	if imported != 2 {
+		t.Fatalf("imported = %d, want 2", imported)
+	}
+
+	userID := userIDByEmail(t, sqlDB, email)
+	var dim sql.NullString
+	if err := sqlDB.QueryRow(`SELECT dimension FROM question_bank WHERE user_id = ? AND question = 'Q1'`, userID).Scan(&dim); err != nil {
+		t.Fatalf("read Q1 dimension: %v", err)
+	}
+	if !dim.Valid || dim.String != "logic" {
+		t.Fatalf("Q1 dimension = %v, want logic", dim)
+	}
+	if err := sqlDB.QueryRow(`SELECT dimension FROM question_bank WHERE user_id = ? AND question = 'Q2'`, userID).Scan(&dim); err != nil {
+		t.Fatalf("read Q2 dimension: %v", err)
+	}
+	if dim.Valid {
+		t.Fatalf("Q2 dimension = %q, want NULL", dim.String)
+	}
+}
+
+func TestImportClassificationFailureKeepsQuestions(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, failingLLM{})
+
+	const email = "test-question-classify-fail@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	for i, q := range []string{"Q1", "Q2"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
+			sessionID, i+1, q,
+		); err != nil {
+			t.Fatalf("seed question: %v", err)
+		}
+	}
+
+	imported := importFromSession(t, r, token, sessionID)
+	if imported != 2 {
+		t.Fatalf("imported = %d, want 2", imported)
+	}
+
+	userID := userIDByEmail(t, sqlDB, email)
+	rows, err := sqlDB.Query(`SELECT dimension FROM question_bank WHERE user_id = ?`, userID)
+	if err != nil {
+		t.Fatalf("query dimensions: %v", err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var dim sql.NullString
+		if err := rows.Scan(&dim); err != nil {
+			t.Fatalf("scan dimension: %v", err)
+		}
+		if dim.Valid {
+			t.Fatalf("expected NULL dimension, got %q", dim.String)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("bank rows = %d, want 2", count)
+	}
+}
+
+func TestListFiltersByDimension(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-listdim@example.com"
+	token := registerUser(t, r, email)
+	userID := userIDByEmail(t, sqlDB, email)
+	insertBankQuestion(t, sqlDB, userID, "logic question", false, "logic")
+	insertBankQuestion(t, sqlDB, userID, "content question", false, "content")
+
+	items := listQuestions(t, r, token, "dimension=logic")
+	if len(items) != 1 {
+		t.Fatalf("len = %d, want 1", len(items))
+	}
+	if items[0].Question != "logic question" {
+		t.Fatalf("got question %q, want logic question", items[0].Question)
+	}
+	if items[0].Dimension == nil || *items[0].Dimension != "logic" {
+		t.Fatalf("dimension = %v, want logic", items[0].Dimension)
+	}
+}
+
+func TestFocusedStarredFirstAndLimit(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	_ = registerUser(t, r, "test-question-focused@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-question-focused@example.com")
+	id1 := insertBankQuestion(t, sqlDB, userID, "focused q1", true, "logic")
+	id2 := insertBankQuestion(t, sqlDB, userID, "focused q2", true, "logic")
+	insertBankQuestion(t, sqlDB, userID, "focused q3", false, "logic")
+
+	svc := question.NewService(sqlDB, nil)
+	items, err := svc.Focused(context.Background(), userID, []string{"logic"}, 2)
+	if err != nil {
+		t.Fatalf("focused: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("len = %d, want 2", len(items))
+	}
+	got := map[int64]bool{}
+	for _, it := range items {
+		if !it.Starred {
+			t.Fatalf("expected starred item, got id=%d", it.ID)
+		}
+		got[it.ID] = true
+	}
+	if !got[id1] || !got[id2] {
+		t.Fatalf("expected ids %d and %d, got %v", id1, id2, got)
+	}
+}
+
+func TestFocusedEmptyDimensionsRejected(t *testing.T) {
+	sqlDB := testDB(t)
+	svc := question.NewService(sqlDB, nil)
+	_, err := svc.Focused(context.Background(), 1, nil, 5)
+	if !errors.Is(err, question.ErrInvalidInput) {
+		t.Fatalf("err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestFocusedInvalidDimensionRejected(t *testing.T) {
+	sqlDB := testDB(t)
+	svc := question.NewService(sqlDB, nil)
+	_, err := svc.Focused(context.Background(), 1, []string{"evil"}, 5)
+	if !errors.Is(err, question.ErrInvalidInput) {
+		t.Fatalf("err = %v, want ErrInvalidInput", err)
 	}
 }

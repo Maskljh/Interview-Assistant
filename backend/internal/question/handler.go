@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/auth"
+	"github.com/interview-assistant/backend/internal/llm"
 )
 
 type Handler struct {
@@ -18,13 +19,14 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string) {
-	svc := NewService(db)
+func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client) {
+	svc := NewService(db, llmClient)
 	h := NewHandler(svc)
 	protected := r.Group("/api/questions")
 	protected.Use(auth.Middleware(secret))
 	protected.GET("", h.List)
 	protected.POST("/from-session/:sessionId", h.ImportFromSession)
+	protected.POST("/question-bank/focused", h.Focused)
 	protected.PATCH("/:id", h.Patch)
 	protected.DELETE("/:id", h.Delete)
 }
@@ -43,6 +45,7 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	f.JobTag = c.Query("job_tag")
 	f.Query = c.Query("q")
+	f.Dimension = c.Query("dimension")
 
 	items, err := h.svc.List(c.Request.Context(), userID.(int64), f)
 	if err != nil {
@@ -78,6 +81,34 @@ func (h *Handler) ImportFromSession(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"imported": imported})
+}
+
+type focusedRequest struct {
+	Dimensions  []string `json:"dimensions"`
+	LimitPerDim int      `json:"limit_per_dimension"`
+}
+
+func (h *Handler) Focused(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req focusedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	items, err := h.svc.Focused(c.Request.Context(), userID.(int64), req.Dimensions, req.LimitPerDim)
+	if errors.Is(err, ErrInvalidInput) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid dimensions"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not build focused set"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
 type patchRequest struct {

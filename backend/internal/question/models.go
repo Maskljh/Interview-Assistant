@@ -10,12 +10,26 @@ type Item struct {
 	Source          string    `json:"source"`
 	SourceSessionID *int64    `json:"source_session_id"`
 	JobTag          *string   `json:"job_tag"`
+	Dimension       *string   `json:"dimension"`
 	Starred         bool      `json:"starred"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
 type ListFilter struct {
-	Starred *bool
-	JobTag  string
-	Query   string
+	Starred   *bool
+	JobTag    string
+	Query     string
+	Dimension string
+}
+
+// dimensionKeys are the four valid assessment dimensions (single source).
+var dimensionKeys = []string{"expression", "logic", "content", "job_match"}
+
+func validateDimension(d string) error {
+	for _, k := range dimensionKeys {
+		if d == k {
+			return nil
+		}
+	}
+	return ErrInvalidInput
 }

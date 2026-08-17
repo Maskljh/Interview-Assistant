@@ -1,7 +1,7 @@
 # V7 错题本专项训练（薄弱维度组卷）— 设计规格
 
 **Date:** 2026-08-17  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v7-focused-practice
 **Parent:** V1 MVP + V2 题库/语音/成长 + V3 画像出题 + V4 PWA + V5 人格 + V6 匹配预检  
 **Approach:** 题库题目打维度标签（LLM 自动分类），新建页画像卡一键按薄弱维度从题库组卷开练
 

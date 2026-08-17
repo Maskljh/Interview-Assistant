@@ -3,15 +3,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   createInterview,
+  createInterviewFromBank,
   startInterview,
   type InputMode,
   type InterviewMode,
   type Persona,
 } from '../api/interviews';
+import { fetchFocusedQuestions } from '../api/questions';
 import { fetchProfile, type Profile } from '../api/profile';
 import { fetchPreCheck, type PreCheckOut } from '../api/precheck';
 import { useAuth } from '../auth/AuthContext';
-import { APP_NAME, MODE_LABELS, PERSONA_LABELS } from '../lib/labels';
+import {
+  APP_NAME,
+  DIMENSION_LABELS,
+  MODE_LABELS,
+  PERSONA_LABELS,
+} from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
@@ -19,13 +26,6 @@ import MobileTabBar from '../components/MobileTabBar';
 const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
 
 const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
-
-const DIMENSION_LABELS: Record<string, string> = {
-  expression: '表达能力',
-  logic: '逻辑结构',
-  content: '内容质量',
-  job_match: '岗位匹配',
-};
 
 const INPUT_MODES: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
@@ -49,6 +49,7 @@ export default function CreateInterviewPage() {
   const [prechecking, setPrechecking] = useState(false);
   const [precheckError, setPrecheckError] = useState('');
   const [precheckStale, setPrecheckStale] = useState(false);
+  const [focusedStarting, setFocusedStarting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +115,30 @@ export default function CreateInterviewPage() {
     }
   }
 
+  async function handleFocusedPractice() {
+    if (!profile) return;
+    setError('');
+    setFocusedStarting(true);
+    try {
+      const items = await fetchFocusedQuestions(profile.weak_dimensions);
+      if (items.length === 0) {
+        setError('题库中没有该薄弱维度的题目，建议先导入');
+        return;
+      }
+      const created = await createInterviewFromBank({
+        question_ids: items.map((q) => q.id),
+        mode,
+        input_mode: inputMode,
+        persona,
+      });
+      navigate(`/interviews/${created.id}/room`, { replace: true });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '专项练习创建失败');
+    } finally {
+      setFocusedStarting(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -170,13 +195,23 @@ export default function CreateInterviewPage() {
         {profile && (
           <div className="profile-card">
             {profile.weak_dimensions.length > 0 ? (
-              <p>
-                针对性出题已开启：根据你最近 {profile.based_on_sessions} 场面试，薄弱点是
-                {profile.weak_dimensions
-                  .map((d) => DIMENSION_LABELS[d] ?? d)
-                  .map((label) => `【${label}】`)
-                  .join('、')}
-              </p>
+              <>
+                <p>
+                  针对性出题已开启：根据你最近 {profile.based_on_sessions} 场面试，薄弱点是
+                  {profile.weak_dimensions
+                    .map((d) => DIMENSION_LABELS[d] ?? d)
+                    .map((label) => `【${label}】`)
+                    .join('、')}
+                </p>
+                <button
+                  type="button"
+                  className="interview-file-clear"
+                  onClick={handleFocusedPractice}
+                  disabled={focusedStarting || loading}
+                >
+                  {focusedStarting ? '正在组卷…' : '针对薄弱点开始练习'}
+                </button>
+              </>
             ) : (
               <p>暂无历史画像，将按通用方式出题</p>
             )}

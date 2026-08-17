@@ -148,3 +148,22 @@ func TestGenerateQuestionsUserInjectionsCoexist(t *testing.T) {
 		t.Fatalf("precheck directive missing: %s", got)
 	}
 }
+
+func TestClassifyDimensionsSystemRequiresSchema(t *testing.T) {
+	sys := ClassifyDimensionsSystem()
+	if !strings.Contains(sys, `"classifications"`) || !strings.Contains(sys, `"dimension"`) {
+		t.Fatalf("schema fields missing: %s", sys)
+	}
+	for _, d := range []string{"expression", "logic", "content", "job_match"} {
+		if !strings.Contains(sys, d) {
+			t.Fatalf("dimension %s missing from rules: %s", d, sys)
+		}
+	}
+}
+
+func TestClassifyDimensionsUserListsQuestions(t *testing.T) {
+	got := ClassifyDimensionsUser([]string{"Q1", "Q2"})
+	if !strings.Contains(got, "- Q1") || !strings.Contains(got, "- Q2") {
+		t.Fatalf("questions missing from prompt: %s", got)
+	}
+}
