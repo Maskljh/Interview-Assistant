@@ -59,6 +59,7 @@ export default function InterviewRoomPage() {
   const attemptRef = useRef(0);
   const voiceReadyRef = useRef(false);
   const voiceCancelRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
@@ -178,6 +179,7 @@ export default function InterviewRoomPage() {
 
   const connectWithRetry = useCallback(
     (attempt: number) => {
+      if (!mountedRef.current) return;
       attemptRef.current = attempt;
       const token = getToken();
       if (!token || !Number.isFinite(interviewId)) {
@@ -196,7 +198,7 @@ export default function InterviewRoomPage() {
           handleMessage(msg);
         },
         onClose: () => {
-          if (doneRef.current) return;
+          if (!mountedRef.current || doneRef.current) return;
           setThinking(false);
           setVoicePhase('idle');
           voicePlayerRef.current?.stop();
@@ -224,6 +226,7 @@ export default function InterviewRoomPage() {
   }, [connectWithRetry]);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!Number.isFinite(interviewId)) {
       setError('无效的面试 ID');
       setLoadingInterview(false);
@@ -269,6 +272,7 @@ export default function InterviewRoomPage() {
 
     return () => {
       cancelled = true;
+      mountedRef.current = false;
       speechVersionRef.current += 1;
       voiceRecorderRef.current?.cancel();
       voiceRecorderRef.current = null;
