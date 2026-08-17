@@ -1,7 +1,7 @@
 # V9 追问轮数随人格 — 设计规格
 
 **Date:** 2026-08-17  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v9-persona-followups
 **Parent:** V5 面试官人格（追问 prompt 已注入人格；本功能深化轮数规则）  
 **Approach:** 人格决定每个主问题的追问轮数上限，替换全局常量 `MaxFollowUpsPerQuestion = 2`
 

@@ -49,6 +49,23 @@ var PersonaPrompts = map[string]string{
 	"stress":      "You are a fast-paced stress interviewer. Ask rapid successive follow-ups, apply pressure, and keep the pace quick to test composure under stress.",
 }
 
+// MaxFollowUpsByPersona caps follow-up turns per main question per persona.
+// standard/unknown fall back to 2 (legacy behavior).
+var MaxFollowUpsByPersona = map[string]int{
+	StandardPersona: 2,
+	"strict_tech":   4,
+	"warm_hr":       1,
+	"stress":        4,
+}
+
+// FollowUpLimit returns the follow-up cap for a persona; unknown → 2.
+func FollowUpLimit(persona string) int {
+	if n, ok := MaxFollowUpsByPersona[persona]; ok {
+		return n
+	}
+	return 2
+}
+
 // personaInjection returns the persona instruction block, or "" when the
 // persona is standard/empty/unknown so prompts stay byte-identical to legacy.
 func personaInjection(persona string) string {
