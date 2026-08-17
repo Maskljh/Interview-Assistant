@@ -86,8 +86,7 @@ func (h *Handler) Serve(c *gin.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				_ = conn.SetWriteDeadline(time.Now().Add(h.writeWait))
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(h.writeWait)); err != nil {
 					return
 				}
 			case <-ctx.Done():
@@ -98,11 +97,11 @@ func (h *Handler) Serve(c *gin.Context) {
 
 	msgs, err := h.svc.BeginLive(ctx, userID, sessionID)
 	if err != nil {
-		_ = conn.WriteJSON(ServerMsg{Type: "status", Content: err.Error()})
+		_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
 		return
 	}
 	for _, m := range msgs {
-		if err := conn.WriteJSON(toServerMsg(m)); err != nil {
+		if err := writeJSON(conn, toServerMsg(m)); err != nil {
 			return
 		}
 	}
@@ -117,11 +116,11 @@ func (h *Handler) Serve(c *gin.Context) {
 		}
 		answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content, clientMsg.VoiceDurationMs)
 		if err != nil {
-			_ = conn.WriteJSON(ServerMsg{Type: "status", Content: err.Error()})
+			_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
 			continue
 		}
 		for _, m := range answerMsgs {
-			if err := conn.WriteJSON(toServerMsg(m)); err != nil {
+			if err := writeJSON(conn, toServerMsg(m)); err != nil {
 				return
 			}
 		}

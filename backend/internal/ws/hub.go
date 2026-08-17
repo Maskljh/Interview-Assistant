@@ -6,6 +6,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// writeMu guards every conn.WriteJSON call so concurrent writers (the Serve
+// read loop and hub Broadcast, e.g. ForceEnd -> BroadcastDone) cannot race on
+// the same connection. gorilla/websocket panics on concurrent writes; heartbeat
+// pings use WriteControl, which gorilla documents as safe to call concurrently,
+// so they do not take this lock.
+var writeMu sync.Mutex
+
+func writeJSON(conn *websocket.Conn, msg any) error {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	return conn.WriteJSON(msg)
+}
+
 type Hub struct {
 	mu    sync.Mutex
 	conns map[int64]map[*websocket.Conn]struct{}
@@ -43,7 +56,7 @@ func (h *Hub) Broadcast(sessionID int64, msg ServerMsg) {
 	}
 	h.mu.Unlock()
 	for _, conn := range targets {
-		_ = conn.WriteJSON(msg)
+		_ = writeJSON(conn, msg)
 	}
 }
 

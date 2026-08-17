@@ -54,16 +54,21 @@ export default function InterviewRoomPage() {
   const speechVersionRef = useRef(0);
   const ttsMutedRef = useRef(false);
   const currentQuestionRef = useRef('');
+  const lastInterviewerMsgRef = useRef<string | null>(null);
   const recordStartRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const attemptRef = useRef(0);
   const voiceReadyRef = useRef(false);
   const voiceCancelRef = useRef(false);
+  const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
     setTurns((prev) => [...prev, { id: turnIdRef.current, role, content }]);
+    if (role === 'interviewer') {
+      lastInterviewerMsgRef.current = content;
+    }
   }, []);
 
   const submitAnswer = useCallback(
@@ -144,7 +149,9 @@ export default function InterviewRoomPage() {
           setThinking(false);
           setVoicePhase('idle');
           if (msg.content) {
-            appendTurn('interviewer', msg.content);
+            if (msg.content !== lastInterviewerMsgRef.current) {
+              appendTurn('interviewer', msg.content);
+            }
             currentQuestionRef.current = msg.content;
             if (inputModeRef.current === 'voice') {
               void playQuestion(msg.content);
@@ -245,6 +252,7 @@ export default function InterviewRoomPage() {
         setInputMode(data.input_mode);
         setPersona(data.persona);
         doneRef.current = false;
+        let lastInterviewerContent: string | null = null;
         if (data.turns.length > 0) {
           const initial: Turn[] = data.turns.map((t) => ({
             id: t.id,
@@ -253,7 +261,14 @@ export default function InterviewRoomPage() {
           }));
           setTurns(initial);
           turnIdRef.current = Math.max(0, ...data.turns.map((t) => t.id));
+          const lastInterviewerTurn = [...initial]
+            .reverse()
+            .find((t) => t.role === 'interviewer');
+          lastInterviewerContent = lastInterviewerTurn
+            ? lastInterviewerTurn.content
+            : null;
         }
+        lastInterviewerMsgRef.current = lastInterviewerContent;
         connect();
       } catch (err) {
         if (!cancelled) {
@@ -279,6 +294,7 @@ export default function InterviewRoomPage() {
       recordStartRef.current = null;
       voiceReadyRef.current = false;
       voiceCancelRef.current = false;
+      voiceActiveRef.current = false;
       if (retryTimerRef.current != null) {
         window.clearTimeout(retryTimerRef.current);
         retryTimerRef.current = null;
@@ -290,6 +306,9 @@ export default function InterviewRoomPage() {
   }, [connect, interviewId]);
 
   async function handleStartRecording() {
+    if (voiceActiveRef.current) {
+      return;
+    }
     if (
       disconnected ||
       thinking ||
@@ -299,6 +318,7 @@ export default function InterviewRoomPage() {
     ) {
       return;
     }
+    voiceActiveRef.current = true;
     speechVersionRef.current += 1;
     voicePlayerRef.current?.stop();
     setError('');
@@ -309,6 +329,7 @@ export default function InterviewRoomPage() {
     try {
       const recorder = await startRecordingSession();
       if (voiceCancelRef.current) {
+        voiceActiveRef.current = false;
         recorder.cancel();
         voiceRecorderRef.current = null;
         setVoicePhase('idle');
@@ -320,6 +341,7 @@ export default function InterviewRoomPage() {
       voiceRecorderRef.current = recorder;
       setStatusLine('正在录音，松开发送');
     } catch {
+      voiceActiveRef.current = false;
       voiceCancelRef.current = false;
       setVoicePhase('idle');
       setStatusLine('无法访问麦克风，请使用文字作答');
@@ -334,6 +356,7 @@ export default function InterviewRoomPage() {
     }
     voiceRecorderRef.current = null;
     voiceReadyRef.current = false;
+    voiceActiveRef.current = false;
     setVoicePhase('transcribing');
     setStatusLine('正在识别语音...');
     try {
@@ -392,6 +415,7 @@ export default function InterviewRoomPage() {
     recordStartRef.current = null;
     voiceReadyRef.current = false;
     voiceCancelRef.current = false;
+    voiceActiveRef.current = false;
     setVoicePhase('idle');
     try {
       await endInterview(interviewId);
