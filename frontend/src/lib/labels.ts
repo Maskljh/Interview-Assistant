@@ -30,3 +30,11 @@ export const PERSONA_LABELS: Record<string, string> = {
   warm_hr: '温和 HR 面',
   stress: '压力面',
 };
+
+// Single source of truth for dimension labels is backend llm.DimensionLabels.
+export const DIMENSION_LABELS: Record<string, string> = {
+  expression: '表达能力',
+  logic: '逻辑结构',
+  content: '内容质量',
+  job_match: '岗位匹配',
+};

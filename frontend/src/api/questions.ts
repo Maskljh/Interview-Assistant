@@ -7,6 +7,7 @@ export interface Question {
   source: string;
   source_session_id: number | null;
   job_tag: string | null;
+  dimension: string | null;
   starred: boolean;
   created_at: string;
 }
@@ -15,6 +16,7 @@ export interface ListQuestionsParams {
   starred?: boolean;
   job_tag?: string;
   q?: string;
+  dimension?: string;
 }
 
 export async function listQuestions(
@@ -30,8 +32,25 @@ export async function listQuestions(
   if (params?.q) {
     search.set('q', params.q);
   }
+  if (params?.dimension) {
+    search.set('dimension', params.dimension);
+  }
   const qs = search.toString();
   return fetchJSON<Question[]>(`/api/questions${qs ? `?${qs}` : ''}`);
+}
+
+export async function fetchFocusedQuestions(
+  dimensions: string[],
+  limitPerDim = 5,
+): Promise<Question[]> {
+  const data = await fetchJSON<{ items: Question[] }>(
+    '/api/questions/question-bank/focused',
+    {
+      method: 'POST',
+      body: JSON.stringify({ dimensions, limit_per_dimension: limitPerDim }),
+    },
+  );
+  return data.items;
 }
 
 export async function importQuestionsFromSession(

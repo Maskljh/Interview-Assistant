@@ -14,7 +14,7 @@ import {
   type Question,
 } from '../api/questions';
 import { useAuth } from '../auth/AuthContext';
-import { PERSONA_LABELS } from '../lib/labels';
+import { DIMENSION_LABELS, PERSONA_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 
@@ -52,6 +52,7 @@ export default function QuestionBankPage() {
   const [starredOnly, setStarredOnly] = useState(false);
   const [jobTag, setJobTag] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dimension, setDimension] = useState('');
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [persona, setPersona] = useState<Persona>('standard');
@@ -64,6 +65,7 @@ export default function QuestionBankPage() {
         ...(starredOnly ? { starred: true } : {}),
         ...(jobTag.trim() ? { job_tag: jobTag.trim() } : {}),
         ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
+        ...(dimension ? { dimension } : {}),
       });
       setQuestions(data);
       setSelectedIds((prev) =>
@@ -74,7 +76,7 @@ export default function QuestionBankPage() {
     } finally {
       setLoading(false);
     }
-  }, [starredOnly, jobTag, searchQuery]);
+  }, [starredOnly, jobTag, searchQuery, dimension]);
 
   useEffect(() => {
     void loadQuestions();
@@ -177,6 +179,21 @@ export default function QuestionBankPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索题干…"
             />
+          </div>
+          <div className="interview-field">
+            <label htmlFor="dimension-filter">维度</label>
+            <select
+              id="dimension-filter"
+              value={dimension}
+              onChange={(e) => setDimension(e.target.value)}
+            >
+              <option value="">全部维度</option>
+              {Object.entries(DIMENSION_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
           <label className="question-bank-checkbox-label">
             <input
