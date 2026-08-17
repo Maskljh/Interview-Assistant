@@ -62,13 +62,14 @@ type Question struct {
 }
 
 type Turn struct {
-	ID        int64
-	SessionID int64
-	Seq       int
-	Role      string
-	Kind      string
-	Content   string
-	CreatedAt time.Time
+	ID              int64
+	SessionID       int64
+	Seq             int
+	Role            string
+	Kind            string
+	Content         string
+	VoiceDurationMs *int
+	CreatedAt       time.Time
 }
 
 func ValidateMode(mode Mode) error {

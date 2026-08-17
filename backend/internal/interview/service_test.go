@@ -402,7 +402,7 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 		t.Fatalf("BeginLive: %v", err)
 	}
 
-	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "first answer")
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "first answer", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer 1: %v", err)
 	}
@@ -410,7 +410,7 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 		t.Fatalf("answer 1 last type = %q, want follow_up", lastOutboundType(msgs))
 	}
 
-	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "second answer")
+	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "second answer", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer 2: %v", err)
 	}
@@ -418,7 +418,7 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 		t.Fatalf("answer 2 last type = %q, want follow_up", lastOutboundType(msgs))
 	}
 
-	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "third answer")
+	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "third answer", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer 3: %v", err)
 	}

@@ -269,7 +269,7 @@ func (s *Service) initFirstQuestion(ctx context.Context, sessionID int64, total 
 	if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
+	if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question, nil); err != nil {
 		return nil, err
 	}
 	state := &sessionredis.LiveState{
@@ -309,7 +309,7 @@ func (s *Service) reconnectLive(ctx context.Context, sessionID int64, total int)
 	}, nil
 }
 
-func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, content string) ([]OutboundMessage, error) {
+func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, content string, voiceDurationMs *int64) ([]OutboundMessage, error) {
 	session, questions, err := s.loadOwnedSession(ctx, userID, sessionID)
 	if err != nil {
 		return nil, err
@@ -329,7 +329,7 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 	progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
 	msgs := []OutboundMessage{{Type: "status", Content: "thinking"}}
 
-	if _, err := s.repo.AppendTurn(sessionID, "candidate", "answer", content); err != nil {
+	if _, err := s.repo.AppendTurn(sessionID, "candidate", "answer", content, voiceDurationMs); err != nil {
 		return nil, err
 	}
 	state.TurnCount++
@@ -341,7 +341,7 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 
 	switch decide.Action {
 	case "follow_up":
-		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "follow_up", decide.FollowUpText); err != nil {
+		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "follow_up", decide.FollowUpText, nil); err != nil {
 			return nil, err
 		}
 		state.FollowUpsOnCurrent++
@@ -370,7 +370,7 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 		if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
 			return nil, err
 		}
-		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question); err != nil {
+		if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question, nil); err != nil {
 			return nil, err
 		}
 		state.QuestionIndex = nextIndex
