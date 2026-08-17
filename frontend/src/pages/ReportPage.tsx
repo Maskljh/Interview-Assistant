@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -37,6 +37,39 @@ export default function ReportPage() {
   const [bankMessage, setBankMessage] = useState('');
   const [bankError, setBankError] = useState('');
   const [expression, setExpression] = useState<ExpressionResult | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const pollCountRef = useRef(0);
+  const [pollFailed, setPollFailed] = useState(false);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current != null) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    pollCountRef.current = 0;
+    setPollFailed(false);
+    pollTimerRef.current = window.setInterval(async () => {
+      pollCountRef.current += 1;
+      try {
+        const result = await getReport(interviewId);
+        if (result.available) {
+          setFeedback(result.feedback);
+          setAvailable(true);
+          stopPolling();
+        } else if (pollCountRef.current >= 6) {
+          stopPolling();
+          setPollFailed(true);
+        }
+      } catch {
+        stopPolling();
+        setError('报告加载失败，请稍后重试');
+      }
+    }, 10000);
+  }, [getReport, interviewId, setFeedback, setAvailable, stopPolling]);
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
@@ -63,6 +96,7 @@ export default function ReportPage() {
         } else {
           setFeedback(null);
           setAvailable(false);
+          startPolling();
         }
       } catch (err) {
         if (!cancelled) {
@@ -87,8 +121,9 @@ export default function ReportPage() {
 
     return () => {
       cancelled = true;
+      stopPolling();
     };
-  }, [interviewId]);
+  }, [interviewId, startPolling]);
 
   async function handleSaveToBank() {
     setSavingToBank(true);
@@ -112,10 +147,13 @@ export default function ReportPage() {
       if (result.available) {
         setFeedback(result.feedback);
         setAvailable(true);
+        stopPolling();
       } else {
         setFeedback(null);
         setAvailable(false);
-        setError('报告仍不可用，请稍后再试。');
+        setPollFailed(false);
+        setError('');
+        startPolling(); // 重启轮询
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '重试生成报告失败');
@@ -131,13 +169,13 @@ export default function ReportPage() {
           {APP_NAME}
         </Link>
         <div className="interview-header-actions">
-          <Link className="interview-header-link" to="/questions">
+          <Link className="interview-header-link header-nav-link" to="/questions">
             题库
           </Link>
-          <Link className="interview-header-link" to="/trends">
+          <Link className="interview-header-link header-nav-link" to="/trends">
             成长分析
           </Link>
-          <Link className="interview-header-link" to={`/interviews/${id}`}>
+          <Link className="interview-header-link header-nav-link" to={`/interviews/${id}`}>
             详情
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
@@ -173,7 +211,11 @@ export default function ReportPage() {
           <p className="interview-error">{error}</p>
         ) : available === false ? (
           <div className="interview-stub">
-            <p>报告尚未就绪，可能仍在分析或上次生成失败。</p>
+            <p>
+              {pollFailed
+                ? '报告生成失败，可点击下方按钮重新生成。'
+                : '报告正在生成中，请稍候…（自动刷新中）'}
+            </p>
             {error && <p className="interview-error">{error}</p>}
             <button
               type="button"
