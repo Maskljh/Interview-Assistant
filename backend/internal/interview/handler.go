@@ -15,18 +15,20 @@ type Handler struct {
 }
 
 type createRequest struct {
-	JobJD      string    `json:"job_jd"`
-	ResumeText *string   `json:"resume_text"`
-	Mode       Mode      `json:"mode"`
-	InputMode  InputMode `json:"input_mode"`
-	Persona    string    `json:"persona"`
+	JobJD        string    `json:"job_jd"`
+	ResumeText   *string   `json:"resume_text"`
+	Mode         Mode      `json:"mode"`
+	InputMode    InputMode `json:"input_mode"`
+	Persona      string    `json:"persona"`
+	PrecheckGaps []string  `json:"precheck_gaps"`
 }
 
 type fromBankRequest struct {
-	QuestionIDs []int64   `json:"question_ids"`
-	Mode        Mode      `json:"mode"`
-	InputMode   InputMode `json:"input_mode"`
-	Persona     string    `json:"persona"`
+	QuestionIDs  []int64   `json:"question_ids"`
+	Mode         Mode      `json:"mode"`
+	InputMode    InputMode `json:"input_mode"`
+	Persona      string    `json:"persona"`
+	PrecheckGaps []string  `json:"precheck_gaps"`
 }
 
 type listItemResponse struct {
@@ -45,6 +47,7 @@ type sessionResponse struct {
 	Mode         Mode               `json:"mode"`
 	InputMode    InputMode          `json:"input_mode"`
 	Persona      string             `json:"persona"`
+	PrecheckGaps []string           `json:"precheck_gaps,omitempty"`
 	Status       Status             `json:"status"`
 	Score        *int            `json:"score"`
 	FeedbackJSON any             `json:"feedback_json"`
@@ -99,7 +102,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode, req.Persona)
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode, req.Persona, req.PrecheckGaps)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -122,7 +125,7 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona)
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.PrecheckGaps)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -255,6 +258,7 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 		Mode:         session.Mode,
 		InputMode:    session.InputMode,
 		Persona:      session.Persona,
+		PrecheckGaps: session.PrecheckGaps,
 		Status:       session.Status,
 		Score:        session.Score,
 		FeedbackJSON: feedback,

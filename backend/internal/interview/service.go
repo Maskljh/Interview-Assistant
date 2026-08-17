@@ -71,7 +71,7 @@ func (s *Service) SetProfileProvider(p SessionProfileProvider) {
 	s.profileProvider = p
 }
 
-func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona string) (*Session, error) {
+func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona string, precheckGaps []string) (*Session, error) {
 	jobJD = strings.TrimSpace(jobJD)
 	if jobJD == "" {
 		return nil, ErrInvalidInput
@@ -91,10 +91,10 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 	if err := validatePersona(persona); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(userID, jobJD, resume, mode, inputMode, persona)
+	return s.repo.Create(userID, jobJD, resume, mode, inputMode, persona, precheckGaps)
 }
 
-func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona string) (*Session, []Question, error) {
+func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona string, precheckGaps []string) (*Session, []Question, error) {
 	if len(questionIDs) == 0 {
 		return nil, nil, ErrInvalidInput
 	}
@@ -127,7 +127,7 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	}
 
 	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, texts)
+	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, precheckGaps, texts)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {
@@ -197,7 +197,7 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 	}
 
 	var out llm.GenQuestionsOut
-	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak, session.Persona, nil), &out); err != nil {
+	if err := s.llm.ChatJSON(ctx, llm.GenerateQuestionsSystem(), llm.GenerateQuestionsUser(session.JobJD, resume, string(session.Mode), weak, session.Persona, session.PrecheckGaps), &out); err != nil {
 		return nil, nil, ErrLLMFailure
 	}
 	if len(out.Questions) < 5 || len(out.Questions) > 8 {
