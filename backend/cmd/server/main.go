@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/analysis"
@@ -91,10 +92,25 @@ var allowedOrigins = map[string]bool{
 	"http://127.0.0.1:5174": true,
 }
 
+// originAllowed reports whether a browser Origin header may call this API.
+// Exact localhost origins are whitelisted; any origin on this app's dev port
+// (5174) is allowed so phones can reach the backend via the machine's LAN IP
+// (e.g. http://10.213.211.101:5174), which changes per network.
+func originAllowed(origin string) bool {
+	if allowedOrigins[origin] {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "http" && u.Port() == "5174"
+}
+
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if allowedOrigins[origin] {
+		if originAllowed(origin) {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
 		}

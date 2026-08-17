@@ -4,6 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    // 默认端口固定为 5174（5173 常被其他项目占用）；host 暴露局域网供手机访问
+    port: 5174,
+    strictPort: true,
+    host: true,
+  },
   plugins: [
     react(),
     VitePWA({

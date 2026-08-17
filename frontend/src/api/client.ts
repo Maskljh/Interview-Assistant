@@ -1,6 +1,11 @@
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8080';
+// 默认 API 地址跟随当前页面的 hostname：桌面访问 localhost 时连本机，
+// 手机通过局域网访问（如 http://10.213.211.101:5174）时自动连电脑的局域网 IP。
+// 显式设置 VITE_API_BASE 时优先。
+const API_BASE =
+  import.meta.env.VITE_API_BASE ??
+  `${window.location.protocol}//${window.location.hostname}:8080`;
 
 export function getApiBase(): string {
   return API_BASE;
