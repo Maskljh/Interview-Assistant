@@ -72,7 +72,7 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
-	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)
