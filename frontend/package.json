@@ -11,6 +11,9 @@
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",

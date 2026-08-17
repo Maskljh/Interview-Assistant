@@ -90,6 +90,8 @@ var allowedOrigins = map[string]bool{
 	"http://127.0.0.1:5173": true,
 	"http://localhost:5174": true,
 	"http://127.0.0.1:5174": true,
+	"http://localhost":       true, // Capacitor Android WebView origin
+	"https://localhost":      true,
 }
 
 // originAllowed reports whether a browser Origin header may call this API.
