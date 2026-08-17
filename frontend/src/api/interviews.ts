@@ -46,6 +46,7 @@ export interface Interview {
   mode: InterviewMode;
   input_mode: InputMode;
   persona: Persona;
+  precheck_gaps: string[] | null;
   status: InterviewStatus;
   score: number | null;
   feedback_json: unknown;

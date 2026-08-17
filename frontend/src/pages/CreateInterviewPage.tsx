@@ -131,7 +131,7 @@ export default function CreateInterviewPage() {
         input_mode: inputMode,
         persona,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
-        ...(precheck ? { precheck_gaps: precheck.gaps } : {}),
+        ...(precheck && !precheckStale ? { precheck_gaps: precheck.gaps } : {}),
       });
       await startInterview(created.id);
       navigate(`/interviews/${created.id}/room`, { replace: true });
