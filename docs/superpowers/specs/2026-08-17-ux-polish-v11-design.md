@@ -1,7 +1,7 @@
 # V11 体验打磨（P1/P2 修复批次）— 设计规格
 
 **Date:** 2026-08-17  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v11-ux-polish
 **Parent:** V10 体验修复（P0）之后的 P1/P2 批次  
 **Approach:** 7 项前端体验修复，全部在现有页面/组件内完成，无后端 API 改动、无迁移
 
