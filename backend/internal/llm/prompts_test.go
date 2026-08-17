@@ -54,6 +54,25 @@ func TestGenerateQuestionsUserUnknownPersonaNoInjection(t *testing.T) {
 	}
 }
 
+func TestFollowUpLimit(t *testing.T) {
+	cases := []struct {
+		persona string
+		want    int
+	}{
+		{StandardPersona, 2},
+		{"", 2},
+		{"unknown", 2},
+		{"strict_tech", 4},
+		{"stress", 4},
+		{"warm_hr", 1},
+	}
+	for _, c := range cases {
+		if got := FollowUpLimit(c.persona); got != c.want {
+			t.Fatalf("FollowUpLimit(%q) = %d, want %d", c.persona, got, c.want)
+		}
+	}
+}
+
 func TestDecideNextUserStandardNoInjection(t *testing.T) {
 	got := DecideNextUser("jd", "technical", "Q", 0, nil, "answer", StandardPersona)
 	if strings.Contains(got, "interviewer") && !strings.Contains(got, "strict senior") {

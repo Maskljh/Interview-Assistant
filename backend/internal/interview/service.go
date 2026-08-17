@@ -488,6 +488,7 @@ func (s *Service) decideNext(ctx context.Context, session *Session, questions []
 		MainQuestionCount:    len(questions),
 		CurrentQuestionIndex: state.QuestionIndex,
 		FollowUpsOnCurrent:   state.FollowUpsOnCurrent,
+		MaxFollowUps:         llm.FollowUpLimit(session.Persona),
 		TurnCount:            state.TurnCount,
 		StartedAt:            startedAt,
 		Now:                  time.Now(),

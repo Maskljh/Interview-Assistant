@@ -8,6 +8,7 @@ type DecideInput struct {
 	MainQuestionCount    int
 	CurrentQuestionIndex int // 0-based
 	FollowUpsOnCurrent   int
+	MaxFollowUps         int // per-persona follow-up cap; <=0 falls back to legacy default
 	TurnCount            int
 	StartedAt            time.Time
 	Now                  time.Time
@@ -30,7 +31,11 @@ func ApplyDecideRules(in DecideInput) DecideResult {
 	if !in.StartedAt.IsZero() && !in.Now.Before(in.StartedAt.Add(MaxDuration)) {
 		return DecideResult{Action: "finish", Reason: "time cap reached"}
 	}
-	if in.FollowUpsOnCurrent >= MaxFollowUpsPerQuestion {
+	followUpCap := in.MaxFollowUps
+	if followUpCap <= 0 {
+		followUpCap = MaxFollowUpsPerQuestion // legacy default
+	}
+	if in.FollowUpsOnCurrent >= followUpCap {
 		return DecideResult{Action: "next_question", Reason: "follow-up cap reached"}
 	}
 	if isLastQuestion && in.ModelAction == "next_question" {
