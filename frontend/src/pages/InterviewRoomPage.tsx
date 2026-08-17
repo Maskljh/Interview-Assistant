@@ -498,10 +498,13 @@ export default function InterviewRoomPage() {
           {APP_NAME}
         </Link>
         <div className="interview-header-actions">
-          <Link className="interview-header-link" to={`/interviews/${id}`}>
+          <Link className="interview-header-link header-nav-link" to="/">
+            返回列表
+          </Link>
+          <Link className="interview-header-link header-nav-link" to={`/interviews/${id}`}>
             详情
           </Link>
-          <Link className="interview-header-link" to="/trends">
+          <Link className="interview-header-link header-nav-link" to="/trends">
             成长分析
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>

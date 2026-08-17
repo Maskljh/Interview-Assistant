@@ -95,13 +95,13 @@ export default function TrendsPage() {
           {APP_NAME}
         </Link>
         <div className="interview-header-actions">
-          <Link className="interview-header-link" to="/">
+          <Link className="interview-header-link header-nav-link" to="/">
             面试列表
           </Link>
-          <Link className="interview-header-link" to="/questions">
+          <Link className="interview-header-link header-nav-link" to="/questions">
             题库
           </Link>
-          <Link className="interview-header-link" to="/trends">
+          <Link className="interview-header-link header-nav-link" to="/trends">
             成长分析
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>

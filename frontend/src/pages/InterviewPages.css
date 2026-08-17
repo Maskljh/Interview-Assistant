@@ -799,3 +799,18 @@
   font: var(--text-caption);
   color: var(--color-mute);
 }
+
+/* 语音重试行（识别失败时显示） */
+.voice-room-retry {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-top: var(--space-xs);
+}
+
+/* 顶栏导航链接（桌面显示，移动端隐藏；底部标签栏承担导航） */
+@media (max-width: 599px) {
+  .header-nav-link {
+    display: none;
+  }
+}

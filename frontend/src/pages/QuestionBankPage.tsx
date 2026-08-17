@@ -140,13 +140,13 @@ export default function QuestionBankPage() {
           面试助手
         </Link>
         <div className="interview-header-actions">
-          <Link className="interview-header-link" to="/">
+          <Link className="interview-header-link header-nav-link" to="/">
             面试列表
           </Link>
-          <span className="interview-header-link" aria-current="page">
+          <span className="interview-header-link header-nav-link" aria-current="page">
             题库
           </span>
-          <Link className="interview-header-link" to="/trends">
+          <Link className="interview-header-link header-nav-link" to="/trends">
             成长分析
           </Link>
           <button type="button" className="interview-header-link" onClick={logout}>
