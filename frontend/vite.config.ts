@@ -10,6 +10,13 @@ export default defineConfig({
     strictPort: true,
     host: true,
   },
+  preview: {
+    // PWA 需生产构建（vite preview）：同样固定 5174 并暴露局域网，
+    // 手机上「添加到主屏幕」依赖完整的 manifest + Service Worker
+    port: 5174,
+    strictPort: true,
+    host: true,
+  },
   plugins: [
     react(),
     VitePWA({
