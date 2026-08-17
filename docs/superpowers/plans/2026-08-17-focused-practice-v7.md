@@ -4,7 +4,7 @@
 
 **Goal:** 题库题目打四维标签（导入时 LLM 自动分类），新建页画像卡一键按薄弱维度从题库组卷（starred 优先）发起 from-bank 专项面试；题库页加维度筛选。
 
-**Architecture:** 迁移 `006_question_dimension.sql` 给 `question_bank` 加 `dimension` 列；`llm` 包新增 `ClassifyDimensionsSystem`/`ClassifyDimensionsUser`；`question.Service` 注入 `llm.Client`，ImportFromSession 导入后 LLM 批量分类（失败降级为 NULL）；repo `List` 支持 `dimension` 过滤；新增 `POST /api/question-bank/focused` 按维度组卷；前端画像卡加「针对薄弱点开始练习」按钮（focused → from-bank → 跳房间），题库页加维度下拉。
+**Architecture:** 迁移 `006_question_dimension.sql` 给 `question_bank` 加 `dimension` 列；`llm` 包新增 `ClassifyDimensionsSystem`/`ClassifyDimensionsUser`；`question.Service` 注入 `llm.Client`，ImportFromSession 导入后 LLM 批量分类（失败降级为 NULL）；repo `List` 支持 `dimension` 过滤；新增 `POST /api/questions/question-bank/focused` 按维度组卷；前端画像卡加「针对薄弱点开始练习」按钮（focused → from-bank → 跳房间），题库页加维度下拉。
 
 **Tech Stack:** Go/Gin、MySQL（迁移 006）、React/Vite TS、既有 `fetchJSON` 客户端。
 
@@ -443,7 +443,7 @@ git commit -m "feat(v7): dimension tags, focused question assembly, LLM classifi
 - Modify: `frontend/src/api/questions.ts`, `frontend/src/lib/labels.ts`, `frontend/src/pages/CreateInterviewPage.tsx`, `frontend/src/pages/QuestionBankPage.tsx`
 
 **Interfaces:**
-- Consumes: `POST /api/question-bank/focused` → `{items: Question[]}`；`GET /api/questions?dimension=`；from-bank（既有 `createInterviewFromBank`）
+- Consumes: `POST /api/questions/question-bank/focused` → `{items: Question[]}`；`GET /api/questions?dimension=`；from-bank（既有 `createInterviewFromBank`）
 - Produces:
   - `fetchFocusedQuestions(dimensions: string[], limitPerDim?: number): Promise<Question[]>`
   - `export const DIMENSION_LABELS: Record<string, string>`（`frontend/src/lib/labels.ts`）
