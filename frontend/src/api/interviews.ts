@@ -59,6 +59,7 @@ export interface Interview {
 export interface CreateInterviewInput {
   job_jd: string;
   resume_text?: string;
+  precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;
@@ -137,6 +138,7 @@ export async function retryReport(id: number): Promise<ReportResult> {
 
 export interface CreateFromBankInput {
   question_ids: number[];
+  precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;
