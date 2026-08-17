@@ -58,7 +58,7 @@ func personaInjection(persona string) string {
 	return PersonaPrompts[persona]
 }
 
-func GenerateQuestionsUser(jobJD, resume, mode string, weak []string, persona string) string {
+func GenerateQuestionsUser(jobJD, resume, mode string, weak []string, persona string, precheckGaps []string) string {
 	base := fmt.Sprintf(`Generate interview questions for this session.
 
 Job description:
@@ -86,7 +86,20 @@ Targeted focus: this user's weak dimensions are %s. Generate at least half of th
 	if inj := personaInjection(persona); inj != "" {
 		base += "\n\n" + inj
 	}
+
+	if inj := precheckInjection(precheckGaps); inj != "" {
+		base += "\n\n" + inj
+	}
 	return base
+}
+
+// precheckInjection returns the pre-check gap directive, or "" when gaps are
+// empty so prompts stay byte-identical to legacy.
+func precheckInjection(gaps []string) string {
+	if len(gaps) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Targeted focus (pre-check): the candidate's JD-match gaps are %s. Include questions that probe these gaps.", strings.Join(gaps, ", "))
 }
 
 type DecideNextOut struct {
@@ -204,4 +217,37 @@ Planned questions:
 
 Full transcript:
 %s`, jobJD, resume, mode, qLines.String(), transcript.String())
+}
+
+// PreCheckSystem instructs the model to score resume-vs-JD match and list gaps.
+func PreCheckSystem() string {
+	return `You are a hiring analyst. Score how well the candidate's resume matches the job description and list the concrete gaps.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"match_score":0,"gaps":["..."],"suggestions":["..."]}
+
+Rules:
+- match_score must be an integer from 0 to 100
+- gaps must be a non-empty array of specific, concrete gaps between the resume and the job description (missing skills, insufficient experience, etc.)
+- suggestions must be a non-empty array of actionable preparation advice`
+}
+
+// PreCheckUser builds the user prompt for a match precheck. An empty resume
+// produces JD-focused gaps and practice advice instead.
+func PreCheckUser(jobJD, resume string) string {
+	if resume == "" {
+		return fmt.Sprintf(`Assess this job description.
+
+Job description:
+%s
+
+No resume was provided. Output the core competency points of this role as gaps, practice advice as suggestions, and a match_score reflecting the baseline difficulty of this role.`, jobJD)
+	}
+	return fmt.Sprintf(`Assess the match between the resume and the job description.
+
+Job description:
+%s
+
+Resume:
+%s`, jobJD, resume)
 }

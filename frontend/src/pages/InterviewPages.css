@@ -771,3 +771,31 @@
 .profile-card p {
   margin: 0;
 }
+
+.precheck-card {
+  margin: 0 0 var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  font: var(--text-body-sm);
+  color: var(--color-ink);
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-sm);
+}
+
+.precheck-card p {
+  margin: 0 0 var(--space-xs);
+}
+
+.precheck-card ul {
+  margin: 0 0 var(--space-sm);
+  padding-left: var(--space-md);
+}
+
+.precheck-stale {
+  color: var(--color-error-deep);
+}
+
+.precheck-section-label {
+  font: var(--text-caption);
+  color: var(--color-mute);
+}

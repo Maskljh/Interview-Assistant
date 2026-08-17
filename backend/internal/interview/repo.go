@@ -14,11 +14,11 @@ func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db: db}
 }
 
-func (r *Repo) Create(userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona string) (*Session, error) {
+func (r *Repo) Create(userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona string, precheckGaps []string) (*Session, error) {
 	res, err := r.db.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, nullString(resume), string(mode), string(inputMode), persona, string(StatusDraft),
+		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, precheck_gaps, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, nullString(resume), string(mode), string(inputMode), persona, nullGapsJSON(precheckGaps), string(StatusDraft),
 	)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (r *Repo) Create(userID int64, jobJD string, resume *string, mode Mode, inp
 
 func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE user_id = ?
@@ -57,7 +57,7 @@ func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 
 func (r *Repo) GetByID(id int64) (*Session, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE id = ?`,
@@ -131,9 +131,10 @@ func scanSession(row rowScanner) (*Session, error) {
 	var score sql.NullInt64
 	var feedback []byte
 	var mode, inputMode, persona, status string
+	var gaps []byte
 
 	err := row.Scan(
-		&s.ID, &s.UserID, &s.JobJD, &resume, &mode, &inputMode, &persona, &status, &score, &feedback,
+		&s.ID, &s.UserID, &s.JobJD, &resume, &mode, &inputMode, &persona, &gaps, &status, &score, &feedback,
 		&s.StartedAt, &s.EndedAt, &s.CreatedAt,
 	)
 	if err != nil {
@@ -150,6 +151,9 @@ func scanSession(row rowScanner) (*Session, error) {
 	if len(feedback) > 0 {
 		s.FeedbackJSON = json.RawMessage(feedback)
 	}
+	if len(gaps) > 0 {
+		_ = json.Unmarshal(gaps, &s.PrecheckGaps) // NULL column → nil slice
+	}
 	s.Mode = Mode(mode)
 	s.InputMode = InputMode(inputMode)
 	s.Persona = persona
@@ -164,6 +168,18 @@ func nullString(s *string) sql.NullString {
 	return sql.NullString{String: *s, Valid: true}
 }
 
+// nullGapsJSON marshals precheck gaps for a JSON column; empty stays NULL.
+func nullGapsJSON(gaps []string) any {
+	if len(gaps) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(gaps)
+	if err != nil {
+		return nil
+	}
+	return string(b)
+}
+
 func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	var text string
 	err := r.db.QueryRow(
@@ -176,7 +192,7 @@ func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	return text, nil
 }
 
-func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona string, texts []string) (*Session, []Question, error) {
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona string, precheckGaps []string, texts []string) (*Session, []Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, nil, err
@@ -184,9 +200,9 @@ func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, i
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, status)
-		 VALUES (?, ?, NULL, ?, ?, ?, ?)`,
-		userID, jobJD, string(mode), string(inputMode), persona, string(StatusReady),
+		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, precheck_gaps, status)
+		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`,
+		userID, jobJD, string(mode), string(inputMode), persona, nullGapsJSON(precheckGaps), string(StatusReady),
 	)
 	if err != nil {
 		return nil, nil, err

@@ -9,6 +9,7 @@ import {
   type Persona,
 } from '../api/interviews';
 import { fetchProfile, type Profile } from '../api/profile';
+import { fetchPreCheck, type PreCheckOut } from '../api/precheck';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, MODE_LABELS, PERSONA_LABELS } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
@@ -44,6 +45,10 @@ export default function CreateInterviewPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [precheck, setPrecheck] = useState<PreCheckOut | null>(null);
+  const [prechecking, setPrechecking] = useState(false);
+  const [precheckError, setPrecheckError] = useState('');
+  const [precheckStale, setPrecheckStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +78,7 @@ export default function CreateInterviewPage() {
       const text = await extractResumeText(file);
       setResumeText(text);
       setResumeFileName(file.name);
+      setPrecheckStale(true);
     } catch (err) {
       setResumeText('');
       setResumeFileName('');
@@ -86,6 +92,26 @@ export default function CreateInterviewPage() {
   function clearResume() {
     setResumeText('');
     setResumeFileName('');
+    setPrecheckStale(true);
+  }
+
+  async function handlePrecheck() {
+    setPrecheckError('');
+    const trimmedJd = jobJd.trim();
+    if (!trimmedJd) {
+      setPrecheckError('请先填写职位描述');
+      return;
+    }
+    setPrechecking(true);
+    try {
+      const result = await fetchPreCheck(trimmedJd, resumeText.trim());
+      setPrecheck(result);
+      setPrecheckStale(false);
+    } catch (err) {
+      setPrecheckError(err instanceof ApiError ? err.message : '匹配度检测失败');
+    } finally {
+      setPrechecking(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -105,6 +131,7 @@ export default function CreateInterviewPage() {
         input_mode: inputMode,
         persona,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
+        ...(precheck && !precheckStale ? { precheck_gaps: precheck.gaps } : {}),
       });
       await startInterview(created.id);
       navigate(`/interviews/${created.id}/room`, { replace: true });
@@ -165,7 +192,10 @@ export default function CreateInterviewPage() {
               id="job-jd"
               required
               value={jobJd}
-              onChange={(e) => setJobJd(e.target.value)}
+              onChange={(e) => {
+                setJobJd(e.target.value);
+                setPrecheckStale(true);
+              }}
               placeholder="请粘贴岗位 JD…"
             />
           </div>
@@ -234,6 +264,50 @@ export default function CreateInterviewPage() {
               ))}
             </select>
           </div>
+
+          <div className="interview-field">
+            <label htmlFor="precheck">匹配度检测（可选）</label>
+            <button
+              type="button"
+              className="interview-file-clear"
+              onClick={handlePrecheck}
+              disabled={prechecking || loading}
+            >
+              {prechecking ? '正在检测…' : '检测简历与职位匹配度'}
+            </button>
+            {precheckError && <p className="interview-error">{precheckError}</p>}
+          </div>
+
+          {precheck && (
+            <div className="precheck-card">
+              {precheckStale && (
+                <p className="precheck-stale">JD/简历已修改，建议重新检测。</p>
+              )}
+              <p>
+                匹配度 <strong>{precheck.match_score}</strong> / 100
+              </p>
+              {precheck.gaps.length > 0 && (
+                <div>
+                  <p className="precheck-section-label">差距</p>
+                  <ul>
+                    {precheck.gaps.map((g, i) => (
+                      <li key={i}>{g}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {precheck.suggestions.length > 0 && (
+                <div>
+                  <p className="precheck-section-label">建议</p>
+                  <ul>
+                    {precheck.suggestions.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="interview-field">
             <label htmlFor="persona">面试官风格</label>

@@ -46,6 +46,7 @@ export interface Interview {
   mode: InterviewMode;
   input_mode: InputMode;
   persona: Persona;
+  precheck_gaps: string[] | null;
   status: InterviewStatus;
   score: number | null;
   feedback_json: unknown;
@@ -59,6 +60,7 @@ export interface Interview {
 export interface CreateInterviewInput {
   job_jd: string;
   resume_text?: string;
+  precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;
@@ -137,6 +139,7 @@ export async function retryReport(id: number): Promise<ReportResult> {
 
 export interface CreateFromBankInput {
   question_ids: number[];
+  precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;

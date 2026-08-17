@@ -804,7 +804,7 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 	svc := interview.NewService(sqlDB, capLLM, store)
 	svc.SetProfileProvider(fixedProfileProvider{p: profile.Profile{WeakDimensions: []string{"logic"}, BasedOnSessions: 3}})
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -833,7 +833,7 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -858,7 +858,7 @@ func TestCreatePersistsPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "strict_tech")
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "strict_tech", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -880,7 +880,7 @@ func TestCreateDefaultsStandardPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "")
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -898,7 +898,7 @@ func TestCreateRejectsInvalidPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "evil")
+	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "evil", nil)
 	if !errors.Is(err, interview.ErrInvalidPersona) {
 		t.Fatalf("err = %v, want ErrInvalidPersona", err)
 	}
@@ -914,7 +914,7 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "warm_hr")
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, "warm_hr", nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -986,5 +986,52 @@ func TestCreateRejectsInvalidPersonaHTTP(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid persona status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreatePersistsPrecheckGaps(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-gaps-persist@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-persist@example.com")
+
+	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, []string{"缺少K8s经验"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, _, _, err := svc.Get(ctx, userID, session.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.PrecheckGaps) != 1 || got.PrecheckGaps[0] != "缺少K8s经验" {
+		t.Fatalf("precheck_gaps = %v, want [缺少K8s经验]", got.PrecheckGaps)
+	}
+}
+
+func TestStartInjectsPrecheckGaps(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+	r := testRouter(t, sqlDB, nil)
+	_ = registerUser(t, r, "test-interview-gaps-start@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-start@example.com")
+
+	capLLM := &capturingLLM{}
+	svc := interview.NewService(sqlDB, capLLM, store)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, []string{"缺少K8s经验"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if len(capLLM.userPrompts) != 1 {
+		t.Fatalf("captured %d prompts, want 1", len(capLLM.userPrompts))
+	}
+	if !strings.Contains(capLLM.userPrompts[0], "Targeted focus (pre-check):") || !strings.Contains(capLLM.userPrompts[0], "缺少K8s经验") {
+		t.Fatalf("prompt missing precheck directive: %s", capLLM.userPrompts[0])
 	}
 }

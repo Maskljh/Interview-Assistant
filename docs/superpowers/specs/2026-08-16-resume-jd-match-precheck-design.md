@@ -1,7 +1,7 @@
 # V6 简历 × JD 匹配度预检 — 设计规格
 
 **Date:** 2026-08-16  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v6-precheck
 **Parent:** V1 MVP + V2 题库/语音/成长 + V3 画像出题 + V4 手机端 PWA + V5 面试官人格  
 **Approach:** 新建面试页可选「匹配度检测」，LLM 即时输出匹配分与差距项；差距项随创建持久化，Start 出题时作为即时画像注入
 

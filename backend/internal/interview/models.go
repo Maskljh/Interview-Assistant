@@ -43,6 +43,7 @@ type Session struct {
 	Mode         Mode
 	InputMode    InputMode
 	Persona      string
+	PrecheckGaps []string
 	Status       Status
 	Score        *int
 	FeedbackJSON json.RawMessage
