@@ -29,7 +29,7 @@ export function connectInterviewWS(
     onMessage(msg: ServerMsg): void;
     onClose(): void;
   },
-): { sendAnswer(content: string): void; close(): void } {
+  ): { sendAnswer(content: string, voiceDurationMs?: number): void; close(): void } {
   const origin = wsOriginFromApiBase(getApiBase());
   const wsUrl = `${origin}/ws/interviews/${id}?token=${encodeURIComponent(token)}`;
   const ws = new WebSocket(wsUrl);
@@ -48,9 +48,15 @@ export function connectInterviewWS(
   };
 
   return {
-    sendAnswer(content: string) {
+    sendAnswer(content: string, voiceDurationMs?: number) {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'answer', content }));
+        ws.send(
+          JSON.stringify(
+            voiceDurationMs
+              ? { type: 'answer', content, voice_duration_ms: voiceDurationMs }
+              : { type: 'answer', content },
+          ),
+        );
       }
     },
     close() {

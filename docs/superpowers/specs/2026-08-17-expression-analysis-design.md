@@ -1,7 +1,7 @@
 # V8 语音表达分析 — 设计规格
 
 **Date:** 2026-08-17  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v8-expression-analysis
 **Parent:** V1 MVP + V2 题库/语音/成长 + V3 画像 + V4 PWA + V5 人格 + V6 预检 + V7 专项训练  
 **Approach:** 语音答案的录音时长随 WS 答案入库，报告页新增「表达分析」区：语速（字/分钟）、口头禅、句长；纯计算、无 LLM
 

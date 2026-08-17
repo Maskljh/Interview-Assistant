@@ -8,6 +8,7 @@ import {
   type InterviewFeedback,
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
+import { fetchExpression, type ExpressionResult } from '../api/expression';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
@@ -35,6 +36,7 @@ export default function ReportPage() {
   const [savingToBank, setSavingToBank] = useState(false);
   const [bankMessage, setBankMessage] = useState('');
   const [bankError, setBankError] = useState('');
+  const [expression, setExpression] = useState<ExpressionResult | null>(null);
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
@@ -74,6 +76,15 @@ export default function ReportPage() {
     }
 
     void load();
+
+    fetchExpression(interviewId)
+      .then((res) => {
+        if (!cancelled) setExpression(res);
+      })
+      .catch(() => {
+        /* silent: hide expression section on error */
+      });
+
     return () => {
       cancelled = true;
     };
@@ -195,6 +206,38 @@ export default function ReportPage() {
             <ReportList title="优点" items={feedback.strengths} />
             <ReportList title="问题" items={feedback.weaknesses} />
             <ReportList title="改进建议" items={feedback.suggestions} />
+
+            {expression && (
+              <div className="profile-card">
+                <h3 className="interview-section-title">表达分析</h3>
+                {expression.speech_rate_cpm !== null ? (
+                  <p>
+                    语速 {expression.speech_rate_cpm} 字/分钟（一般 100–200
+                    字/分钟）
+                  </p>
+                ) : (
+                  <p>本场为文字作答，无语速指标</p>
+                )}
+                {expression.fillers.length > 0 ? (
+                  <p>
+                    高频口头禅：
+                    {expression.fillers
+                      .map((f) => `${f.word} ×${f.count}`)
+                      .join('、')}
+                  </p>
+                ) : (
+                  <p>口头禅较少，继续保持</p>
+                )}
+                {expression.avg_answer_chars > 0 ? (
+                  <p>
+                    平均每答 {expression.avg_answer_chars} 字 / 平均句长{' '}
+                    {expression.avg_sentence_chars} 字
+                  </p>
+                ) : (
+                  <p>暂无答案数据</p>
+                )}
+              </div>
+            )}
 
             <p className="report-model-version">模型：{feedback.model_version}</p>
           </>

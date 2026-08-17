@@ -54,6 +54,7 @@ export default function InterviewRoomPage() {
   const speechVersionRef = useRef(0);
   const ttsMutedRef = useRef(false);
   const currentQuestionRef = useRef('');
+  const recordStartRef = useRef<number | null>(null);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
@@ -61,10 +62,10 @@ export default function InterviewRoomPage() {
   }, []);
 
   const submitAnswer = useCallback(
-    (content: string) => {
+    (content: string, voiceDurationMs?: number) => {
       appendTurn('candidate', content);
       setAnswer('');
-      socketRef.current?.sendAnswer(content);
+      socketRef.current?.sendAnswer(content, voiceDurationMs);
     },
     [appendTurn],
   );
@@ -233,6 +234,7 @@ export default function InterviewRoomPage() {
       speechVersionRef.current += 1;
       voiceRecorderRef.current?.cancel();
       voiceRecorderRef.current = null;
+      recordStartRef.current = null;
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
@@ -255,12 +257,14 @@ export default function InterviewRoomPage() {
     setError('');
     setStatusLine('');
     try {
+      recordStartRef.current = Date.now();
       const recorder = await startRecordingSession();
       voiceRecorderRef.current?.cancel();
       voiceRecorderRef.current = recorder;
       setVoicePhase('recording');
       setStatusLine('正在录音，松开发送');
     } catch {
+      recordStartRef.current = null;
       setVoicePhase('idle');
       setStatusLine('无法访问麦克风，请使用文字作答');
     }
@@ -273,6 +277,10 @@ export default function InterviewRoomPage() {
     setVoicePhase('transcribing');
     setStatusLine('正在识别语音...');
     try {
+      const durationMs = recordStartRef.current
+        ? Date.now() - recordStartRef.current
+        : undefined;
+      recordStartRef.current = null;
       const audio = await recorder.stop();
       const { text } = await transcribeAudio(audio);
       const trimmed = text.trim();
@@ -283,7 +291,7 @@ export default function InterviewRoomPage() {
       }
       setVoicePhase('sending');
       setStatusLine('');
-      submitAnswer(trimmed);
+      submitAnswer(trimmed, durationMs);
     } catch (err) {
       setVoicePhase('idle');
       setStatusLine(
@@ -321,6 +329,7 @@ export default function InterviewRoomPage() {
     voicePlayerRef.current?.stop();
     voiceRecorderRef.current?.cancel();
     voiceRecorderRef.current = null;
+    recordStartRef.current = null;
     setVoicePhase('idle');
     try {
       await endInterview(interviewId);

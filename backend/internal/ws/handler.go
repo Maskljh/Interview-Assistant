@@ -72,7 +72,7 @@ func (h *Handler) Serve(c *gin.Context) {
 		if clientMsg.Type != "answer" {
 			continue
 		}
-		answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content)
+		answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content, clientMsg.VoiceDurationMs)
 		if err != nil {
 			_ = conn.WriteJSON(ServerMsg{Type: "status", Content: err.Error()})
 			continue

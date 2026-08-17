@@ -99,7 +99,7 @@ func (r *Repo) ListQuestions(sessionID int64) ([]Question, error) {
 
 func (r *Repo) ListTurns(sessionID int64) ([]Turn, error) {
 	rows, err := r.db.Query(
-		`SELECT id, session_id, seq, role, kind, content, created_at
+		`SELECT id, session_id, seq, role, kind, content, voice_duration_ms, created_at
 		 FROM interview_turns
 		 WHERE session_id = ?
 		 ORDER BY seq`,
@@ -113,8 +113,13 @@ func (r *Repo) ListTurns(sessionID int64) ([]Turn, error) {
 	var turns []Turn
 	for rows.Next() {
 		var t Turn
-		if err := rows.Scan(&t.ID, &t.SessionID, &t.Seq, &t.Role, &t.Kind, &t.Content, &t.CreatedAt); err != nil {
+		var voiceDurationMs sql.NullInt64
+		if err := rows.Scan(&t.ID, &t.SessionID, &t.Seq, &t.Role, &t.Kind, &t.Content, &voiceDurationMs, &t.CreatedAt); err != nil {
 			return nil, err
+		}
+		if voiceDurationMs.Valid {
+			v := int(voiceDurationMs.Int64)
+			t.VoiceDurationMs = &v
 		}
 		turns = append(turns, t)
 	}
@@ -286,7 +291,7 @@ func (r *Repo) BeginSession(sessionID int64) (bool, error) {
 	return n > 0, nil
 }
 
-func (r *Repo) AppendTurn(sessionID int64, role, kind, content string) (int, error) {
+func (r *Repo) AppendTurn(sessionID int64, role, kind, content string, voiceDurationMs *int64) (int, error) {
 	var maxSeq sql.NullInt64
 	if err := r.db.QueryRow(`SELECT MAX(seq) FROM interview_turns WHERE session_id = ?`, sessionID).Scan(&maxSeq); err != nil {
 		return 0, err
@@ -296,8 +301,8 @@ func (r *Repo) AppendTurn(sessionID int64, role, kind, content string) (int, err
 		seq = int(maxSeq.Int64) + 1
 	}
 	_, err := r.db.Exec(
-		`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, ?, ?, ?, ?)`,
-		sessionID, seq, role, kind, content,
+		`INSERT INTO interview_turns (session_id, seq, role, kind, content, voice_duration_ms) VALUES (?, ?, ?, ?, ?, ?)`,
+		sessionID, seq, role, kind, content, voiceDurationMs,
 	)
 	return seq, err
 }

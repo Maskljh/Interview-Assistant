@@ -1,8 +1,9 @@
 package ws
 
 type ClientMsg struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+	Type            string `json:"type"`
+	Content         string `json:"content"`
+	VoiceDurationMs *int64 `json:"voice_duration_ms,omitempty"`
 }
 
 type ServerMsg struct {

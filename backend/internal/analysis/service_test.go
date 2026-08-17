@@ -215,7 +215,7 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
 		t.Fatalf("BeginLive: %v", err)
 	}
-	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer")
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestFinishEvaluateFailureCompletedAvailableFalse(t *testing.T) {
 	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
 		t.Fatalf("BeginLive: %v", err)
 	}
-	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer"); err != nil {
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer", nil); err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
 

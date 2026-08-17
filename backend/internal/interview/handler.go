@@ -67,12 +67,13 @@ type questionResponse struct {
 }
 
 type turnResponse struct {
-	ID        int64     `json:"id"`
-	Seq       int       `json:"seq"`
-	Role      string    `json:"role"`
-	Kind      string    `json:"kind"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID              int64     `json:"id"`
+	Seq             int       `json:"seq"`
+	Role            string    `json:"role"`
+	Kind            string    `json:"kind"`
+	Content         string    `json:"content"`
+	VoiceDurationMs *int      `json:"voice_duration_ms"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func NewHandler(svc *Service) *Handler {
@@ -279,12 +280,13 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 	}
 	for _, t := range turns {
 		resp.Turns = append(resp.Turns, turnResponse{
-			ID:        t.ID,
-			Seq:       t.Seq,
-			Role:      t.Role,
-			Kind:      t.Kind,
-			Content:   t.Content,
-			CreatedAt: t.CreatedAt,
+			ID:              t.ID,
+			Seq:             t.Seq,
+			Role:            t.Role,
+			Kind:            t.Kind,
+			Content:         t.Content,
+			VoiceDurationMs: t.VoiceDurationMs,
+			CreatedAt:       t.CreatedAt,
 		})
 	}
 	return resp

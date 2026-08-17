@@ -9,6 +9,7 @@ import (
 	"github.com/interview-assistant/backend/internal/analytics"
 	"github.com/interview-assistant/backend/internal/config"
 	"github.com/interview-assistant/backend/internal/db"
+	"github.com/interview-assistant/backend/internal/expression"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/precheck"
@@ -78,6 +79,7 @@ func main() {
 	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
+	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }
