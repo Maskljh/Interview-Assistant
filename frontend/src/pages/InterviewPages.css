@@ -828,9 +828,18 @@
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
 }
 
+.virtual-persona-img {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: contain; /* 整图等比完整显示，不裁剪 */
+  background: var(--color-canvas-soft);
+}
+
 .virtual-persona-label {
   font: var(--text-caption);
   color: var(--color-mute);
+  text-align: center;
 }
 
 .virtual-persona-avatar-btn {
@@ -840,31 +849,32 @@
   text-decoration: underline;
 }
 
-/* idle 呼吸 + 眨眼 */
-.virtual-persona--idle .virtual-persona-head {
+/* idle 呼吸浮动 */
+.virtual-persona--idle .virtual-persona-img {
   animation: persona-breathe 2.5s ease-in-out infinite;
 }
 
-.virtual-persona--idle .virtual-persona-eye {
-  animation: persona-blink 4s ease-in-out infinite;
+/* speaking 点头 */
+.virtual-persona--speaking .virtual-persona-img {
+  animation: persona-nod 0.8s ease-in-out infinite;
+}
+
+/* listening 轻微等待 */
+.virtual-persona--listening .virtual-persona-img {
+  animation: persona-listen 3s ease-in-out infinite;
 }
 
 @keyframes persona-breathe {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  50% { transform: translateY(-3px); }
 }
 
-@keyframes persona-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
-}
-
-/* listening 轻微等待 */
-.virtual-persona--listening .virtual-persona-head {
-  animation: persona-listen 3s ease-in-out infinite;
+@keyframes persona-nod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(1px) rotate(1.5deg); }
 }
 
 @keyframes persona-listen {
   0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(1px); }
+  50% { transform: translateX(2px); }
 }
