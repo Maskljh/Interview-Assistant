@@ -17,7 +17,6 @@ export default function UserCamera() {
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
         setEnabled(true);
       } catch {
         // 拒绝授权 / 无摄像头 → 静默降级，不打扰面试
@@ -30,6 +29,14 @@ export default function UserCamera() {
       streamRef.current = null;
     };
   }, []);
+
+  // <video> 在 setEnabled(true) 之后才挂载，需在渲染后把流挂上去
+  useEffect(() => {
+    const el = videoRef.current;
+    if (enabled && el && streamRef.current) {
+      el.srcObject = streamRef.current;
+    }
+  }, [enabled]);
 
   if (!enabled) return null;
 
