@@ -53,16 +53,14 @@ export default function VideoPersona({
           muted={muted}
           onEnded={onVideoEnded}
         />
-        {state === 'playing' && (
-          <div className="video-persona-controls">
-            <button type="button" className="video-persona-btn" onClick={onToggleMute}>
-              {muted ? '取消静音' : '静音'}
-            </button>
-            <button type="button" className="video-persona-btn" onClick={onSkip}>
-              跳过
-            </button>
-          </div>
-        )}
+        <div className="video-persona-controls">
+          <button type="button" className="video-persona-btn" onClick={onToggleMute}>
+            {muted ? '取消静音' : '静音'}
+          </button>
+          <button type="button" className="video-persona-btn" onClick={onSkip}>
+            跳过
+          </button>
+        </div>
       </div>
       {question && <p className="video-persona-subtitle">{question}</p>}
     </div>

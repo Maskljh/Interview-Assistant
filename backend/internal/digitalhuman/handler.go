@@ -58,13 +58,17 @@ func (h *handler) Result(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "digital human service unavailable"})
 		return
 	}
+	if c.Param("taskId") == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "taskId is required"})
+		return
+	}
 	status, videoURL, err := h.provider.Result(c.Request.Context(), c.Param("taskId"))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "digital human service unavailable"})
 		return
 	}
 	resp := gin.H{"status": status}
-	if videoURL != "" {
+	if status == StatusCompleted && videoURL != "" {
 		resp["videoURL"] = videoURL
 	}
 	c.JSON(http.StatusOK, resp)

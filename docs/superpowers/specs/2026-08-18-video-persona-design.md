@@ -72,10 +72,10 @@ Browser (voice 模式)
 
 ```go
 type Provider interface {
-    // Submit 提交文本口播任务，返回任务 ID
-    Submit(text, voice string) (taskID string, err error)
+    // Submit 提交文本口播任务，返回任务 ID（音色 voice 来自 Config，不逐题传参）
+    Submit(ctx context.Context, text string) (taskID string, err error)
     // Result 查询任务状态；完成时返回视频 URL
-    Result(taskID string) (status Status, videoURL string, err error)
+    Result(ctx context.Context, taskID string) (status Status, videoURL string, err error)
 }
 ```
 
@@ -114,11 +114,11 @@ DIGITAL_HUMAN_VOICE=              # 音色 ID
 
 ### 6.1 提问流程（voice 模式，替代现有 playQuestion TTS）
 
-1. WS 收到新问题 → `personaState = 'generating'`（新增状态），显示「正在生成问题…」
+1. WS 收到新问题 → `videoState = 'generating'`，显示「正在生成问题…」
 2. `POST /api/digital-human/videos {text}` → 轮询 `GET`（间隔 ~3s）
-3. completed → `personaState = 'playing'`，播放 `<video>`（服务商 mp4，播一遍）
-4. 播完 → 复用现有「开始作答」流程（录音 → ASR → 自动 WS answer）；字幕保持显示题目
-5. 任何失败/超时 → 降级：V13 静态人像 + TTS 播报（现有逻辑），提示「视频生成失败，已切换语音播报」
+3. completed → `videoState = 'playing'`，播放 `<video>`（服务商 mp4，播一遍）
+4. 播完 → `videoState = 'ended'`，停在最后一帧且字幕保持显示题目；随后复用现有「开始作答」流程（录音 → ASR → 自动 WS answer）
+5. 任何失败/超时 → 静默降级：`videoState` 回到 `'none'`，复用现有 `playQuestion` 启动 V13 TTS 播报（状态标签「正在朗读问题...」），不额外 toast 提示
 
 ### 6.2 摄像头小窗
 
@@ -128,7 +128,7 @@ DIGITAL_HUMAN_VOICE=              # 音色 ID
 
 ### 6.3 状态与组件
 
-- `personaState` 扩展：`'idle' | 'generating' | 'playing' | 'listening' | 'speaking'`（`speaking` 仅降级路径 TTS 用）
+- 新增 `videoState` 状态机：`'none' | 'generating' | 'playing' | 'ended'`（`'none'` = 未启用视频，渲染 V13 静态人像；`'ended'` = 播完停在最后一帧，字幕保留）；`personaState` 保持 V13 三态 `'idle' | 'speaking' | 'listening'`，仅在 `videoState === 'none'` 时更新（视频活动期间由 VideoPersona 接管渲染）
 - 新增 `VideoPersona` 组件：视频大屏 + 字幕 overlay + 等待态（复用 V13 CSS 动画风格）
 - 渲染条件不变：仅 `effectiveInputMode === 'voice'` 显示
 - 字幕：题目全文显示在视频下方（现有题目展示区复用），回答期间保持可见

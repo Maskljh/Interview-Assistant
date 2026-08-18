@@ -137,6 +137,20 @@ func TestResultPending(t *testing.T) {
 	}
 }
 
+func TestResultFailedOmitsVideoURL(t *testing.T) {
+	r := testRouter(&fakeProvider{resultStatus: digitalhuman.StatusFailed, resultURL: "https://cdn.example.com/v.mp4"})
+	rec := getVideo(t, r, "task-1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"status":"failed"`)) {
+		t.Fatalf("body = %s, want status failed", rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("videoURL")) {
+		t.Fatalf("body = %s, failed 状态不应带 videoURL", rec.Body.String())
+	}
+}
+
 func TestResultUnavailableWhenProviderNil(t *testing.T) {
 	rec := getVideo(t, testRouter(nil), "task-1")
 	if rec.Code != http.StatusServiceUnavailable {
