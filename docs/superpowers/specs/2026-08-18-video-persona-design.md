@@ -1,7 +1,7 @@
 # V14 数字人视频面试官 — 设计规格
 
 **Date:** 2026-08-18
-**Status:** Draft for user review
+**Status:** Implemented
 **Parent:** V13 静态人像之后的形象升级
 **Approach:** voice 模式下，用 `wps.png` 照片经国内云数字人 API 生成「会开口读题的面试官视频」替代 V13 静态人像 + TTS 播报；双画面（面试官视频大屏 + 用户摄像头小窗，本地预览）；题目字幕同步显示；服务商抽象层隔离
 
