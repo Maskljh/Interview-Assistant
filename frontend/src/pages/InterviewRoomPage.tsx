@@ -48,11 +48,9 @@ export default function InterviewRoomPage() {
   const [retryingASR, setRetryingASR] = useState(false);
   const [textModeOverride, setTextModeOverride] = useState(false);
   const [personaState, setPersonaState] = useState<'idle' | 'speaking' | 'listening'>('idle');
-  const [personaLevel, setPersonaLevel] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     localStorage.getItem('virtual_persona_avatar'),
   );
-  const personaLevelRaf = useRef(0);
 
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
@@ -323,21 +321,6 @@ export default function InterviewRoomPage() {
   }, [effectiveInputMode]);
 
   useEffect(() => {
-    if (personaState !== 'speaking') {
-      if (personaLevelRaf.current) cancelAnimationFrame(personaLevelRaf.current);
-      return;
-    }
-    const tick = () => {
-      setPersonaLevel(voicePlayerRef.current?.getLevel() ?? 0);
-      personaLevelRaf.current = requestAnimationFrame(tick);
-    };
-    personaLevelRaf.current = requestAnimationFrame(tick);
-    return () => {
-      if (personaLevelRaf.current) cancelAnimationFrame(personaLevelRaf.current);
-    };
-  }, [personaState]);
-
-  useEffect(() => {
     if (reading) setPersonaState('speaking');
     else if (thinking) setPersonaState('listening');
     else setPersonaState('idle');
@@ -581,7 +564,7 @@ export default function InterviewRoomPage() {
 
             {effectiveInputMode === 'voice' && (
               <div className="virtual-persona-area">
-                <VirtualPersona state={personaState} level={personaLevel} avatarUrl={avatarUrl} />
+                <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
                 <label className="virtual-persona-avatar-btn">
                   换头像
                   <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
