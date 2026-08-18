@@ -1,7 +1,7 @@
 # V13 虚拟人换用静态形象图 — 设计规格
 
 **Date:** 2026-08-18  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v13-static-persona
 **Parent:** V12 数字虚拟人（SVG 形象）之后的形象替换  
 **Approach:** 虚拟面试官改为整张静态图片（用户指定 `wps.png`），图片文件原样零修改，保留整体动画（呼吸/点头/等待），移除嘴型动画
 
