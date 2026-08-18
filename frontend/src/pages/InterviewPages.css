@@ -878,3 +878,115 @@
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
 }
+
+/* V14 数字人视频面试官 */
+.video-persona-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.video-persona {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.video-persona-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-radius: var(--rounded-lg);
+  overflow: hidden;
+}
+
+.video-persona-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.video-persona-waiting {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: var(--color-canvas-soft);
+  animation: persona-listen 3s ease-in-out infinite;
+}
+
+.video-persona-label {
+  position: absolute;
+  bottom: var(--space-sm);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: var(--text-caption);
+  color: var(--color-mute);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 2px 0;
+}
+
+.video-persona-subtitle {
+  margin: 0;
+  padding: 0 var(--space-sm);
+  font: var(--text-body);
+  color: var(--color-ink);
+  text-align: center;
+}
+
+.video-persona-controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.video-persona-btn {
+  font: var(--text-caption);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  border-radius: var(--rounded-full);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.video-persona-cam {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 25%;
+  max-width: 200px;
+  border: 2px solid var(--color-hairline-strong);
+  border-radius: var(--rounded-lg);
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+}
+
+.video-persona-cam video {
+  width: 100%;
+  display: block;
+}
+
+.video-persona-cam-off {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font: var(--text-caption);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  border-radius: var(--rounded-full);
+  padding: 2px 8px;
+  cursor: pointer;
+}

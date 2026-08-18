@@ -122,7 +122,7 @@ DIGITAL_HUMAN_VOICE=              # 音色 ID
 
 ### 6.2 摄像头小窗
 
-- 进入 voice 模式时 `getUserMedia({ video: true, audio: true })`；音频流供现有录音使用
+- 进入 voice 模式时 `getUserMedia({ video: true })`（仅视频轨，本地预览不上传）；录音仍走现有「按次申请麦克风」路径，音频作答链路零改动
 - 小窗 `<video muted playsInline>` 本地预览，右下角叠加；提供「关闭摄像头」按钮（仅停 video 轨）
 - 拒绝/无摄像头/浏览器不支持 → 只显示面试官视频，作答链路不变（静默降级）
 
