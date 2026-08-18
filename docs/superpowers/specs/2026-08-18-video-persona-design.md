@@ -19,7 +19,7 @@
 |--------|------|
 | 形态 | **照片变数字人**：`wps.png`（现有资源）上传服务商生成口播视频；非录播素材、非实时数字人流 |
 | 实时性 | **预生成片段**：每题渲染 20~60 秒，等待时提示「正在生成问题…」；非秒级实时流 |
-| 服务商 | **国内云数字人 API**（目标：硅基智能 / 腾讯云智影 / 讯飞智作，以开通确认的 API 为准），按量付费，人民币直连 |
+| 服务商 | **国内数字人服务商**（目标：硅基智能 / 腾讯云智影 / 讯飞智作，以开通确认的 API 为准），按量付费，人民币直连；**排除阿里云 IMS**（其数字人集成为实时 RTC 场景、集成第三方并需工单计价，无「照片→口播视频」自助 API） |
 | 口播内容 | **只口播当前问题**（含追问）；不合成整段对话历史；不做衔接话术 |
 | 模式衔接 | **升级现有 voice 模式**（text / voice 二选一不变）；不新增 video 第三模式 |
 | 用户侧 | **开摄像头**：voice 模式双画面（面试官视频大屏 + 自己小窗）；`getUserMedia {video:true, audio:true}`，**本地预览不上传** |
@@ -160,7 +160,7 @@ DIGITAL_HUMAN_VOICE=              # 音色 ID
 ## 9. Implementation notes
 
 - 涉及文件：`backend/internal/digitalhuman/`（新）、`backend/cmd/server/main.go`（注册路由 + 配置）、`.env.example`、`frontend/src/pages/InterviewRoomPage.tsx`、`frontend/src/components/VideoPersona.tsx`（新）、`frontend/src/pages/InterviewPages.css`
-- 服务商选型（硅基智能 / 腾讯云智影 / 讯飞智作）：以注册开通后的实际 API 文档为准；实现文件内标注待确认项（形象上传方式、任务查询、音色 ID）
+- 服务商选型：**排除阿里云 IMS**（2026-08-18 调研：无「照片→口播视频」自助 API，数字人集成为实时 RTC 场景、对接相芯/灵境第三方、计费需工单）；候选为硅基智能 / 腾讯云智影 / 讯飞智作，以注册开通后的实际 API 文档为准；实现文件内标注待确认项（形象上传方式、任务查询、音色 ID）
 - 无 DB 迁移、无新前端依赖
 - `wps.png` 复用现有 `frontend/public/persona-default.png` 作降级形象；上传给服务商用同一张图
 - Prefer branch `feat/v14-video-persona` from main HEAD
