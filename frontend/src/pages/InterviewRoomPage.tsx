@@ -14,6 +14,9 @@ import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
 import VirtualPersona from '../components/VirtualPersona';
+import VideoPersona from '../components/VideoPersona';
+import UserCamera from '../components/UserCamera';
+import { getVideoTask, submitVideo } from '../api/digitalHuman';
 
 interface Turn {
   id: number;
@@ -51,6 +54,8 @@ export default function InterviewRoomPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     localStorage.getItem('virtual_persona_avatar'),
   );
+  const [videoState, setVideoState] = useState<'none' | 'generating' | 'playing' | 'ended'>('none');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
@@ -70,6 +75,7 @@ export default function InterviewRoomPage() {
   const voiceCancelRef = useRef(false);
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
+  const videoUnavailableRef = useRef(false);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
@@ -140,6 +146,70 @@ export default function InterviewRoomPage() {
     setStatusLine('');
   }, []);
 
+  async function pollVideoTask(taskId: string, version: number): Promise<string | null> {
+    for (let i = 0; i < VIDEO_MAX_POLL_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS));
+      if (version !== speechVersionRef.current) return null;
+      const res = await getVideoTask(taskId);
+      if (version !== speechVersionRef.current) return null;
+      if (res.status === 'completed' && res.videoURL) return res.videoURL;
+      if (res.status === 'failed') return null;
+    }
+    return null; // 超时
+  }
+
+  const playQuestionVideo = useCallback(
+    async (content: string) => {
+      if (ttsMutedRef.current) return;
+      const version = ++speechVersionRef.current;
+      setVideoState('generating');
+      setVideoUrl(null);
+      setStatusLine('正在生成问题…');
+      try {
+        const { taskId } = await submitVideo(content);
+        if (version !== speechVersionRef.current) return;
+        const url = await pollVideoTask(taskId, version);
+        if (version !== speechVersionRef.current) return;
+        if (url) {
+          setVideoUrl(url);
+          setVideoState('playing');
+          setStatusLine('');
+          return;
+        }
+      } catch (err) {
+        if (version !== speechVersionRef.current) return;
+        if (err instanceof ApiError && err.status === 503) {
+          videoUnavailableRef.current = true; // 本场数字人不可用，后续直接 TTS
+        }
+      }
+      // 失败/超时 → 降级 TTS 播报（V13 行为）
+      setVideoState('none');
+      setVideoUrl(null);
+      void playQuestion(content);
+    },
+    [playQuestion],
+  );
+
+  const handleVideoEnded = useCallback(() => {
+    // 播完停在最后一帧（videoState='ended'），字幕保留
+    setVideoState('ended');
+    setStatusLine('');
+  }, []);
+
+  const handleVideoSkip = useCallback(() => {
+    speechVersionRef.current += 1; // 取消进行中的轮询
+    setVideoState('none');
+    setVideoUrl(null);
+    setStatusLine('');
+  }, []);
+
+  const handleVideoToggleMute = useCallback(() => {
+    const next = !ttsMutedRef.current;
+    ttsMutedRef.current = next;
+    setTtsMuted(next);
+    setStatusLine(next ? '已静音' : '');
+  }, []);
+
   const handleMessage = useCallback(
     (msg: ServerMsg) => {
       if (msg.progress) {
@@ -162,7 +232,11 @@ export default function InterviewRoomPage() {
             }
             currentQuestionRef.current = msg.content;
             if (inputModeRef.current === 'voice') {
-              void playQuestion(msg.content);
+              if (videoUnavailableRef.current) {
+                void playQuestion(msg.content);
+              } else {
+                void playQuestionVideo(msg.content);
+              }
             }
           }
           break;
@@ -187,10 +261,12 @@ export default function InterviewRoomPage() {
           break;
       }
     },
-    [appendTurn, interviewId, navigate, playQuestion],
+    [appendTurn, interviewId, navigate, playQuestion, playQuestionVideo],
   );
 
   const RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
+  const VIDEO_POLL_INTERVAL_MS = 3000;
+  const VIDEO_MAX_POLL_ATTEMPTS = 40; // 3s × 40 = 120s 上限
 
   const connectWithRetry = useCallback(
     (attempt: number) => {
@@ -321,10 +397,20 @@ export default function InterviewRoomPage() {
   }, [effectiveInputMode]);
 
   useEffect(() => {
+    if (effectiveInputMode === 'text' && videoState !== 'none') {
+      speechVersionRef.current += 1;
+      setVideoState('none');
+      setVideoUrl(null);
+      setStatusLine('');
+    }
+  }, [effectiveInputMode, videoState]);
+
+  useEffect(() => {
+    if (videoState !== 'none') return; // 视频模式由 VideoPersona 接管渲染
     if (reading) setPersonaState('speaking');
     else if (thinking) setPersonaState('listening');
     else setPersonaState('idle');
-  }, [reading, thinking]);
+  }, [videoState, reading, thinking]);
 
   useEffect(() => {
     if (user === null && !loadingInterview) {
@@ -563,8 +649,21 @@ export default function InterviewRoomPage() {
             </div>
 
             {effectiveInputMode === 'voice' && (
-              <div className="virtual-persona-area">
-                <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
+              <div className="video-persona-stage">
+                {videoState !== 'none' ? (
+                  <VideoPersona
+                    state={videoState}
+                    videoUrl={videoUrl}
+                    question={currentQuestionRef.current ?? ''}
+                    muted={ttsMuted}
+                    onVideoEnded={handleVideoEnded}
+                    onToggleMute={handleVideoToggleMute}
+                    onSkip={handleVideoSkip}
+                  />
+                ) : (
+                  <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
+                )}
+                <UserCamera />
                 <label className="virtual-persona-avatar-btn">
                   换头像
                   <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
@@ -649,7 +748,9 @@ export default function InterviewRoomPage() {
                           disconnected ||
                           ending ||
                           voicePhase === 'transcribing' ||
-                          voicePhase === 'sending'
+                          voicePhase === 'sending' ||
+                          videoState === 'generating' ||
+                          videoState === 'playing'
                         }
                         aria-pressed={voicePhase === 'recording'}
                       >
@@ -683,33 +784,35 @@ export default function InterviewRoomPage() {
                           </button>
                         </div>
                       )}
-                      <div className="voice-room-tts-controls">
-                        <button
-                          type="button"
-                          className={`voice-room-tts-btn${
-                            ttsMuted ? ' is-active' : ''
-                          }`}
-                          onClick={toggleMute}
-                        >
-                          {ttsMuted ? '取消静音' : '静音'}
-                        </button>
-                        <button
-                          type="button"
-                          className="voice-room-tts-btn"
-                          onClick={handleReplay}
-                          disabled={!currentQuestionRef.current || ttsMuted}
-                        >
-                          重播
-                        </button>
-                        <button
-                          type="button"
-                          className="voice-room-tts-btn"
-                          onClick={handleSkipPlayback}
-                          disabled={!reading}
-                        >
-                          跳过
-                        </button>
-                      </div>
+                      {videoState === 'none' && (
+                        <div className="voice-room-tts-controls">
+                          <button
+                            type="button"
+                            className={`voice-room-tts-btn${
+                              ttsMuted ? ' is-active' : ''
+                            }`}
+                            onClick={toggleMute}
+                          >
+                            {ttsMuted ? '取消静音' : '静音'}
+                          </button>
+                          <button
+                            type="button"
+                            className="voice-room-tts-btn"
+                            onClick={handleReplay}
+                            disabled={!currentQuestionRef.current || ttsMuted}
+                          >
+                            重播
+                          </button>
+                          <button
+                            type="button"
+                            className="voice-room-tts-btn"
+                            onClick={handleSkipPlayback}
+                            disabled={!reading}
+                          >
+                            跳过
+                          </button>
+                        </div>
+                      )}
                       <button
                         type="button"
                         className="interview-inline-link"
