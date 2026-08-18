@@ -814,3 +814,57 @@
     display: none;
   }
 }
+
+.virtual-persona-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.virtual-persona {
+  position: relative;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+}
+
+.virtual-persona-label {
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
+.virtual-persona-avatar-btn {
+  font: var(--text-caption);
+  color: var(--color-ink);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* idle 呼吸 + 眨眼 */
+.virtual-persona--idle .virtual-persona-head {
+  animation: persona-breathe 2.5s ease-in-out infinite;
+}
+
+.virtual-persona--idle .virtual-persona-eye {
+  animation: persona-blink 4s ease-in-out infinite;
+}
+
+@keyframes persona-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes persona-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+/* listening 轻微等待 */
+.virtual-persona--listening .virtual-persona-head {
+  animation: persona-listen 3s ease-in-out infinite;
+}
+
+@keyframes persona-listen {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}

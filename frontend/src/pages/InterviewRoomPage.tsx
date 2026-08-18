@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
 import { endInterview, getInterview, type InputMode, type Persona } from '../api/interviews';
@@ -13,6 +13,7 @@ import { APP_NAME, PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
 import MobileTabBar from '../components/MobileTabBar';
+import VirtualPersona from '../components/VirtualPersona';
 
 interface Turn {
   id: number;
@@ -46,6 +47,12 @@ export default function InterviewRoomPage() {
   const [reading, setReading] = useState(false);
   const [retryingASR, setRetryingASR] = useState(false);
   const [textModeOverride, setTextModeOverride] = useState(false);
+  const [personaState, setPersonaState] = useState<'idle' | 'speaking' | 'listening'>('idle');
+  const [personaLevel, setPersonaLevel] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
+    localStorage.getItem('virtual_persona_avatar'),
+  );
+  const personaLevelRaf = useRef(0);
 
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
@@ -316,6 +323,27 @@ export default function InterviewRoomPage() {
   }, [effectiveInputMode]);
 
   useEffect(() => {
+    if (personaState !== 'speaking') {
+      if (personaLevelRaf.current) cancelAnimationFrame(personaLevelRaf.current);
+      return;
+    }
+    const tick = () => {
+      setPersonaLevel(voicePlayerRef.current?.getLevel() ?? 0);
+      personaLevelRaf.current = requestAnimationFrame(tick);
+    };
+    personaLevelRaf.current = requestAnimationFrame(tick);
+    return () => {
+      if (personaLevelRaf.current) cancelAnimationFrame(personaLevelRaf.current);
+    };
+  }, [personaState]);
+
+  useEffect(() => {
+    if (reading) setPersonaState('speaking');
+    else if (thinking) setPersonaState('listening');
+    else setPersonaState('idle');
+  }, [reading, thinking]);
+
+  useEffect(() => {
     if (user === null && !loadingInterview) {
       socketRef.current?.close();
       socketRef.current = null;
@@ -326,6 +354,28 @@ export default function InterviewRoomPage() {
       navigate('/login');
     }
   }, [user, loadingInterview, navigate]);
+
+  function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setStatusLine('请选择图片文件');
+      return;
+    }
+    if (file.size > 300 * 1024) {
+      setStatusLine('头像需小于 300KB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      localStorage.setItem('virtual_persona_avatar', url);
+      setAvatarUrl(url);
+      setStatusLine('头像已更新');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
 
   async function handleStartRecording() {
     failedAudioRef.current = null;
@@ -528,6 +578,16 @@ export default function InterviewRoomPage() {
                 </span>
               )}
             </div>
+
+            {effectiveInputMode === 'voice' && (
+              <div className="virtual-persona-area">
+                <VirtualPersona state={personaState} level={personaLevel} avatarUrl={avatarUrl} />
+                <label className="virtual-persona-avatar-btn">
+                  换头像
+                  <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
+                </label>
+              </div>
+            )}
 
             {error && <p className="interview-error">{error}</p>}
             {statusLine && <p className="interview-room-status">{statusLine}</p>}
