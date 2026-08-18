@@ -1,7 +1,7 @@
 # V12 数字虚拟人讲话 — 设计规格
 
 **Date:** 2026-08-18  
-**Status:** Draft for user review  
+**Status:** Implemented on feat/v12-virtual-persona
 **Parent:** 全功能（V1–V11）之上的体验增强  
 **Approach:** 面试房间语音模式下显示 2D 虚拟面试官形象，TTS 播报时用 Web Audio 音量驱动嘴型动画
 
