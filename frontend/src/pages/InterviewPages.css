@@ -937,7 +937,7 @@
 .video-persona-subtitle {
   margin: 0;
   padding: 0 var(--space-sm);
-  font: var(--text-body);
+  font: var(--text-body-md);
   color: var(--color-ink);
   text-align: center;
 }
