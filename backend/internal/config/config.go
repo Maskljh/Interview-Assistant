@@ -18,6 +18,11 @@ type Config struct {
 	AliyunAccessKeyID     string
 	AliyunAccessKeySecret string
 	AliyunNLSAppKey       string
+	DigitalHumanProvider  string
+	DigitalHumanAPIKey    string
+	DigitalHumanSecret    string
+	DigitalHumanAvatarID  string
+	DigitalHumanVoice     string
 }
 
 func Load() (*Config, error) {
@@ -36,6 +41,11 @@ func Load() (*Config, error) {
 		AliyunAccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
 		AliyunAccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 		AliyunNLSAppKey:       os.Getenv("ALIYUN_NLS_APP_KEY"),
+		DigitalHumanProvider:  os.Getenv("DIGITAL_HUMAN_PROVIDER"),
+		DigitalHumanAPIKey:    os.Getenv("DIGITAL_HUMAN_API_KEY"),
+		DigitalHumanSecret:    os.Getenv("DIGITAL_HUMAN_SECRET"),
+		DigitalHumanAvatarID:  os.Getenv("DIGITAL_HUMAN_AVATAR_ID"),
+		DigitalHumanVoice:     os.Getenv("DIGITAL_HUMAN_VOICE"),
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET required")
