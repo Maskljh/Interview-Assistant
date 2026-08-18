@@ -16,7 +16,11 @@ export default function VirtualPersona({ state, level = 0, avatarUrl }: VirtualP
 
   // speaking 时嘴型随音量缩放（rAF 直改 SVG 属性）
   useEffect(() => {
-    if (state !== 'speaking' || !mouthRef.current) return;
+    if (state !== 'speaking' || !mouthRef.current) {
+      mouthRef.current?.setAttribute('ry', '3'); // 闭嘴（无残留）
+      bodyRef.current?.setAttribute('transform', ''); // 身体复位（无残留）
+      return;
+    }
     let raf = 0;
     const tick = () => {
       if (mouthRef.current) {
