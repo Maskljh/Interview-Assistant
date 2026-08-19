@@ -12,8 +12,8 @@ const isNative = Capacitor.isNativePlatform();
 const API_BASE = import.meta.env.VITE_API_BASE
   ? import.meta.env.VITE_API_BASE
   : isNative
-    ? 'http://10.213.211.101:8080' // App 内默认指向开发机局域网 IP（打包时按需改）
-    : `${window.location.protocol}//${window.location.hostname}:8080`;
+    ? 'http://10.213.211.101:9090' // App 内默认指向开发机局域网 IP（打包时按需改）
+    : `${window.location.protocol}//${window.location.hostname}:9090`;
 
 export function getApiBase(): string {
   return API_BASE;
