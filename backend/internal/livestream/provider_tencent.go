@@ -106,15 +106,26 @@ func (p *tencentProvider) StartSession(ctx context.Context, avatarID string) (Se
 	if sessionID == "" {
 		return nil, fmt.Errorf("ivh createsession: missing SessionId")
 	}
+	// 创建成功后若后续失败，需 closesession 释放并发配额（项目仅 1 个并发会话）
+	cleanup := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = p.ivhCall(cleanupCtx, "/v2/ivh/sessionmanager/sessionmanagerservice/closesession", map[string]any{
+			"ReqId":     reqID(),
+			"SessionId": sessionID,
+		})
+	}
 	// 轮询 statsession 直到会话就绪（SessionStatus==1 且 IsSessionStarted=true，实测约 15s），
 	// 再调 startsession；缺失这两步时 command(SEND_TEXT) 会返回 110016 APaasStreamSessionNotStart。
 	if err := p.waitSessionReady(ctx, sessionID); err != nil {
+		cleanup()
 		return nil, err
 	}
 	if _, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/startsession", map[string]any{
 		"ReqId":     reqID(),
 		"SessionId": sessionID,
 	}); err != nil {
+		cleanup()
 		return nil, fmt.Errorf("ivh startsession: %w", err)
 	}
 	return &tencentSession{provider: p, sessionID: sessionID}, nil
