@@ -115,7 +115,10 @@ func main() {
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	digitalhuman.RegisterRoutes(r, cfg.JWTSecret, dhProvider)
-	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider)
+	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider, &livestream.Config{
+		ProviderName: cfg.LivestreamProvider,
+		StreamURL:    cfg.LivestreamStreamURL,
+	})
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }

@@ -1,11 +1,18 @@
 package livestream
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -14,19 +21,23 @@ import (
 
 const maxSpeakTextRunes = 1000
 
-func RegisterRoutes(r *gin.Engine, secret string, provider Provider) {
-	h := &handler{provider: provider, sessions: make(map[string]Session)}
+func RegisterRoutes(r *gin.Engine, secret string, provider Provider, cfg *Config) {
+	h := &handler{provider: provider, sessions: make(map[string]Session), appKey: cfg.APIKey, accessToken: cfg.Secret, projectID: cfg.AvatarID}
 	protected := r.Group("/api/livestream")
 	protected.Use(auth.Middleware(secret))
 	protected.POST("/sessions", h.Create)
 	protected.POST("/sessions/:id/speak", h.Speak)
 	protected.POST("/sessions/:id/close", h.Close)
+	protected.GET("/sign", h.Sign)
 }
 
 type handler struct {
-	provider Provider
-	mu       sync.Mutex
-	sessions map[string]Session
+	provider    Provider
+	mu          sync.Mutex
+	sessions    map[string]Session
+	appKey      string
+	accessToken string
+	projectID   string
 }
 
 type createResponse struct {
@@ -119,4 +130,28 @@ func randomID() string {
 		return "session"
 	}
 	return hex.EncodeToString(b)
+}
+
+// signIVHParams 生成腾讯 IVH 签名：query 公共参数按字典序拼 k=v&k=v，
+// 用 AccessToken 作密钥 HmacSha256，Base64 后 URL 编码。
+func signIVHParams(appkey, timestamp, accessToken string) string {
+	plain := "appkey=" + appkey + "&timestamp=" + timestamp
+	mac := hmac.New(sha256.New, []byte(accessToken))
+	mac.Write([]byte(plain))
+	return url.QueryEscape(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+}
+
+func (h *handler) Sign(c *gin.Context) {
+	if h.provider == nil || h.appKey == "" || h.accessToken == "" || h.projectID == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "livestream service unavailable"})
+		return
+	}
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	c.JSON(http.StatusOK, gin.H{
+		"appkey":              h.appKey,
+		"timestamp":           timestamp,
+		"signature":           signIVHParams(h.appKey, timestamp, h.accessToken),
+		"virtualmanProjectId": h.projectID,
+		"userId":              fmt.Sprintf("interview-%d", time.Now().UnixNano()),
+	})
 }
