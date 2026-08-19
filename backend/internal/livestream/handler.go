@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -52,6 +53,7 @@ func (h *handler) Create(c *gin.Context) {
 	}
 	sess, err := h.provider.StartSession(c.Request.Context(), "")
 	if err != nil {
+		log.Printf("livestream StartSession: %v", err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "livestream service unavailable"})
 		return
 	}
@@ -91,6 +93,7 @@ func (h *handler) Speak(c *gin.Context) {
 		return
 	}
 	if err := sess.Speak(c.Request.Context(), req.Text); err != nil {
+		log.Printf("livestream speak: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "livestream speak failed"})
 		return
 	}

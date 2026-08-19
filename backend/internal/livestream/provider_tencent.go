@@ -3,6 +3,8 @@ package livestream
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +14,22 @@ import (
 	"time"
 )
 
-const ivhBaseURL = "https://gw.tvs.qq.com"
+const (
+	ivhBaseURL     = "https://gw.tvs.qq.com"
+	ivhPollTimeout = 40 * time.Second
+	ivhPollEvery   = 2 * time.Second
+)
+
+// reqID 生成腾讯 IVH 所需的 32 位 hex ReqId。
+// IVH 网关拒绝 randomID() 的 16 位 hex（Code 100001 Invalid ReqId）；
+// 32 位 hex（crypto/rand 16 字节）实测可用（createsession/command/closesession）。
+func reqID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%032x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
 
 type tencentProvider struct {
 	appKey      string
@@ -76,20 +93,59 @@ func (p *tencentProvider) ivhCall(ctx context.Context, path string, payload map[
 
 func (p *tencentProvider) StartSession(ctx context.Context, avatarID string) (Session, error) {
 	payload, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/createsession", map[string]any{
-		"ReqId":               randomID(),
+		"ReqId":               reqID(),
 		"VirtualmanProjectId": p.projectID,
 		"UserId":              fmt.Sprintf("interview-%d", time.Now().UnixNano()),
 		"Protocol":            "rtmp",
 		"DriverType":          1,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ivh createsession: %w", err)
 	}
 	sessionID, _ := payload["SessionId"].(string)
 	if sessionID == "" {
 		return nil, fmt.Errorf("ivh createsession: missing SessionId")
 	}
+	// 轮询 statsession 直到会话就绪（SessionStatus==1 且 IsSessionStarted=true，实测约 15s），
+	// 再调 startsession；缺失这两步时 command(SEND_TEXT) 会返回 110016 APaasStreamSessionNotStart。
+	if err := p.waitSessionReady(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	if _, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/startsession", map[string]any{
+		"ReqId":     reqID(),
+		"SessionId": sessionID,
+	}); err != nil {
+		return nil, fmt.Errorf("ivh startsession: %w", err)
+	}
 	return &tencentSession{provider: p, sessionID: sessionID}, nil
+}
+
+// waitSessionReady 轮询 statsession 直到会话可驱动（SessionStatus==1 且 IsSessionStarted=true）。
+// 上限 ivhPollTimeout（40s），每次间隔 ivhPollEvery（2s），尊重 ctx 取消。
+func (p *tencentProvider) waitSessionReady(ctx context.Context, sessionID string) error {
+	deadline := time.Now().Add(ivhPollTimeout)
+	for {
+		payload, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/statsession", map[string]any{
+			"ReqId":     reqID(),
+			"SessionId": sessionID,
+		})
+		if err != nil {
+			return fmt.Errorf("ivh statsession: %w", err)
+		}
+		status, _ := payload["SessionStatus"].(float64)
+		started, _ := payload["IsSessionStarted"].(bool)
+		if status == 1 && started {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("ivh statsession: session not ready within %s (SessionStatus=%v IsSessionStarted=%v)", ivhPollTimeout, status, started)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("ivh statsession: %w", ctx.Err())
+		case <-time.After(ivhPollEvery):
+		}
+	}
 }
 
 type tencentSession struct {
@@ -101,7 +157,7 @@ func (s *tencentSession) StreamURL() string { return "" } // 播放由前端 SDK
 
 func (s *tencentSession) Speak(ctx context.Context, text string) error {
 	_, err := s.provider.ivhCall(ctx, "/v2/ivh/interactdriver/interactdriverservice/command", map[string]any{
-		"ReqId":     randomID(),
+		"ReqId":     reqID(),
 		"SessionId": s.sessionID,
 		"Command":   "SEND_TEXT",
 		"Data": map[string]any{
@@ -116,7 +172,7 @@ func (s *tencentSession) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, err := s.provider.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/closesession", map[string]any{
-		"ReqId":     randomID(),
+		"ReqId":     reqID(),
 		"SessionId": s.sessionID,
 	})
 	return err
