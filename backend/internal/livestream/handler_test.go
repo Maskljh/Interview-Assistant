@@ -37,7 +37,11 @@ func (f *fakeProvider) StartSession(ctx context.Context, avatarID string) (lives
 func testRouter(p livestream.Provider) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	livestream.RegisterRoutes(r, "test-secret", p)
+	livestream.RegisterRoutes(r, "test-secret", p, &livestream.Config{
+		APIKey:   "test-appkey",
+		Secret:   "test-token",
+		AvatarID: "test-project",
+	})
 	return r
 }
 
@@ -172,5 +176,32 @@ func TestUnauthorized(t *testing.T) {
 	testRouter(nil).ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSignReturnsCredentials(t *testing.T) {
+	r := testRouter(&fakeProvider{session: &fakeSession{streamURL: "https://example.com/stream.mp4"}})
+	req := httptest.NewRequest(http.MethodGet, "/api/livestream/sign", nil)
+	req.Header.Set("Authorization", authHeader(t))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		AppKey            string `json:"appkey"`
+		Timestamp         string `json:"timestamp"`
+		Signature         string `json:"signature"`
+		VirtualmanProject string `json:"virtualmanProjectId"`
+		UserID            string `json:"userId"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.AppKey == "" || resp.Timestamp == "" || resp.Signature == "" {
+		t.Fatalf("credentials must be non-empty: %+v", resp)
+	}
+	if resp.VirtualmanProject == "" || resp.UserID == "" {
+		t.Fatalf("projectId/userId must be non-empty: %+v", resp)
 	}
 }

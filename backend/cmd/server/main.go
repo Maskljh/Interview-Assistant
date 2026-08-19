@@ -87,6 +87,9 @@ func main() {
 	if cfg.LivestreamProvider != "" {
 		lsProvider, err = livestream.NewProvider(livestream.Config{
 			ProviderName: cfg.LivestreamProvider,
+			APIKey:       cfg.TencentAppKey,
+			Secret:       cfg.TencentAccessToken,
+			AvatarID:     cfg.TencentProjectID,
 			StreamURL:    cfg.LivestreamStreamURL,
 		})
 		if err != nil {
@@ -115,7 +118,13 @@ func main() {
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	digitalhuman.RegisterRoutes(r, cfg.JWTSecret, dhProvider)
-	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider)
+	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider, &livestream.Config{
+		ProviderName: cfg.LivestreamProvider,
+		APIKey:       cfg.TencentAppKey,
+		Secret:       cfg.TencentAccessToken,
+		AvatarID:     cfg.TencentProjectID,
+		StreamURL:    cfg.LivestreamStreamURL,
+	})
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }

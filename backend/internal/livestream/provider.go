@@ -41,6 +41,8 @@ func NewProvider(cfg Config) (Provider, error) {
 	switch cfg.ProviderName {
 	case "stub":
 		return &stubProvider{streamURL: cfg.StreamURL}, nil
+	case "tencent":
+		return newTencentProvider(cfg), nil
 	default:
 		return nil, fmt.Errorf("livestream provider %q not supported", cfg.ProviderName)
 	}
