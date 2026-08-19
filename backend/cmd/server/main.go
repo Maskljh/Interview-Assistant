@@ -87,6 +87,9 @@ func main() {
 	if cfg.LivestreamProvider != "" {
 		lsProvider, err = livestream.NewProvider(livestream.Config{
 			ProviderName: cfg.LivestreamProvider,
+			APIKey:       cfg.TencentAppKey,
+			Secret:       cfg.TencentAccessToken,
+			AvatarID:     cfg.TencentProjectID,
 			StreamURL:    cfg.LivestreamStreamURL,
 		})
 		if err != nil {
