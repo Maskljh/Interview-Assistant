@@ -25,6 +25,9 @@ type Config struct {
 	DigitalHumanVoice     string
 	LivestreamProvider    string
 	LivestreamStreamURL   string
+	TencentAppKey         string
+	TencentAccessToken    string
+	TencentProjectID      string
 }
 
 func Load() (*Config, error) {
@@ -50,6 +53,9 @@ func Load() (*Config, error) {
 		DigitalHumanVoice:     os.Getenv("DIGITAL_HUMAN_VOICE"),
 		LivestreamProvider:    os.Getenv("LIVESTREAM_PROVIDER"),
 		LivestreamStreamURL:   os.Getenv("LIVESTREAM_STREAM_URL"),
+		TencentAppKey:         os.Getenv("TENCENT_APPKEY"),
+		TencentAccessToken:    os.Getenv("TENCENT_ACCESSTOKEN"),
+		TencentProjectID:      os.Getenv("TENCENT_PROJECT_ID"),
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET required")

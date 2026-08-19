@@ -117,6 +117,9 @@ func main() {
 	digitalhuman.RegisterRoutes(r, cfg.JWTSecret, dhProvider)
 	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider, &livestream.Config{
 		ProviderName: cfg.LivestreamProvider,
+		APIKey:       cfg.TencentAppKey,
+		Secret:       cfg.TencentAccessToken,
+		AvatarID:     cfg.TencentProjectID,
 		StreamURL:    cfg.LivestreamStreamURL,
 	})
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
