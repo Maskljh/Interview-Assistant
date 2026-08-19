@@ -20,8 +20,10 @@ import LivestreamPersona from '../components/LivestreamPersona';
 import {
   closeLivestream,
   createLivestreamSession,
+  getLivestreamSign,
   speakLivestream,
   type LivestreamSession,
+  type LivestreamSign,
 } from '../api/livestream';
 import { getVideoTask, submitVideo } from '../api/digitalHuman';
 
@@ -63,7 +65,8 @@ export default function InterviewRoomPage() {
   );
   const [videoState, setVideoState] = useState<'none' | 'generating' | 'playing' | 'ended'>('none');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [liveSession, setLiveSession] = useState<LivestreamSession | null>(null);
+  const [liveSign, setLiveSign] = useState<LivestreamSign | null>(null);
+  const [liveReady, setLiveReady] = useState(false);
   const [liveSpeaking, setLiveSpeaking] = useState(false);
 
   const turnIdRef = useRef(0);
@@ -169,32 +172,30 @@ export default function InterviewRoomPage() {
   const estimateSpeakMs = (text: string) =>
     Math.min(30000, Math.max(3000, Math.ceil(text.length / 4) * 1000));
 
+  // 就绪门控回调必须稳定：避免每次渲染生成新函数导致 LivestreamPersona 的 effect 重跑（会关/重开 SDK 会话）
+  const handleLiveReady = useCallback(() => setLiveReady(true), []);
+
+  // 每题 speak 前建一个腾讯后端「驱动会话」再 speak（SDK 会话由前端创建，后端拿不到其 sessionId）；
+  // 该会话由 liveSessionRef 持有，卸载/结束面试时统一 close 清理。
   const handleLiveSpeak = useCallback(
     (content: string) => {
-      const session = liveSessionRef.current;
-      if (!session) return;
+      if (!liveReady) return; // 就绪门控：SDK 未就绪时口播无效，字幕仍在，可重播
       clearLiveSpeakTimer();
       setLiveSpeaking(true);
-      void speakLivestream(session.sessionId, content).catch(async () => {
+      void (async () => {
         try {
-          // 会话可能已失效（如后端重启）→ 重建一次会话并重试
-          const newSession = await createLivestreamSession();
-          liveSessionRef.current = newSession;
-          setLiveSession(newSession);
-          await speakLivestream(newSession.sessionId, content);
+          const session = await createLivestreamSession();
+          liveSessionRef.current = session;
+          await speakLivestream(session.sessionId, content);
         } catch {
-          // 仍失败 → 回退 V14：TTS 播报当前题，面试不中断
-          liveAvailableRef.current = false;
-          liveSessionRef.current = null;
-          setLiveSession(null);
-          void playQuestion(content);
+          // 失败：字幕仍在，可重播
         }
-      });
+      })();
       liveSpeakTimerRef.current = window.setTimeout(() => {
         setLiveSpeaking(false);
       }, estimateSpeakMs(content));
     },
-    [clearLiveSpeakTimer],
+    [clearLiveSpeakTimer, liveReady],
   );
 
   const handleLiveReplay = useCallback(() => {
@@ -416,17 +417,13 @@ export default function InterviewRoomPage() {
             : null;
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
-        // 实时视频面试：进入即建会话；失败(503) → liveAvailable=false，回退 V14 流程
+        // 实时视频面试：进入即取 sign；失败 → liveAvailable=false，回退 V14 流程
         if (data.input_mode === 'voice') {
           try {
-            const session = await createLivestreamSession();
-            if (cancelled) {
-              void closeLivestream(session.sessionId).catch(() => {});
-              return;
-            }
-            liveSessionRef.current = session;
+            const sign = await getLivestreamSign();
+            if (cancelled) return;
             liveAvailableRef.current = true;
-            setLiveSession(session);
+            setLiveSign(sign);
           } catch {
             liveAvailableRef.current = false;
           }
@@ -465,7 +462,8 @@ export default function InterviewRoomPage() {
       const session = liveSessionRef.current;
       liveSessionRef.current = null;
       liveAvailableRef.current = false;
-      setLiveSession(null);
+      setLiveSign(null);
+      setLiveReady(false);
       if (session) void closeLivestream(session.sessionId).catch(() => {});
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
@@ -679,7 +677,8 @@ export default function InterviewRoomPage() {
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
     liveAvailableRef.current = false;
-    setLiveSession(null);
+    setLiveSign(null);
+    setLiveReady(false);
     if (session) void closeLivestream(session.sessionId).catch(() => {});
     voicePlayerRef.current?.stop();
     voiceRecorderRef.current?.cancel();
@@ -744,12 +743,13 @@ export default function InterviewRoomPage() {
 
             {effectiveInputMode === 'voice' && (
               <div className="video-persona-stage">
-                {liveSession ? (
+                {liveSign ? (
                   <LivestreamPersona
-                    streamURL={liveSession.streamURL}
+                    sign={liveSign}
                     question={currentQuestionRef.current ?? ''}
                     speaking={liveSpeaking}
                     muted={ttsMuted}
+                    onReady={handleLiveReady}
                     onToggleMute={handleVideoToggleMute}
                     onReplay={handleLiveReplay}
                     onSkip={handleLiveSkip}
@@ -888,7 +888,7 @@ export default function InterviewRoomPage() {
                           </button>
                         </div>
                       )}
-                      {videoState === 'none' && !liveSession && (
+                      {videoState === 'none' && !liveSign && (
                         <div className="voice-room-tts-controls">
                           <button
                             type="button"
