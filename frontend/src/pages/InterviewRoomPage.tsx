@@ -175,8 +175,20 @@ export default function InterviewRoomPage() {
       if (!session) return;
       clearLiveSpeakTimer();
       setLiveSpeaking(true);
-      void speakLivestream(session.sessionId, content).catch(() => {
-        // 失败不阻塞：字幕仍在，可点「重播」重试
+      void speakLivestream(session.sessionId, content).catch(async () => {
+        try {
+          // 会话可能已失效（如后端重启）→ 重建一次会话并重试
+          const newSession = await createLivestreamSession();
+          liveSessionRef.current = newSession;
+          setLiveSession(newSession);
+          await speakLivestream(newSession.sessionId, content);
+        } catch {
+          // 仍失败 → 回退 V14：TTS 播报当前题，面试不中断
+          liveAvailableRef.current = false;
+          liveSessionRef.current = null;
+          setLiveSession(null);
+          void playQuestion(content);
+        }
       });
       liveSpeakTimerRef.current = window.setTimeout(() => {
         setLiveSpeaking(false);
@@ -876,7 +888,7 @@ export default function InterviewRoomPage() {
                           </button>
                         </div>
                       )}
-                      {videoState === 'none' && (
+                      {videoState === 'none' && !liveSession && (
                         <div className="voice-room-tts-controls">
                           <button
                             type="button"
