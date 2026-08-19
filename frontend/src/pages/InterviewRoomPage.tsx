@@ -453,6 +453,7 @@ export default function InterviewRoomPage() {
       const session = liveSessionRef.current;
       liveSessionRef.current = null;
       liveAvailableRef.current = false;
+      setLiveSession(null);
       if (session) void closeLivestream(session.sessionId).catch(() => {});
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
@@ -666,6 +667,7 @@ export default function InterviewRoomPage() {
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
     liveAvailableRef.current = false;
+    setLiveSession(null);
     if (session) void closeLivestream(session.sessionId).catch(() => {});
     voicePlayerRef.current?.stop();
     voiceRecorderRef.current?.cancel();
