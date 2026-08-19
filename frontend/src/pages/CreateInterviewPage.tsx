@@ -30,6 +30,7 @@ const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
 const INPUT_MODES: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
   { value: 'voice', label: '语音' },
+  { value: 'video', label: '视频' },
 ];
 
 export default function CreateInterviewPage() {

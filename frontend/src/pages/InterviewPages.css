@@ -990,3 +990,23 @@
   padding: 2px 8px;
   cursor: pointer;
 }
+
+/* 视频模式数智人不可用：静态降级提示 + 重试按钮 */
+.live-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  width: min(640px, 100%);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--rounded-md);
+  background: var(--color-warning-bg, rgba(255, 193, 7, 0.12));
+  border: 1px solid var(--color-warning-border, rgba(255, 193, 7, 0.35));
+  font: var(--text-caption);
+  color: var(--color-ink);
+}
+
+.live-unavailable p {
+  margin: 0;
+}

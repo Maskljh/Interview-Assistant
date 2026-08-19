@@ -26,21 +26,17 @@ import {
   type LivestreamSign,
 } from '../api/livestream';
 import { getVideoTask, submitVideo } from '../api/digitalHuman';
-
 interface Turn {
   id: number;
   role: 'interviewer' | 'candidate';
   content: string;
 }
-
 type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'sending';
-
 export default function InterviewRoomPage() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const interviewId = Number(id);
-
   const [turns, setTurns] = useState<Turn[]>([]);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(
     null,
@@ -68,7 +64,8 @@ export default function InterviewRoomPage() {
   const [liveSign, setLiveSign] = useState<LivestreamSign | null>(null);
   const [, setLiveReady] = useState(false);
   const [liveSpeaking, setLiveSpeaking] = useState(false);
-
+  const [liveUnavailable, setLiveUnavailable] = useState(false);
+  const [retryingLive, setRetryingLive] = useState(false);
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
   const doneRef = useRef(false);
@@ -92,7 +89,6 @@ export default function InterviewRoomPage() {
   const liveSessionRef = useRef<LivestreamSession | null>(null);
   const liveReadyRef = useRef(false);
   const liveSpeakTimerRef = useRef<number | null>(null);
-
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
     setTurns((prev) => [...prev, { id: turnIdRef.current, role, content }]);
@@ -100,7 +96,6 @@ export default function InterviewRoomPage() {
       lastInterviewerMsgRef.current = content;
     }
   }, []);
-
   const submitAnswer = useCallback(
     (content: string, voiceDurationMs?: number) => {
       appendTurn('candidate', content);
@@ -109,7 +104,6 @@ export default function InterviewRoomPage() {
     },
     [appendTurn],
   );
-
   const playQuestion = useCallback(async (content: string) => {
     if (ttsMutedRef.current) return;
     const version = ++speechVersionRef.current;
@@ -136,7 +130,6 @@ export default function InterviewRoomPage() {
       );
     }
   }, []);
-
   const toggleMute = useCallback(() => {
     const next = !ttsMutedRef.current;
     ttsMutedRef.current = next;
@@ -148,31 +141,26 @@ export default function InterviewRoomPage() {
       setStatusLine('');
     }
   }, []);
-
   const handleReplay = useCallback(() => {
     if (currentQuestionRef.current && !ttsMutedRef.current) {
       void playQuestion(currentQuestionRef.current);
     }
   }, [playQuestion]);
-
   const handleSkipPlayback = useCallback(() => {
     speechVersionRef.current += 1;
     voicePlayerRef.current?.stop();
     setReading(false);
     setStatusLine('');
   }, []);
-
   const clearLiveSpeakTimer = useCallback(() => {
     if (liveSpeakTimerRef.current != null) {
       window.clearTimeout(liveSpeakTimerRef.current);
       liveSpeakTimerRef.current = null;
     }
   }, []);
-
   // 实时流无单题结束事件：按文本长度估算口播时长（约 4 字/秒），到时清除口播状态
   const estimateSpeakMs = (text: string) =>
     Math.min(30000, Math.max(3000, Math.ceil(text.length / 4) * 1000));
-
   // 就绪门控回调必须稳定：避免每次渲染生成新函数导致 LivestreamPersona 的 effect 重跑（会关/重开 SDK 会话）
   // 就绪标记同时写 ref（口播门控用）与 state（保留 setter，当前无渲染读取）；state 绝不进入回调依赖链，
   // 否则 onReady→setLiveReady→handleLiveSpeak 变化→handleMessage→connect 重建→挂载 effect 重跑→无限循环
@@ -180,16 +168,15 @@ export default function InterviewRoomPage() {
     liveReadyRef.current = true;
     setLiveReady(true);
   }, []);
-
-  // SDK 初始化/运行失败：本场禁用 live（liveAvailable=false、清 sign），回退 V14 视频/TTS 流程
+  // SDK 初始化/运行失败：本场禁用 live（liveAvailable=false、清 sign），回退静态形象 + TTS，并提示可重试
   const handleLiveError = useCallback(() => {
     liveAvailableRef.current = false;
     liveReadyRef.current = false;
     setLiveReady(false);
     setLiveSign(null);
+    setLiveUnavailable(true);
   }, []);
-
-  // 每场面试仅建一个腾讯后端「驱动会话」（进入 voice 模式时创建），全程复用；
+  // 每场面试仅建一个腾讯后端「驱动会话」（进入 video 模式时创建），全程复用；
   // 该会话由 liveSessionRef 持有，卸载/结束面试时统一 close 清理。
   const handleLiveSpeak = useCallback(
     (content: string) => {
@@ -219,17 +206,40 @@ export default function InterviewRoomPage() {
     },
     [clearLiveSpeakTimer, playQuestion],
   );
-
   const handleLiveReplay = useCallback(() => {
     const content = currentQuestionRef.current;
     if (content) void handleLiveSpeak(content);
   }, [handleLiveSpeak]);
-
   const handleLiveSkip = useCallback(() => {
     clearLiveSpeakTimer();
     setLiveSpeaking(false);
   }, [clearLiveSpeakTimer]);
-
+  // 视频模式数智人不可用时的重试：重新取 sign 并重建驱动会话（腾讯侧单配额，重试前旧会话已由 TTL/close 释放）
+  async function retryLivestream() {
+    if (retryingLive) return;
+    setRetryingLive(true);
+    setError('');
+    try {
+      const sign = await getLivestreamSign();
+      const session = await createLivestreamSession();
+      if (!mountedRef.current) {
+        // 重试期间组件已卸载/结束：不持有该会话，直接关闭防泄漏
+        void closeLivestream(session.sessionId).catch(() => {});
+        return;
+      }
+      liveSessionRef.current = session;
+      liveAvailableRef.current = true;
+      setLiveUnavailable(false);
+      setLiveSign(sign);
+      setStatusLine('数智人已重新加载');
+    } catch {
+      liveAvailableRef.current = false;
+      setLiveUnavailable(true);
+      setStatusLine('数智人仍不可用，可继续以静态面试官作答');
+    } finally {
+      setRetryingLive(false);
+    }
+  }
   async function pollVideoTask(taskId: string, version: number): Promise<string | null> {
     for (let i = 0; i < VIDEO_MAX_POLL_ATTEMPTS; i++) {
       await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS));
@@ -241,7 +251,6 @@ export default function InterviewRoomPage() {
     }
     return null; // 超时
   }
-
   const playQuestionVideo = useCallback(
     async (content: string) => {
       if (ttsMutedRef.current) return;
@@ -273,33 +282,28 @@ export default function InterviewRoomPage() {
     },
     [playQuestion],
   );
-
   const handleVideoEnded = useCallback(() => {
     // 播完停在最后一帧（videoState='ended'），字幕保留
     setVideoState('ended');
     setStatusLine('');
   }, []);
-
   const handleVideoSkip = useCallback(() => {
     speechVersionRef.current += 1; // 取消进行中的轮询
     setVideoState('none');
     setVideoUrl(null);
     setStatusLine('');
   }, []);
-
   const handleVideoToggleMute = useCallback(() => {
     const next = !ttsMutedRef.current;
     ttsMutedRef.current = next;
     setTtsMuted(next);
     setStatusLine(next ? '已静音' : '');
   }, []);
-
   const handleMessage = useCallback(
     (msg: ServerMsg) => {
       if (msg.progress) {
         setProgress(msg.progress);
       }
-
       switch (msg.type) {
         case 'session_started':
           setDisconnected(false);
@@ -315,14 +319,16 @@ export default function InterviewRoomPage() {
               appendTurn('interviewer', msg.content);
             }
             currentQuestionRef.current = msg.content;
-            if (inputModeRef.current === 'voice') {
+            if (inputModeRef.current === 'video') {
               if (liveAvailableRef.current) {
                 void handleLiveSpeak(msg.content);
-              } else if (videoUnavailableRef.current) {
-                void playQuestion(msg.content);
               } else {
-                void playQuestionVideo(msg.content);
+                // 数智人不可用：静态形象 + TTS（提示与重试按钮已显示）
+                void playQuestion(msg.content);
               }
+            } else if (inputModeRef.current === 'voice') {
+              // 语音模式：V13 行为，静态形象 + TTS，不依赖腾讯
+              void playQuestion(msg.content);
             }
           }
           break;
@@ -349,11 +355,9 @@ export default function InterviewRoomPage() {
     },
     [appendTurn, interviewId, navigate, playQuestion, playQuestionVideo, handleLiveSpeak],
   );
-
   const RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
   const VIDEO_POLL_INTERVAL_MS = 3000;
   const VIDEO_MAX_POLL_ATTEMPTS = 40; // 3s × 40 = 120s 上限
-
   const connectWithRetry = useCallback(
     (attempt: number) => {
       if (!mountedRef.current) return;
@@ -366,7 +370,6 @@ export default function InterviewRoomPage() {
       socketRef.current?.close();
       setDisconnected(false);
       setError('');
-
       socketRef.current = connectInterviewWS(interviewId, token, {
         onMessage: (msg) => {
           if (msg.type === 'session_started') {
@@ -396,12 +399,10 @@ export default function InterviewRoomPage() {
     },
     [handleMessage, interviewId],
   );
-
   const connect = useCallback(() => {
     attemptRef.current = 0;
     connectWithRetry(0);
   }, [connectWithRetry]);
-
   useEffect(() => {
     mountedRef.current = true;
     if (!Number.isFinite(interviewId)) {
@@ -409,11 +410,9 @@ export default function InterviewRoomPage() {
       setLoadingInterview(false);
       return;
     }
-
     let cancelled = false;
     setLoadingInterview(true);
     setError('');
-
     async function loadAndConnect() {
       try {
         const data = await getInterview(interviewId);
@@ -439,9 +438,10 @@ export default function InterviewRoomPage() {
             : null;
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
-        // 实时视频面试：进入即取 sign 并建唯一驱动会话（腾讯侧 1 会话并发配额，全程复用）；
-        // 任一失败 → liveAvailable=false，回退 V14 流程
-        if (data.input_mode === 'voice') {
+        // 视频模式：进入即取 sign 并建唯一驱动会话（腾讯侧 1 会话并发配额，全程复用）；
+        // 任一失败 → liveAvailable=false，显示提示 + 重试，回退静态形象 + TTS。
+        // 语音模式：V13 行为，不请求 sign、不建腾讯会话、不占配额。
+        if (data.input_mode === 'video') {
           try {
             const sign = await getLivestreamSign();
             if (cancelled) return;
@@ -453,9 +453,11 @@ export default function InterviewRoomPage() {
             }
             liveSessionRef.current = session;
             liveAvailableRef.current = true;
+            setLiveUnavailable(false);
             setLiveSign(sign);
           } catch {
             liveAvailableRef.current = false;
+            setLiveUnavailable(true);
           }
         }
         connect();
@@ -471,9 +473,7 @@ export default function InterviewRoomPage() {
         }
       }
     }
-
     void loadAndConnect();
-
     return () => {
       cancelled = true;
       mountedRef.current = false;
@@ -494,6 +494,7 @@ export default function InterviewRoomPage() {
       liveAvailableRef.current = false;
       setLiveSign(null);
       setLiveReady(false);
+      setLiveUnavailable(false);
       liveReadyRef.current = false;
       if (session) void closeLivestream(session.sessionId).catch(() => {});
       voicePlayerRef.current?.stop();
@@ -501,14 +502,13 @@ export default function InterviewRoomPage() {
       socketRef.current = null;
     };
   }, [connect, interviewId]);
-
   const effectiveInputMode: InputMode =
-    inputMode === 'voice' && !textModeOverride ? 'voice' : 'text';
-
+    (inputMode === 'voice' || inputMode === 'video') && !textModeOverride
+      ? inputMode
+      : 'text';
   useEffect(() => {
     inputModeRef.current = effectiveInputMode;
   }, [effectiveInputMode]);
-
   useEffect(() => {
     if (effectiveInputMode === 'text') {
       clearLiveSpeakTimer();
@@ -521,14 +521,12 @@ export default function InterviewRoomPage() {
       }
     }
   }, [effectiveInputMode, videoState, clearLiveSpeakTimer]);
-
   useEffect(() => {
     if (videoState !== 'none') return; // 视频模式由 VideoPersona 接管渲染
     if (reading) setPersonaState('speaking');
     else if (thinking) setPersonaState('listening');
     else setPersonaState('idle');
   }, [videoState, reading, thinking]);
-
   useEffect(() => {
     if (user === null && !loadingInterview) {
       socketRef.current?.close();
@@ -540,7 +538,6 @@ export default function InterviewRoomPage() {
       navigate('/login');
     }
   }, [user, loadingInterview, navigate]);
-
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -562,7 +559,6 @@ export default function InterviewRoomPage() {
     reader.readAsDataURL(file);
     e.target.value = '';
   }
-
   async function handleStartRecording() {
     failedAudioRef.current = null;
     if (voiceActiveRef.current) {
@@ -606,7 +602,6 @@ export default function InterviewRoomPage() {
       setStatusLine('无法访问麦克风，请使用文字作答');
     }
   }
-
   async function handleStopRecording() {
     const recorder = voiceRecorderRef.current;
     if (!recorder) {
@@ -649,7 +644,6 @@ export default function InterviewRoomPage() {
       voiceReadyRef.current = false;
     }
   }
-
   async function handleRetryASR() {
     const audio = failedAudioRef.current;
     if (!audio || retryingASR) return;
@@ -678,7 +672,6 @@ export default function InterviewRoomPage() {
       setRetryingASR(false);
     }
   }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = answer.trim();
@@ -686,18 +679,17 @@ export default function InterviewRoomPage() {
       return;
     }
     if (
-      inputModeRef.current === 'voice' &&
+      (inputModeRef.current === 'voice' || inputModeRef.current === 'video') &&
       (voicePhase === 'transcribing' || voicePhase === 'sending')
     ) {
       setStatusLine('正在识别语音，请稍候');
       return;
     }
-    if (inputModeRef.current === 'voice') {
+    if (inputModeRef.current === 'voice' || inputModeRef.current === 'video') {
       setVoicePhase('sending');
     }
     submitAnswer(trimmed);
   }
-
   async function handleForceEnd() {
     if (ending || doneRef.current) return;
     setEnding(true);
@@ -710,6 +702,7 @@ export default function InterviewRoomPage() {
     liveAvailableRef.current = false;
     setLiveSign(null);
     setLiveReady(false);
+    setLiveUnavailable(false);
     liveReadyRef.current = false;
     if (session) void closeLivestream(session.sessionId).catch(() => {});
     voicePlayerRef.current?.stop();
@@ -732,9 +725,7 @@ export default function InterviewRoomPage() {
       setEnding(false);
     }
   }
-
   const voiceBusy = voicePhase === 'transcribing' || voicePhase === 'sending';
-
   return (
     <div className="interview-page">
       <header className="interview-header">
@@ -772,8 +763,16 @@ export default function InterviewRoomPage() {
                 </span>
               )}
             </div>
-
             {effectiveInputMode === 'voice' && (
+              <div className="video-persona-stage">
+                <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
+                <label className="virtual-persona-avatar-btn">
+                  换头像
+                  <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
+                </label>
+              </div>
+            )}
+            {effectiveInputMode === 'video' && (
               <div className="video-persona-stage">
                 {liveSign ? (
                   <LivestreamPersona
@@ -801,16 +800,27 @@ export default function InterviewRoomPage() {
                   <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
                 )}
                 <UserCamera />
+                {liveUnavailable && (
+                  <div className="live-unavailable">
+                    <p>数智人不可用，已切换为静态面试官</p>
+                    <button
+                      type="button"
+                      className="interview-inline-link"
+                      onClick={() => void retryLivestream()}
+                      disabled={retryingLive}
+                    >
+                      {retryingLive ? '正在重试…' : '重试加载数智人'}
+                    </button>
+                  </div>
+                )}
                 <label className="virtual-persona-avatar-btn">
                   换头像
                   <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
                 </label>
               </div>
             )}
-
             {error && <p className="interview-error">{error}</p>}
             {statusLine && <p className="interview-room-status">{statusLine}</p>}
-
             <div className="interview-transcript interview-room-transcript">
               {turns.length === 0 ? (
                 <p className="interview-loading">正在连接面试间…</p>
@@ -837,7 +847,6 @@ export default function InterviewRoomPage() {
                 <p className="interview-room-thinking">面试官思考中…</p>
               )}
             </div>
-
             {disconnected && (
               <div className="interview-room-disconnect">
                 <p>连接已断开。</p>
@@ -846,11 +855,10 @@ export default function InterviewRoomPage() {
                 </button>
               </div>
             )}
-
             <form className="interview-room-form" onSubmit={handleSubmit}>
-              {inputMode === 'voice' && (
+              {(inputMode === 'voice' || inputMode === 'video') && (
                 <div className="voice-room-controls">
-                  {effectiveInputMode === 'voice' ? (
+                  {effectiveInputMode !== 'text' ? (
                     <>
                       <button
                         type="button"
@@ -975,17 +983,16 @@ export default function InterviewRoomPage() {
                   )}
                 </div>
               )}
-
               <div className="interview-field">
                 <label htmlFor="answer">
-                  {effectiveInputMode === 'voice' ? '文字作答（备选）' : '你的回答'}
+                  {effectiveInputMode !== 'text' ? '文字作答（备选）' : '你的回答'}
                 </label>
                 <textarea
                   id="answer"
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder={
-                    effectiveInputMode === 'voice'
+                    effectiveInputMode !== 'text'
                       ? '输入文字作为备选…'
                       : '在此输入回答…'
                   }
@@ -1001,7 +1008,8 @@ export default function InterviewRoomPage() {
                     disconnected ||
                     ending ||
                     !answer.trim() ||
-                    (inputModeRef.current === 'voice' && voiceBusy)
+                    ((inputModeRef.current === 'voice' || inputModeRef.current === 'video') &&
+                      voiceBusy)
                   }
                 >
                   发送回答

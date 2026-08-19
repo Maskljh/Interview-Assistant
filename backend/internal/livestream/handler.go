@@ -20,10 +20,27 @@ import (
 	"github.com/interview-assistant/backend/internal/auth"
 )
 
-const maxSpeakTextRunes = 1000
+const (
+	maxSpeakTextRunes = 1000
+	// livestreamSessionTTL 驱动会话空闲超时：浏览器异常退出导致的残留会话
+	// 超过该时长无 speak 活动即自动 Close，释放腾讯单配额，避免永久占住
+	// 导致后续「数智人看不到」。正常 close 仍由前端显式触发，不受影响。
+	livestreamSessionTTL = 30 * time.Minute
+	// livestreamReapInterval 后台清理扫描周期。
+	livestreamReapInterval = time.Minute
+)
 
 func RegisterRoutes(r *gin.Engine, secret string, provider Provider, cfg *Config) {
-	h := &handler{provider: provider, sessions: make(map[string]Session), appKey: cfg.APIKey, accessToken: cfg.Secret, projectID: cfg.AvatarID}
+	h := &handler{
+		provider:    provider,
+		sessions:    make(map[string]*sessionEntry),
+		appKey:      cfg.APIKey,
+		accessToken: cfg.Secret,
+		projectID:   cfg.AvatarID,
+		ttl:         livestreamSessionTTL,
+		stopReap:    make(chan struct{}),
+	}
+	h.startReaper()
 	protected := r.Group("/api/livestream")
 	protected.Use(auth.Middleware(secret))
 	protected.POST("/sessions", h.Create)
@@ -32,13 +49,63 @@ func RegisterRoutes(r *gin.Engine, secret string, provider Provider, cfg *Config
 	protected.GET("/sign", h.Sign)
 }
 
+// sessionEntry 记录驱动会话及其最近一次活动时间，供 TTL 清理判断。
+type sessionEntry struct {
+	sess         Session
+	lastActivity time.Time
+}
+
 type handler struct {
 	provider    Provider
 	mu          sync.Mutex
-	sessions    map[string]Session
+	sessions    map[string]*sessionEntry
 	appKey      string
 	accessToken string
 	projectID   string
+	ttl         time.Duration
+	stopReap    chan struct{}
+}
+
+// startReaper 启动后台清理 goroutine：周期扫描，关闭并删除空闲超时的驱动会话。
+func (h *handler) startReaper() {
+	go func() {
+		ticker := time.NewTicker(livestreamReapInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				h.reapStale(time.Now(), h.ttl)
+			case <-h.stopReap:
+				return
+			}
+		}
+	}()
+}
+
+// reapStale 关闭并删除 lastActivity 距今超过 ttl 的会话。
+// 供后台定时清理调用；测试可传入自定义 now/ttl 直接验证。
+func (h *handler) reapStale(now time.Time, ttl time.Duration) {
+	h.mu.Lock()
+	var stale []Session
+	for id, e := range h.sessions {
+		if now.Sub(e.lastActivity) > ttl {
+			delete(h.sessions, id)
+			stale = append(stale, e.sess)
+		}
+	}
+	h.mu.Unlock()
+	for _, s := range stale {
+		_ = s.Close()
+	}
+}
+
+// touch 更新会话最近活动时间（Create/Speak/Close 时调用）。
+func (h *handler) touch(id string) {
+	h.mu.Lock()
+	if e, ok := h.sessions[id]; ok {
+		e.lastActivity = time.Now()
+	}
+	h.mu.Unlock()
 }
 
 type createResponse struct {
@@ -59,7 +126,7 @@ func (h *handler) Create(c *gin.Context) {
 	}
 	sessionID := randomID()
 	h.mu.Lock()
-	h.sessions[sessionID] = sess
+	h.sessions[sessionID] = &sessionEntry{sess: sess, lastActivity: time.Now()}
 	h.mu.Unlock()
 	c.JSON(http.StatusOK, createResponse{SessionID: sessionID, StreamURL: sess.StreamURL()})
 }
@@ -79,6 +146,7 @@ func (h *handler) Speak(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
+	h.touch(id)
 	var req speakRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -107,7 +175,7 @@ func (h *handler) Close(c *gin.Context) {
 		return
 	}
 	h.mu.Lock()
-	sess, ok := h.sessions[id]
+	e, ok := h.sessions[id]
 	if ok {
 		delete(h.sessions, id)
 	}
@@ -116,15 +184,18 @@ func (h *handler) Close(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	_ = sess.Close()
+	_ = e.sess.Close()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (h *handler) lookup(id string) (Session, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	s, ok := h.sessions[id]
-	return s, ok
+	e, ok := h.sessions[id]
+	if !ok {
+		return nil, false
+	}
+	return e.sess, true
 }
 
 func randomID() string {

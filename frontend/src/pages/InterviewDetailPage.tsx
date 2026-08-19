@@ -21,6 +21,7 @@ import MobileTabBar from '../components/MobileTabBar';
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
   text: '文本作答',
   voice: '语音作答',
+  video: '视频作答',
 };
 
 function roleLabel(role: string): string {

@@ -9,7 +9,7 @@ export type InterviewStatus =
   | 'completed'
   | 'failed';
 
-export type InputMode = 'text' | 'voice';
+export type InputMode = 'text' | 'voice' | 'video';
 
 export type Persona = 'standard' | 'strict_tech' | 'warm_hr' | 'stress';
 
