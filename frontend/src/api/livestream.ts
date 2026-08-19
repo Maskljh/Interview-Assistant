@@ -13,6 +13,14 @@ async function readError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, message);
 }
 
+export interface LivestreamSign {
+  appkey: string;
+  timestamp: string;
+  signature: string;
+  virtualmanProjectId: string;
+  userId: string;
+}
+
 export interface LivestreamSession {
   sessionId: string;
   streamURL: string;
@@ -58,4 +66,13 @@ export async function closeLivestream(sessionId: string): Promise<void> {
     },
   );
   if (!res.ok) throw await readError(res);
+}
+
+export async function getLivestreamSign(): Promise<LivestreamSign> {
+  const token = getToken();
+  const res = await fetch(`${getApiBase()}/api/livestream/sign`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw await readError(res);
+  return (await res.json()) as LivestreamSign;
 }
