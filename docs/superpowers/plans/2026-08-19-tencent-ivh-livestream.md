@@ -278,11 +278,11 @@ func (p *tencentProvider) ivhCall(ctx context.Context, path string, payload map[
 
 func (p *tencentProvider) StartSession(ctx context.Context, avatarID string) (Session, error) {
 	payload, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/createsession", map[string]any{
-		"ReqId":              randomID(),
+		"ReqId":               reqID(), // 32 位 hex（16 字节），Tencent 拒绝 16 位短 ReqId
 		"VirtualmanProjectId": p.projectID,
-		"UserId":             fmt.Sprintf("interview-%d", time.Now().UnixNano()),
-		"Protocol":           "rtmp",
-		"DriverType":         1,
+		"UserId":              fmt.Sprintf("interview-%d", time.Now().UnixNano()),
+		"Protocol":            "rtmp",
+		"DriverType":          1,
 	})
 	if err != nil {
 		return nil, err
@@ -290,6 +290,33 @@ func (p *tencentProvider) StartSession(ctx context.Context, avatarID string) (Se
 	sessionID, _ := payload["SessionId"].(string)
 	if sessionID == "" {
 		return nil, fmt.Errorf("ivh createsession: missing SessionId")
+	}
+	// 轮询 statsession 至就绪（SessionStatus==1，一般 ~16s），再 startsession；
+	// 否则 speak 会返回 110016 APaasStreamSessionNotStart。
+	pollCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	defer cancel()
+	for {
+		st, err := p.ivhCall(pollCtx, "/v2/ivh/sessionmanager/sessionmanagerservice/statsession", map[string]any{
+			"ReqId":     reqID(),
+			"SessionId": sessionID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if status, _ := st["SessionStatus"].(float64); status == 1 {
+			break
+		}
+		select {
+		case <-pollCtx.Done():
+			return nil, fmt.Errorf("ivh statsession: timeout waiting ready")
+		case <-time.After(2 * time.Second):
+		}
+	}
+	if _, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/startsession", map[string]any{
+		"ReqId":     reqID(),
+		"SessionId": sessionID,
+	}); err != nil {
+		return nil, err
 	}
 	return &tencentSession{provider: p, sessionID: sessionID}, nil
 }
