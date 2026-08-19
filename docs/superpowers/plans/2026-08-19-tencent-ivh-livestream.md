@@ -13,8 +13,8 @@
 - **零 DB 改动**；不新增 `video` 第三输入模式（只升级 voice 模式）
 - 摄像头仅本地预览（`UserCamera` 不变）
 - 后端 `.env`：`LIVESTREAM_PROVIDER=tencent` + `TENCENT_APPKEY` / `TENCENT_ACCESSTOKEN` / `TENCENT_PROJECT_ID`；**AccessToken 不出后端**
-- 腾讯 IVH 域名 `https://gw.tvs.qq.com`，REST 路径 `/v2/` 前缀；签名 = `URLEncode(Base64(HmacSha256(排序拼接串, AccessToken)))`（已实测通过）
-- 已实测凭证：appkey=`bc3a90f138a24b289ab98512d8d815a6`、accesstoken=`01f7146e24bc4a8aa0ec9eebf49a88dd`、virtualmanProjectId=`94eac74ea3a048e3b7757168504ef71e`
+- **签名 = `URLEncode(Base64(HmacSha256(排序拼接串, AccessToken)))`**（已实测通过；注意：`/sign` 响应中签名是单次 QueryEscape 后的值供前端原样使用；后端 `ivhCall` 构造 query 时必须用**未转义的原始 base64**放入 `url.Values` 让 `Encode()` 做单次转义，避免双重编码）
+- 已实测凭证：appkey / accesstoken / virtualmanProjectId 见本地 .env（凭证已从文档移除，勿外泄）
 - 后端模块 `github.com/interview-assistant/backend`；鉴权 `auth.Middleware(secret)`；前端 API base `getApiBase()`
 - 分支 `feat/v16-tencent-ivh` from main HEAD
 
@@ -97,13 +97,18 @@ func RegisterRoutes(r *gin.Engine, secret string, provider Provider, cfg *Config
 新增签名函数与 Sign handler：
 
 ```go
-// signIVHParams 生成腾讯 IVH 签名：query 公共参数按字典序拼 k=v&k=v，
-// 用 AccessToken 作密钥 HmacSha256，Base64 后 URL 编码。
-func signIVHParams(appkey, timestamp, accessToken string) string {
+// rawIVHSignature 返回腾讯 IVH 签名的原始 base64（未 QueryEscape），供后端 ivhCall 构造 query 用。
+func rawIVHSignature(appkey, timestamp, accessToken string) string {
 	plain := "appkey=" + appkey + "&timestamp=" + timestamp
 	mac := hmac.New(sha256.New, []byte(accessToken))
 	mac.Write([]byte(plain))
-	return url.QueryEscape(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// signIVHParams 生成腾讯 IVH 签名：query 公共参数按字典序拼 k=v&k=v，
+// 用 AccessToken 作密钥 HmacSha256，Base64 后 URL 编码。
+func signIVHParams(appkey, timestamp, accessToken string) string {
+	return url.QueryEscape(rawIVHSignature(appkey, timestamp, accessToken))
 }
 
 func (h *handler) Sign(c *gin.Context) {
@@ -226,12 +231,14 @@ func newTencentProvider(cfg Config) Provider {
 }
 
 // ivhCall 调用腾讯 IVH REST：query 带 appkey/timestamp/signature，body 为 Header+Payload 信封。
+// 注意：signature 必须用原始 base64（未 QueryEscape），由 url.Values.Encode() 做单次转义；
+// 用 signIVHParams（已转义）会二次编码导致网关验签失败。
 func (p *tencentProvider) ivhCall(ctx context.Context, path string, payload map[string]any) (map[string]any, error) {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	query := url.Values{}
 	query.Set("appkey", p.appKey)
 	query.Set("timestamp", timestamp)
-	query.Set("signature", signIVHParams(p.appKey, timestamp, p.accessToken))
+	query.Set("signature", rawIVHSignature(p.appKey, timestamp, p.accessToken))
 	reqURL := ivhBaseURL + path + "?" + query.Encode()
 
 	bodyMap := map[string]any{"Header": map[string]any{}, "Payload": payload}
@@ -393,9 +400,9 @@ git commit -m "feat(livestream): Tencent IVH provider"
 
 ```
 LIVESTREAM_PROVIDER=tencent
-TENCENT_APPKEY=bc3a90f138a24b289ab98512d8d815a6
-TENCENT_ACCESSTOKEN=01f7146e24bc4a8aa0ec9eebf49a88dd
-TENCENT_PROJECT_ID=94eac74ea3a048e3b7757168504ef71e
+TENCENT_APPKEY=<见本地 .env>
+TENCENT_ACCESSTOKEN=<见本地 .env>
+TENCENT_PROJECT_ID=<见本地 .env>
 ```
 
 （保留原有的 `LIVESTREAM_STREAM_URL`，供 stub 降级用。）
