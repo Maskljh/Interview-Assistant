@@ -181,17 +181,33 @@ export default function InterviewRoomPage() {
     setLiveReady(true);
   }, []);
 
-  // 每题 speak 前建一个腾讯后端「驱动会话」再 speak（SDK 会话由前端创建，后端拿不到其 sessionId）；
+  // SDK 初始化/运行失败：本场禁用 live（liveAvailable=false、清 sign），回退 V14 视频/TTS 流程
+  const handleLiveError = useCallback(() => {
+    liveAvailableRef.current = false;
+    liveReadyRef.current = false;
+    setLiveReady(false);
+    setLiveSign(null);
+  }, []);
+
+  // 每场面试仅建一个腾讯后端「驱动会话」（进入 voice 模式时创建），全程复用；
   // 该会话由 liveSessionRef 持有，卸载/结束面试时统一 close 清理。
   const handleLiveSpeak = useCallback(
     (content: string) => {
-      if (!liveReadyRef.current) return; // 就绪门控：SDK 未就绪时口播无效，字幕仍在，可重播
+      if (!liveReadyRef.current) {
+        // 就绪门控：SDK 未就绪时先降级 V14 TTS 口播，保证第一题必被说出（SDK 就绪后重播走 live）
+        void playQuestion(content);
+        return;
+      }
+      const session = liveSessionRef.current;
+      if (!session) {
+        // 驱动会话未就绪（liveAvailable 时应已就绪）：回退 V14 TTS
+        void playQuestion(content);
+        return;
+      }
       clearLiveSpeakTimer();
       setLiveSpeaking(true);
       void (async () => {
         try {
-          const session = await createLivestreamSession();
-          liveSessionRef.current = session;
           await speakLivestream(session.sessionId, content);
         } catch {
           // 失败：字幕仍在，可重播
@@ -201,7 +217,7 @@ export default function InterviewRoomPage() {
         setLiveSpeaking(false);
       }, estimateSpeakMs(content));
     },
-    [clearLiveSpeakTimer],
+    [clearLiveSpeakTimer, playQuestion],
   );
 
   const handleLiveReplay = useCallback(() => {
@@ -423,11 +439,19 @@ export default function InterviewRoomPage() {
             : null;
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
-        // 实时视频面试：进入即取 sign；失败 → liveAvailable=false，回退 V14 流程
+        // 实时视频面试：进入即取 sign 并建唯一驱动会话（腾讯侧 1 会话并发配额，全程复用）；
+        // 任一失败 → liveAvailable=false，回退 V14 流程
         if (data.input_mode === 'voice') {
           try {
             const sign = await getLivestreamSign();
             if (cancelled) return;
+            const session = await createLivestreamSession();
+            if (!mountedRef.current) {
+              // 等待建流期间组件已卸载/结束：不持有该会话，直接关闭防泄漏
+              void closeLivestream(session.sessionId).catch(() => {});
+              return;
+            }
+            liveSessionRef.current = session;
             liveAvailableRef.current = true;
             setLiveSign(sign);
           } catch {
@@ -758,6 +782,7 @@ export default function InterviewRoomPage() {
                     speaking={liveSpeaking}
                     muted={ttsMuted}
                     onReady={handleLiveReady}
+                    onError={handleLiveError}
                     onToggleMute={handleVideoToggleMute}
                     onReplay={handleLiveReplay}
                     onSkip={handleLiveSkip}

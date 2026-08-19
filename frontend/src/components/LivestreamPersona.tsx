@@ -21,6 +21,8 @@ interface LivestreamPersonaProps {
   speaking?: boolean;
   muted?: boolean;
   onReady?: () => void;
+  /** SDK 初始化/运行失败时通知父组件（触发 V14 降级） */
+  onError?: () => void;
   onToggleMute?: () => void;
   onReplay?: () => void;
   onSkip?: () => void;
@@ -32,6 +34,7 @@ export default function LivestreamPersona({
   speaking = false,
   muted = false,
   onReady,
+  onError,
   onToggleMute,
   onReplay,
   onSkip,
@@ -45,6 +48,10 @@ export default function LivestreamPersona({
     const IVH = window.IVH;
     if (!IVH || !containerRef.current) return;
     let cancelled = false;
+    const handleError = () => {
+      if (cancelled) return;
+      onError?.();
+    };
     const start = async () => {
       IVH.init({
         sign: {
@@ -55,6 +62,9 @@ export default function LivestreamPersona({
         virtualmanProjectId: sign.virtualmanProjectId,
         element: containerRef.current!,
       });
+      if (typeof IVH.on === 'function') {
+        IVH.on('error', handleError);
+      }
       await IVH.createSession({ userId: sign.userId });
       if (cancelled) return;
       await IVH.startSession();
@@ -63,13 +73,14 @@ export default function LivestreamPersona({
       onReady?.();
     }
     void start().catch(() => {
-      // 建流失败：由父组件降级（onReady 未触发）
+      // 建流失败：通知父组件降级（onReady 未触发）
+      handleError();
     });
     return () => {
       cancelled = true;
       void IVH.closeSession().catch(() => {});
     };
-  }, [sign, onReady]);
+  }, [sign, onReady, onError]);
 
   return (
     <div className="video-persona video-persona--live" aria-label="实时面试官">
