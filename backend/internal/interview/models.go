@@ -33,6 +33,7 @@ type InputMode string
 const (
 	InputModeText  InputMode = "text"
 	InputModeVoice InputMode = "voice"
+	InputModeVideo InputMode = "video"
 )
 
 type Session struct {
@@ -83,7 +84,7 @@ func ValidateMode(mode Mode) error {
 
 func ValidateInputMode(m InputMode) error {
 	switch m {
-	case InputModeText, InputModeVoice:
+	case InputModeText, InputModeVoice, InputModeVideo:
 		return nil
 	default:
 		return ErrInvalidInput
