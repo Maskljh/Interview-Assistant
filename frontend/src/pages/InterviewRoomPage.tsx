@@ -16,6 +16,13 @@ import MobileTabBar from '../components/MobileTabBar';
 import VirtualPersona from '../components/VirtualPersona';
 import VideoPersona from '../components/VideoPersona';
 import UserCamera from '../components/UserCamera';
+import LivestreamPersona from '../components/LivestreamPersona';
+import {
+  closeLivestream,
+  createLivestreamSession,
+  speakLivestream,
+  type LivestreamSession,
+} from '../api/livestream';
 import { getVideoTask, submitVideo } from '../api/digitalHuman';
 
 interface Turn {
@@ -56,6 +63,8 @@ export default function InterviewRoomPage() {
   );
   const [videoState, setVideoState] = useState<'none' | 'generating' | 'playing' | 'ended'>('none');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [liveSession, setLiveSession] = useState<LivestreamSession | null>(null);
+  const [liveSpeaking, setLiveSpeaking] = useState(false);
 
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
@@ -76,6 +85,9 @@ export default function InterviewRoomPage() {
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
   const videoUnavailableRef = useRef(false);
+  const liveAvailableRef = useRef(false);
+  const liveSessionRef = useRef<LivestreamSession | null>(null);
+  const liveSpeakTimerRef = useRef<number | null>(null);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
@@ -145,6 +157,43 @@ export default function InterviewRoomPage() {
     setReading(false);
     setStatusLine('');
   }, []);
+
+  const clearLiveSpeakTimer = useCallback(() => {
+    if (liveSpeakTimerRef.current != null) {
+      window.clearTimeout(liveSpeakTimerRef.current);
+      liveSpeakTimerRef.current = null;
+    }
+  }, []);
+
+  // 实时流无单题结束事件：按文本长度估算口播时长（约 4 字/秒），到时清除口播状态
+  const estimateSpeakMs = (text: string) =>
+    Math.min(30000, Math.max(3000, Math.ceil(text.length / 4) * 1000));
+
+  const handleLiveSpeak = useCallback(
+    (content: string) => {
+      const session = liveSessionRef.current;
+      if (!session) return;
+      clearLiveSpeakTimer();
+      setLiveSpeaking(true);
+      void speakLivestream(session.sessionId, content).catch(() => {
+        // 失败不阻塞：字幕仍在，可点「重播」重试
+      });
+      liveSpeakTimerRef.current = window.setTimeout(() => {
+        setLiveSpeaking(false);
+      }, estimateSpeakMs(content));
+    },
+    [clearLiveSpeakTimer],
+  );
+
+  const handleLiveReplay = useCallback(() => {
+    const content = currentQuestionRef.current;
+    if (content) void handleLiveSpeak(content);
+  }, [handleLiveSpeak]);
+
+  const handleLiveSkip = useCallback(() => {
+    clearLiveSpeakTimer();
+    setLiveSpeaking(false);
+  }, [clearLiveSpeakTimer]);
 
   async function pollVideoTask(taskId: string, version: number): Promise<string | null> {
     for (let i = 0; i < VIDEO_MAX_POLL_ATTEMPTS; i++) {
@@ -232,7 +281,9 @@ export default function InterviewRoomPage() {
             }
             currentQuestionRef.current = msg.content;
             if (inputModeRef.current === 'voice') {
-              if (videoUnavailableRef.current) {
+              if (liveAvailableRef.current) {
+                void handleLiveSpeak(msg.content);
+              } else if (videoUnavailableRef.current) {
                 void playQuestion(msg.content);
               } else {
                 void playQuestionVideo(msg.content);
@@ -261,7 +312,7 @@ export default function InterviewRoomPage() {
           break;
       }
     },
-    [appendTurn, interviewId, navigate, playQuestion, playQuestionVideo],
+    [appendTurn, interviewId, navigate, playQuestion, playQuestionVideo, handleLiveSpeak],
   );
 
   const RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000];
@@ -353,6 +404,21 @@ export default function InterviewRoomPage() {
             : null;
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
+        // 实时视频面试：进入即建会话；失败(503) → liveAvailable=false，回退 V14 流程
+        if (data.input_mode === 'voice') {
+          try {
+            const session = await createLivestreamSession();
+            if (cancelled) {
+              void closeLivestream(session.sessionId).catch(() => {});
+              return;
+            }
+            liveSessionRef.current = session;
+            liveAvailableRef.current = true;
+            setLiveSession(session);
+          } catch {
+            liveAvailableRef.current = false;
+          }
+        }
         connect();
       } catch (err) {
         if (!cancelled) {
@@ -383,6 +449,11 @@ export default function InterviewRoomPage() {
         window.clearTimeout(retryTimerRef.current);
         retryTimerRef.current = null;
       }
+      clearLiveSpeakTimer();
+      const session = liveSessionRef.current;
+      liveSessionRef.current = null;
+      liveAvailableRef.current = false;
+      if (session) void closeLivestream(session.sessionId).catch(() => {});
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
@@ -397,13 +468,17 @@ export default function InterviewRoomPage() {
   }, [effectiveInputMode]);
 
   useEffect(() => {
-    if (effectiveInputMode === 'text' && videoState !== 'none') {
-      speechVersionRef.current += 1;
-      setVideoState('none');
-      setVideoUrl(null);
-      setStatusLine('');
+    if (effectiveInputMode === 'text') {
+      clearLiveSpeakTimer();
+      setLiveSpeaking(false);
+      if (videoState !== 'none') {
+        speechVersionRef.current += 1;
+        setVideoState('none');
+        setVideoUrl(null);
+        setStatusLine('');
+      }
     }
-  }, [effectiveInputMode, videoState]);
+  }, [effectiveInputMode, videoState, clearLiveSpeakTimer]);
 
   useEffect(() => {
     if (videoState !== 'none') return; // 视频模式由 VideoPersona 接管渲染
@@ -587,6 +662,11 @@ export default function InterviewRoomPage() {
     setStatusLine('正在生成报告，请稍候…');
     setError('');
     speechVersionRef.current += 1;
+    clearLiveSpeakTimer();
+    const session = liveSessionRef.current;
+    liveSessionRef.current = null;
+    liveAvailableRef.current = false;
+    if (session) void closeLivestream(session.sessionId).catch(() => {});
     voicePlayerRef.current?.stop();
     voiceRecorderRef.current?.cancel();
     voiceRecorderRef.current = null;
@@ -650,7 +730,17 @@ export default function InterviewRoomPage() {
 
             {effectiveInputMode === 'voice' && (
               <div className="video-persona-stage">
-                {videoState !== 'none' ? (
+                {liveSession ? (
+                  <LivestreamPersona
+                    streamURL={liveSession.streamURL}
+                    question={currentQuestionRef.current ?? ''}
+                    speaking={liveSpeaking}
+                    muted={ttsMuted}
+                    onToggleMute={handleVideoToggleMute}
+                    onReplay={handleLiveReplay}
+                    onSkip={handleLiveSkip}
+                  />
+                ) : videoState !== 'none' ? (
                   <VideoPersona
                     state={videoState}
                     videoUrl={videoUrl}
