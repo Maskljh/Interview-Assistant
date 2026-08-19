@@ -66,7 +66,7 @@ export default function InterviewRoomPage() {
   const [videoState, setVideoState] = useState<'none' | 'generating' | 'playing' | 'ended'>('none');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [liveSign, setLiveSign] = useState<LivestreamSign | null>(null);
-  const [liveReady, setLiveReady] = useState(false);
+  const [, setLiveReady] = useState(false);
   const [liveSpeaking, setLiveSpeaking] = useState(false);
 
   const turnIdRef = useRef(0);
@@ -90,6 +90,7 @@ export default function InterviewRoomPage() {
   const videoUnavailableRef = useRef(false);
   const liveAvailableRef = useRef(false);
   const liveSessionRef = useRef<LivestreamSession | null>(null);
+  const liveReadyRef = useRef(false);
   const liveSpeakTimerRef = useRef<number | null>(null);
 
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
@@ -173,13 +174,18 @@ export default function InterviewRoomPage() {
     Math.min(30000, Math.max(3000, Math.ceil(text.length / 4) * 1000));
 
   // 就绪门控回调必须稳定：避免每次渲染生成新函数导致 LivestreamPersona 的 effect 重跑（会关/重开 SDK 会话）
-  const handleLiveReady = useCallback(() => setLiveReady(true), []);
+  // 就绪标记同时写 ref（口播门控用）与 state（保留 setter，当前无渲染读取）；state 绝不进入回调依赖链，
+  // 否则 onReady→setLiveReady→handleLiveSpeak 变化→handleMessage→connect 重建→挂载 effect 重跑→无限循环
+  const handleLiveReady = useCallback(() => {
+    liveReadyRef.current = true;
+    setLiveReady(true);
+  }, []);
 
   // 每题 speak 前建一个腾讯后端「驱动会话」再 speak（SDK 会话由前端创建，后端拿不到其 sessionId）；
   // 该会话由 liveSessionRef 持有，卸载/结束面试时统一 close 清理。
   const handleLiveSpeak = useCallback(
     (content: string) => {
-      if (!liveReady) return; // 就绪门控：SDK 未就绪时口播无效，字幕仍在，可重播
+      if (!liveReadyRef.current) return; // 就绪门控：SDK 未就绪时口播无效，字幕仍在，可重播
       clearLiveSpeakTimer();
       setLiveSpeaking(true);
       void (async () => {
@@ -195,7 +201,7 @@ export default function InterviewRoomPage() {
         setLiveSpeaking(false);
       }, estimateSpeakMs(content));
     },
-    [clearLiveSpeakTimer, liveReady],
+    [clearLiveSpeakTimer],
   );
 
   const handleLiveReplay = useCallback(() => {
@@ -464,6 +470,7 @@ export default function InterviewRoomPage() {
       liveAvailableRef.current = false;
       setLiveSign(null);
       setLiveReady(false);
+      liveReadyRef.current = false;
       if (session) void closeLivestream(session.sessionId).catch(() => {});
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
@@ -679,6 +686,7 @@ export default function InterviewRoomPage() {
     liveAvailableRef.current = false;
     setLiveSign(null);
     setLiveReady(false);
+    liveReadyRef.current = false;
     if (session) void closeLivestream(session.sessionId).catch(() => {});
     voicePlayerRef.current?.stop();
     voiceRecorderRef.current?.cancel();
