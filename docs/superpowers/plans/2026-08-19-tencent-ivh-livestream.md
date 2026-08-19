@@ -14,7 +14,7 @@
 - 摄像头仅本地预览（`UserCamera` 不变）
 - 后端 `.env`：`LIVESTREAM_PROVIDER=tencent` + `TENCENT_APPKEY` / `TENCENT_ACCESSTOKEN` / `TENCENT_PROJECT_ID`；**AccessToken 不出后端**
 - 腾讯 IVH 域名 `https://gw.tvs.qq.com`，REST 路径 `/v2/` 前缀；签名 = `URLEncode(Base64(HmacSha256(排序拼接串, AccessToken)))`（已实测通过）
-- 已实测凭证：appkey=`bc3a90f138a24b289ab98512d8d815a6`、accesstoken=`01f7146e24bc4a8aa0ec9eebf49a88dd`、virtualmanProjectId=`94eac74ea3a048e3b7757168504ef71e`
+- 已实测凭证：appkey / accesstoken / virtualmanProjectId 见本地 .env（凭证已从文档移除，勿外泄）
 - 后端模块 `github.com/interview-assistant/backend`；鉴权 `auth.Middleware(secret)`；前端 API base `getApiBase()`
 - 分支 `feat/v16-tencent-ivh` from main HEAD
 
@@ -393,9 +393,9 @@ git commit -m "feat(livestream): Tencent IVH provider"
 
 ```
 LIVESTREAM_PROVIDER=tencent
-TENCENT_APPKEY=bc3a90f138a24b289ab98512d8d815a6
-TENCENT_ACCESSTOKEN=01f7146e24bc4a8aa0ec9eebf49a88dd
-TENCENT_PROJECT_ID=94eac74ea3a048e3b7757168504ef71e
+TENCENT_APPKEY=<见本地 .env>
+TENCENT_ACCESSTOKEN=<见本地 .env>
+TENCENT_PROJECT_ID=<见本地 .env>
 ```
 
 （保留原有的 `LIVESTREAM_STREAM_URL`，供 stub 降级用。）
