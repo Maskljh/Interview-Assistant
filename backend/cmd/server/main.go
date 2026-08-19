@@ -13,6 +13,7 @@ import (
 	"github.com/interview-assistant/backend/internal/digitalhuman"
 	"github.com/interview-assistant/backend/internal/expression"
 	"github.com/interview-assistant/backend/internal/interview"
+	"github.com/interview-assistant/backend/internal/livestream"
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/precheck"
 	"github.com/interview-assistant/backend/internal/profile"
@@ -82,6 +83,20 @@ func main() {
 		log.Println("warning: DIGITAL_HUMAN_PROVIDER not set; /api/digital-human/videos return 503")
 	}
 
+	var lsProvider livestream.Provider
+	if cfg.LivestreamProvider != "" {
+		lsProvider, err = livestream.NewProvider(livestream.Config{
+			ProviderName: cfg.LivestreamProvider,
+			StreamURL:    cfg.LivestreamStreamURL,
+		})
+		if err != nil {
+			log.Fatalf("livestream provider: %v", err)
+		}
+		log.Println("livestream provider enabled")
+	} else {
+		log.Println("warning: LIVESTREAM_PROVIDER not set; /api/livestream/sessions return 503")
+	}
+
 	svc := interview.NewService(sqlDB, llmClient, store)
 	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
 	svc.SetEvaluator(analysisSvc)
@@ -100,6 +115,7 @@ func main() {
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	digitalhuman.RegisterRoutes(r, cfg.JWTSecret, dhProvider)
+	livestream.RegisterRoutes(r, cfg.JWTSecret, lsProvider)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }

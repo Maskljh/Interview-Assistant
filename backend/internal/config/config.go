@@ -23,6 +23,8 @@ type Config struct {
 	DigitalHumanSecret    string
 	DigitalHumanAvatarID  string
 	DigitalHumanVoice     string
+	LivestreamProvider    string
+	LivestreamStreamURL   string
 }
 
 func Load() (*Config, error) {
@@ -46,6 +48,8 @@ func Load() (*Config, error) {
 		DigitalHumanSecret:    os.Getenv("DIGITAL_HUMAN_SECRET"),
 		DigitalHumanAvatarID:  os.Getenv("DIGITAL_HUMAN_AVATAR_ID"),
 		DigitalHumanVoice:     os.Getenv("DIGITAL_HUMAN_VOICE"),
+		LivestreamProvider:    os.Getenv("LIVESTREAM_PROVIDER"),
+		LivestreamStreamURL:   os.Getenv("LIVESTREAM_STREAM_URL"),
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET required")
