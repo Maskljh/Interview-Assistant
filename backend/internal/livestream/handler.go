@@ -132,13 +132,20 @@ func randomID() string {
 	return hex.EncodeToString(b)
 }
 
-// signIVHParams 生成腾讯 IVH 签名：query 公共参数按字典序拼 k=v&k=v，
-// 用 AccessToken 作密钥 HmacSha256，Base64 后 URL 编码。
-func signIVHParams(appkey, timestamp, accessToken string) string {
+// rawIVHSignature 生成腾讯 IVH 签名原始值：query 公共参数按字典序拼 k=v&k=v，
+// 用 AccessToken 作密钥 HmacSha256，返回 Base64 编码（未做 URL 转义）。
+func rawIVHSignature(appkey, timestamp, accessToken string) string {
 	plain := "appkey=" + appkey + "&timestamp=" + timestamp
 	mac := hmac.New(sha256.New, []byte(accessToken))
 	mac.Write([]byte(plain))
-	return url.QueryEscape(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// signIVHParams 返回已做 URL 编码的签名，供 /sign 接口原样返回给前端插入 query。
+// 后端 ivhCall 应使用 rawIVHSignature，让 url.Values.Encode() 完成唯一一次转义，
+// 避免对 signIVHParams 的输出再次编码造成二次转义（% 变 %25）。
+func signIVHParams(appkey, timestamp, accessToken string) string {
+	return url.QueryEscape(rawIVHSignature(appkey, timestamp, accessToken))
 }
 
 func (h *handler) Sign(c *gin.Context) {

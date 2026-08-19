@@ -36,7 +36,7 @@ func (p *tencentProvider) ivhCall(ctx context.Context, path string, payload map[
 	query := url.Values{}
 	query.Set("appkey", p.appKey)
 	query.Set("timestamp", timestamp)
-	query.Set("signature", signIVHParams(p.appKey, timestamp, p.accessToken))
+	query.Set("signature", rawIVHSignature(p.appKey, timestamp, p.accessToken))
 	reqURL := ivhBaseURL + path + "?" + query.Encode()
 
 	bodyMap := map[string]any{"Header": map[string]any{}, "Payload": payload}
