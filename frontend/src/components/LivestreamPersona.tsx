@@ -4,7 +4,7 @@ import type { LivestreamSign } from '../api/livestream';
 declare global {
   interface Window {
     IVH?: {
-      init(opts: { sign: Record<string, string>; virtualmanProjectId: string; element: HTMLElement }): void;
+      init(opts: { sign: string; virtualmanProjectId: string; element: HTMLElement }): void;
       createSession(opts?: Record<string, unknown>): Promise<{ sessionId: string }>;
       startSession(): Promise<void>;
       closeSession(): Promise<void>;
@@ -54,11 +54,7 @@ export default function LivestreamPersona({
     };
     const start = async () => {
       IVH.init({
-        sign: {
-          appkey: sign.appkey,
-          timestamp: sign.timestamp,
-          signature: sign.signature,
-        },
+        sign: sign.signature,
         virtualmanProjectId: sign.virtualmanProjectId,
         element: containerRef.current!,
       });
