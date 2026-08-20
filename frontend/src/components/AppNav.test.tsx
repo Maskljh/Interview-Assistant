@@ -11,9 +11,12 @@ function LocationProbe() {
   return <div data-testid="location">{pathname}</div>;
 }
 
-function renderNav(props: { tab: NavTab; actions?: NavAction[]; confirmLeave?: boolean }) {
+function renderNav(
+  props: { tab: NavTab; actions?: NavAction[]; confirmLeave?: boolean },
+  options: { initialEntries?: string[] } = {},
+) {
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={options.initialEntries ?? ['/']}>
       <AuthProvider>
         <AppNav {...props} />
         <LocationProbe />
