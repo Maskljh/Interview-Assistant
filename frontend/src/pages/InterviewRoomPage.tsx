@@ -392,9 +392,7 @@ export default function InterviewRoomPage() {
         onMessage: (msg) => {
           if (msg.type === 'session_started') {
             attemptRef.current = 0; // 重连成功，重置退避
-          }
-          handleMessage(msg);
-          if (msg.type === 'session_started') {
+            handleMessage(msg);
             const queue = pendingAnswersRef.current;
             if (queue.length > 0) {
               pendingAnswersRef.current = [];
@@ -404,6 +402,8 @@ export default function InterviewRoomPage() {
               setPendingCount(0);
               setStatusLine('连接已恢复，暂存回答已发送');
             }
+          } else {
+            handleMessage(msg);
           }
         },
         onClose: () => {
@@ -860,7 +860,7 @@ export default function InterviewRoomPage() {
                 </label>
               </div>
             )}
-            {error && <p className="interview-error">{error}</p>}
+            {turns.length > 0 && error && <p className="interview-error">{error}</p>}
             {pendingCount > 0 && (
               <p className="interview-room-status interview-room-pending">
                 未连接，回答已暂存（{pendingCount} 条），重连后自动发送
