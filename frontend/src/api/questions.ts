@@ -78,3 +78,10 @@ export async function deleteQuestion(id: number): Promise<void> {
     method: 'DELETE',
   });
 }
+
+export async function deleteQuestions(ids: number[]): Promise<void> {
+  await fetchJSON<{ deleted: number }>('/api/questions/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}

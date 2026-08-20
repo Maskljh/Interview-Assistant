@@ -1111,3 +1111,67 @@
   color: var(--color-mute);
   font-style: italic;
 }
+
+/* ─── Question group header layout ─── */
+.question-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 12px var(--space-md);
+  background: var(--color-canvas-soft);
+  border: none;
+  cursor: default;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.question-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: var(--text-body-sm-strong);
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.question-group-toggle:hover {
+  color: var(--color-link);
+}
+
+.question-group-select-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--text-caption);
+  color: var(--color-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.question-group-select-all input {
+  margin: 0;
+}
+
+/* ─── Bulk delete button ─── */
+.question-bank-bulk-delete {
+  padding: 6px 14px;
+  font: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-error-deep);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-error-soft);
+  border-radius: var(--rounded-pill);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.question-bank-bulk-delete:hover {
+  background: var(--color-error-soft);
+  border-color: var(--color-error-deep);
+}

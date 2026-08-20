@@ -29,6 +29,7 @@ func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Clie
 	protected.POST("/question-bank/focused", h.Focused)
 	protected.PATCH("/:id", h.Patch)
 	protected.DELETE("/:id", h.Delete)
+	protected.POST("/batch-delete", h.BatchDelete)
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -165,4 +166,26 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) BatchDelete(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ids"})
+		return
+	}
+	deleted := 0
+	for _, id := range req.IDs {
+		if err := h.svc.Delete(c.Request.Context(), userID.(int64), id); err == nil {
+			deleted++
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
 }

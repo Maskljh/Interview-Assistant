@@ -9,6 +9,7 @@ import {
 } from '../api/interviews';
 import {
   deleteQuestion,
+  deleteQuestions,
   listQuestions,
   patchQuestion,
   type Question,
@@ -152,6 +153,29 @@ export default function QuestionBankPage() {
     }
   }
 
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`确定删除选中的 ${selectedIds.length} 道题目吗？`)) return;
+    try {
+      await deleteQuestions(selectedIds);
+      setQuestions((prev) => prev.filter((q) => !selectedIds.includes(q.id)));
+      setSelectedIds([]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '批量删除失败');
+    }
+  }
+
+  function toggleGroupSelect(sessionId: number | null) {
+    const groupItems = questions.filter((q) => (q.source_session_id ?? null) === sessionId);
+    const groupIds = groupItems.map((q) => q.id);
+    const allSelected = groupIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !groupIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => [...new Set([...prev, ...groupIds])]);
+    }
+  }
+
   async function handleStartPractice() {
     if (selectedIds.length === 0) {
       setError('请至少选择一道题目');
@@ -262,19 +286,29 @@ export default function QuestionBankPage() {
               const sampleDate = items[0]?.created_at?.slice(0, 10);
               return (
                 <div key={sessionId ?? 'none'} className="question-group">
-                  <button
-                    type="button"
-                    className="question-group-header"
-                    onClick={() => toggleGroup(sessionId)}
-                  >
-                    <span className="question-group-arrow">{groupExpanded ? '▾' : '▸'}</span>
-                    <span className="question-group-title">
-                      {sessionId ? `面试 #${sessionId}` : '独立题目'}
-                    </span>
-                    {sampleTag && <span className="mode-pill">{sampleTag}</span>}
-                    {sampleDate && <span className="question-group-date">{sampleDate}</span>}
-                    <span className="question-group-count">{items.length} 题</span>
-                  </button>
+                  <div className="question-group-header">
+                    <button
+                      type="button"
+                      className="question-group-toggle"
+                      onClick={() => toggleGroup(sessionId)}
+                    >
+                      <span className="question-group-arrow">{groupExpanded ? '▾' : '▸'}</span>
+                      <span className="question-group-title">
+                        {sessionId ? `面试 #${sessionId}` : '独立题目'}
+                      </span>
+                      {sampleTag && <span className="mode-pill">{sampleTag}</span>}
+                      {sampleDate && <span className="question-group-date">{sampleDate}</span>}
+                      <span className="question-group-count">{items.length} 题</span>
+                    </button>
+                    <label className="question-group-select-all">
+                      <input
+                        type="checkbox"
+                        checked={items.length > 0 && items.every((q) => selectedIds.includes(q.id))}
+                        onChange={() => toggleGroupSelect(sessionId)}
+                      />
+                      <span>全选</span>
+                    </label>
+                  </div>
 
                   {groupExpanded && (
                     <ul className="interview-list question-group-list">
@@ -363,6 +397,15 @@ export default function QuestionBankPage() {
           <span className="question-bank-selected">
             已选 {selectedIds.length} 题
           </span>
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              className="question-bank-bulk-delete"
+              onClick={() => void handleBulkDelete()}
+            >
+              删除选中
+            </button>
+          )}
           <div className="interview-field question-bank-mode">
             <label htmlFor="practice-mode">模式</label>
             <select

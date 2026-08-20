@@ -175,7 +175,7 @@ func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int
 	return resp.ID
 }
 
-func startInterview(t *testing.T, r *gin.Engine, token string, sessionID int64) {
+func startInterview(t *testing.T, sqlDB *sql.DB, r *gin.Engine, token string, sessionID int64) {
 	t.Helper()
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
@@ -183,6 +183,11 @@ func startInterview(t *testing.T, r *gin.Engine, token string, sessionID int64) 
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("start status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	// Mark all generated questions as asked so the import path (which only
+	// imports asked=1 questions) sees them.
+	if _, err := sqlDB.Exec(`UPDATE interview_questions SET asked = 1 WHERE session_id = ?`, sessionID); err != nil {
+		t.Fatalf("mark questions asked: %v", err)
 	}
 }
 
@@ -269,24 +274,39 @@ func insertBankQuestion(t *testing.T, sqlDB *sql.DB, userID int64, question stri
 	return id
 }
 
+// seedTurn inserts a single interview turn, simulating a live transcript.
+func seedTurn(t *testing.T, sqlDB *sql.DB, sessionID int64, seq int, role, kind, content string) {
+	t.Helper()
+	if _, err := sqlDB.Exec(
+		`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, ?, ?, ?, ?)`,
+		sessionID, seq, role, kind, content,
+	); err != nil {
+		t.Fatalf("seed turn: %v", err)
+	}
+}
+
 func TestImportFromSessionCopiesMainQuestions(t *testing.T) {
 	sqlDB := testDB(t)
-	const n = 6
-	r := testRouter(t, sqlDB, fakeQuestionsLLM(n))
+	r := testRouter(t, sqlDB, nil)
 
 	token := registerUser(t, r, "test-question-import@example.com")
 	jobJD := "Backend engineer JD"
 	sessionID := createInterview(t, r, token, jobJD, "mixed")
-	startInterview(t, r, token, sessionID)
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
+	seedTurn(t, sqlDB, sessionID, 5, "interviewer", "question", "Q3")
+	seedTurn(t, sqlDB, sessionID, 6, "candidate", "answer", "A3")
 
 	imported := importFromSession(t, r, token, sessionID)
-	if imported != n {
-		t.Fatalf("imported = %d, want %d", imported, n)
+	if imported != 3 {
+		t.Fatalf("imported = %d, want 3", imported)
 	}
 
 	items := listQuestions(t, r, token, "")
-	if len(items) < n {
-		t.Fatalf("list len = %d, want >= %d", len(items), n)
+	if len(items) < 3 {
+		t.Fatalf("list len = %d, want >= 3", len(items))
 	}
 	for _, item := range items {
 		if item.Source != "interview" {
@@ -328,7 +348,8 @@ func TestImportForeignSessionReturns404(t *testing.T) {
 	tokenA := registerUser(t, r, "test-question-foreign-a@example.com")
 	tokenB := registerUser(t, r, "test-question-foreign-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
-	startInterview(t, r, tokenA, sessionID)
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/questions/from-session/%d", sessionID), nil)
@@ -347,7 +368,10 @@ func TestPatchStarAndFilter(t *testing.T) {
 	token := registerUser(t, r, "test-question-patch@example.com")
 	jobJD := "Backend engineer JD"
 	sessionID := createInterview(t, r, token, jobJD, "mixed")
-	startInterview(t, r, token, sessionID)
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 	importFromSession(t, r, token, sessionID)
 
 	items := listQuestions(t, r, token, "")
@@ -393,7 +417,10 @@ func TestDeleteOwnQuestion(t *testing.T) {
 	tokenA := registerUser(t, r, "test-question-delete-a@example.com")
 	tokenB := registerUser(t, r, "test-question-delete-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
-	startInterview(t, r, tokenA, sessionID)
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 	importFromSession(t, r, tokenA, sessionID)
 
 	items := listQuestions(t, r, tokenA, "")
@@ -433,7 +460,10 @@ func TestListIsolation(t *testing.T) {
 	tokenA := registerUser(t, r, "test-question-isolate-a@example.com")
 	tokenB := registerUser(t, r, "test-question-isolate-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
-	startInterview(t, r, tokenA, sessionID)
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 	importFromSession(t, r, tokenA, sessionID)
 
 	itemsA := listQuestions(t, r, tokenA, "")
@@ -458,14 +488,10 @@ func TestImportClassifiesDimensions(t *testing.T) {
 	const email = "test-question-classify@example.com"
 	token := registerUser(t, r, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
-	for i, q := range []string{"Q1", "Q2"} {
-		if _, err := sqlDB.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
-			sessionID, i+1, q,
-		); err != nil {
-			t.Fatalf("seed question: %v", err)
-		}
-	}
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 
 	imported := importFromSession(t, r, token, sessionID)
 	if imported != 2 {
@@ -495,14 +521,10 @@ func TestImportClassificationFailureKeepsQuestions(t *testing.T) {
 	const email = "test-question-classify-fail@example.com"
 	token := registerUser(t, r, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
-	for i, q := range []string{"Q1", "Q2"} {
-		if _, err := sqlDB.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
-			sessionID, i+1, q,
-		); err != nil {
-			t.Fatalf("seed question: %v", err)
-		}
-	}
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 
 	imported := importFromSession(t, r, token, sessionID)
 	if imported != 2 {
@@ -611,26 +633,16 @@ func TestImportFromSessionIncludesFollowUps(t *testing.T) {
 	const email = "test-question-followup@example.com"
 	token := registerUser(t, r, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
-	for i, q := range []string{"Q1", "Q2"} {
-		if _, err := sqlDB.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
-			sessionID, i+1, q,
-		); err != nil {
-			t.Fatalf("seed question: %v", err)
-		}
-	}
-	for i, f := range []string{"F1", "F2"} {
-		if _, err := sqlDB.Exec(
-			`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, ?, 'interviewer', 'follow_up', ?)`,
-			sessionID, 10+i, f,
-		); err != nil {
-			t.Fatalf("seed follow-up: %v", err)
-		}
-	}
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "follow_up", "F1")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
+	seedTurn(t, sqlDB, sessionID, 5, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 6, "candidate", "answer", "A3")
 
 	imported := importFromSession(t, r, token, sessionID)
-	if imported != 4 {
-		t.Fatalf("imported = %d, want 4", imported)
+	if imported != 3 {
+		t.Fatalf("imported = %d, want 3", imported)
 	}
 
 	items := listQuestions(t, r, token, "")
@@ -638,7 +650,7 @@ func TestImportFromSessionIncludesFollowUps(t *testing.T) {
 	for _, item := range items {
 		got[item.Question] = true
 	}
-	for _, q := range []string{"Q1", "Q2", "F1", "F2"} {
+	for _, q := range []string{"Q1", "F1", "Q2"} {
 		if !got[q] {
 			t.Fatalf("question %q missing from bank", q)
 		}
@@ -654,14 +666,10 @@ func TestImportFromSessionDeduplicates(t *testing.T) {
 	const email = "test-question-dedupe@example.com"
 	token := registerUser(t, r, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
-	for i, q := range []string{"Q1", "Q2"} {
-		if _, err := sqlDB.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
-			sessionID, i+1, q,
-		); err != nil {
-			t.Fatalf("seed question: %v", err)
-		}
-	}
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "question", "Q2")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
 
 	first := importFromSession(t, r, token, sessionID)
 	if first != 2 {
