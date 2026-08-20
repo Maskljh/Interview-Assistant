@@ -29,6 +29,9 @@ type Session interface {
 // Provider 创建实时数字人会话。
 type Provider interface {
 	StartSession(ctx context.Context, avatarID string) (Session, error)
+	// CloseSession 按 sessionID 关闭已有会话（释放并发配额）。
+	// 用于服务重启后清理残留会话。
+	CloseSession(ctx context.Context, sessionID string) error
 }
 
 // NewProvider 按配置构造 Provider。ProviderName 为空时返回 (nil, nil)，

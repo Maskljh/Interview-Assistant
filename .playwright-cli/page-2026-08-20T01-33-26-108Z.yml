@@ -1,0 +1,15 @@
+- generic [ref=e4]:
+  - heading "注册" [level=1] [ref=e5]
+  - paragraph [ref=e6]: 模拟面试助手
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - generic [ref=e9]: 邮箱
+      - textbox "邮箱" [ref=e10]
+    - generic [ref=e11]:
+      - generic [ref=e12]: 密码（至少 8 位）
+      - textbox "密码（至少 8 位）" [ref=e13]
+    - button "创建账号" [ref=e14] [cursor=pointer]
+  - paragraph [ref=e15]:
+    - text: 已有账号？
+    - link "登录" [ref=e16] [cursor=pointer]:
+      - /url: /login

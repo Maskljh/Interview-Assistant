@@ -1,14 +1,18 @@
 package livestream
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"net/url"
 	"strconv"
 	"strings"
@@ -31,15 +35,21 @@ const (
 )
 
 func RegisterRoutes(r *gin.Engine, secret string, provider Provider, cfg *Config) {
+	// 会话 ID 持久化文件：与可执行文件同目录下的 livestream_sessions.json
+	exe, _ := os.Executable()
+	sessionFile := filepath.Join(filepath.Dir(exe), "livestream_sessions.json")
 	h := &handler{
 		provider:    provider,
 		sessions:    make(map[string]*sessionEntry),
+		sessionFile: sessionFile,
 		appKey:      cfg.APIKey,
 		accessToken: cfg.Secret,
 		projectID:   cfg.AvatarID,
 		ttl:         livestreamSessionTTL,
 		stopReap:    make(chan struct{}),
 	}
+	// 启动时关闭上次残留的腾讯会话（释放单配额），不阻塞启动
+	h.closeStaleFromDisk()
 	h.startReaper()
 	protected := r.Group("/api/livestream")
 	protected.Use(auth.Middleware(secret))
@@ -59,11 +69,73 @@ type handler struct {
 	provider    Provider
 	mu          sync.Mutex
 	sessions    map[string]*sessionEntry
+	sessionFile string // 持久化会话 ID 文件路径，重启后可关闭残留会话
 	appKey      string
 	accessToken string
 	projectID   string
 	ttl         time.Duration
 	stopReap    chan struct{}
+}
+
+// loadSessionIDs 从磁盘读取持久化的会话 ID 列表。
+func (h *handler) loadSessionIDs() []string {
+	data, err := os.ReadFile(h.sessionFile)
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	if err := json.Unmarshal(data, &ids); err != nil {
+		return nil
+	}
+	return ids
+}
+
+// saveSessionIDs 将会话 ID 列表写入磁盘。
+func (h *handler) saveSessionIDs(ids []string) {
+	data, err := json.Marshal(ids)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(h.sessionFile, data, 0644)
+}
+
+// addSessionIDToDisk 将新会话 ID 追加到磁盘文件。
+func (h *handler) addSessionIDToDisk(id string) {
+	h.mu.Lock()
+	ids := h.loadSessionIDs()
+	ids = append(ids, id)
+	h.saveSessionIDs(ids)
+	h.mu.Unlock()
+}
+
+// removeSessionIDFromDisk 从磁盘文件删除指定会话 ID。
+func (h *handler) removeSessionIDFromDisk(id string) {
+	h.mu.Lock()
+	ids := h.loadSessionIDs()
+	var out []string
+	for _, sid := range ids {
+		if sid != id {
+			out = append(out, sid)
+		}
+	}
+	h.saveSessionIDs(out)
+	h.mu.Unlock()
+}
+
+// closeStaleFromDisk 启动时关闭磁盘上残留的会话（上次进程未正常关闭或强刷导致）。
+func (h *handler) closeStaleFromDisk() {
+	ids := h.loadSessionIDs()
+	if len(ids) == 0 || h.provider == nil {
+		return
+	}
+	for _, sid := range ids {
+		log.Printf("livestream: closing stale session %s from disk", sid)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = h.provider.CloseSession(ctx, sid)
+		cancel()
+	}
+	// 清空文件
+	h.saveSessionIDs(nil)
 }
 
 // startReaper 启动后台清理 goroutine：周期扫描，关闭并删除空闲超时的驱动会话。
@@ -97,6 +169,16 @@ func (h *handler) reapStale(now time.Time, ttl time.Duration) {
 	for _, s := range stale {
 		_ = s.Close()
 	}
+	// reap 关闭的会话也从磁盘移除（已在 mu.Lock 内从 map 删除，此处遍历 stale 对应的 ID）
+	// 由于 stale slice 只有 sess 没有 id，需要在 Lock 内记录 ID。重构为在 Lock 内完成。
+	// 简化方案：reap 后重写磁盘为当前 map 中所有 ID
+	h.mu.Lock()
+	var remaining []string
+	for id := range h.sessions {
+		remaining = append(remaining, id)
+	}
+	h.saveSessionIDs(remaining)
+	h.mu.Unlock()
 }
 
 // touch 更新会话最近活动时间（Create/Speak/Close 时调用）。
@@ -128,6 +210,7 @@ func (h *handler) Create(c *gin.Context) {
 	h.mu.Lock()
 	h.sessions[sessionID] = &sessionEntry{sess: sess, lastActivity: time.Now()}
 	h.mu.Unlock()
+	h.addSessionIDToDisk(sessionID)
 	c.JSON(http.StatusOK, createResponse{SessionID: sessionID, StreamURL: sess.StreamURL()})
 }
 
@@ -180,6 +263,7 @@ func (h *handler) Close(c *gin.Context) {
 		delete(h.sessions, id)
 	}
 	h.mu.Unlock()
+	h.removeSessionIDFromDisk(id)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return

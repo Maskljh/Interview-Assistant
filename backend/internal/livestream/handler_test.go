@@ -34,6 +34,10 @@ func (f *fakeProvider) StartSession(ctx context.Context, avatarID string) (lives
 	return f.session, f.startErr
 }
 
+func (f *fakeProvider) CloseSession(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func testRouter(p livestream.Provider) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

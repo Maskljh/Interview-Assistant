@@ -179,6 +179,14 @@ func (s *tencentSession) Speak(ctx context.Context, text string) error {
 	return err
 }
 
+func (p *tencentProvider) CloseSession(ctx context.Context, sessionID string) error {
+	_, err := p.ivhCall(ctx, "/v2/ivh/sessionmanager/sessionmanagerservice/closesession", map[string]any{
+		"ReqId":     reqID(),
+		"SessionId": sessionID,
+	})
+	return err
+}
+
 func (s *tencentSession) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

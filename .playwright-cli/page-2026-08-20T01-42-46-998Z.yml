@@ -1,0 +1,14 @@
+- generic [ref=e38]:
+  - banner [ref=e39]:
+    - link "模拟面试助手" [ref=e40] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e41]:
+      - link "返回列表" [ref=e42] [cursor=pointer]:
+        - /url: /
+      - link "详情" [ref=e43] [cursor=pointer]:
+        - /url: /interviews/5128
+      - link "成长分析" [ref=e44] [cursor=pointer]:
+        - /url: /trends
+      - button "退出登录" [ref=e45] [cursor=pointer]
+  - main [ref=e46]:
+    - paragraph [ref=e47]: 加载面试中…

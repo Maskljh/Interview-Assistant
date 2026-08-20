@@ -1,0 +1,19 @@
+- generic [ref=e17]:
+  - banner [ref=e18]:
+    - link "模拟面试助手" [ref=e19] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e20]:
+      - link "题库" [ref=e21] [cursor=pointer]:
+        - /url: /questions
+      - link "成长分析" [ref=e22] [cursor=pointer]:
+        - /url: /trends
+      - link "新建面试" [ref=e23] [cursor=pointer]:
+        - /url: /interviews/new
+      - button "退出登录" [ref=e24] [cursor=pointer]
+  - main [ref=e25]:
+    - heading "我的面试" [level=1] [ref=e26]
+    - paragraph [ref=e27]: 练习记录与历史回看
+    - generic [ref=e28]:
+      - paragraph [ref=e29]: 还没有面试记录，开始你的第一场练习吧。
+      - link "新建面试" [ref=e30] [cursor=pointer]:
+        - /url: /interviews/new

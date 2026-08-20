@@ -25,3 +25,5 @@ func (s *stubSession) StreamURL() string { return s.streamURL }
 func (s *stubSession) Speak(ctx context.Context, text string) error { return nil }
 
 func (s *stubSession) Close() error { return nil }
+
+func (p *stubProvider) CloseSession(ctx context.Context, sessionID string) error { return nil }
