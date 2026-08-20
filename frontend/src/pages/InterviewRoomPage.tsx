@@ -732,6 +732,7 @@ export default function InterviewRoomPage() {
   }
   async function handleForceEnd() {
     if (ending || doneRef.current) return;
+    if (!window.confirm('确定结束面试吗？结束后将生成评分报告，且无法继续回答。')) return;
     setEnding(true);
     setStatusLine('正在生成报告，请稍候…');
     setError('');
