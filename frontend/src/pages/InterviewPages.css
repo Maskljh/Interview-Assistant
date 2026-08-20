@@ -413,6 +413,30 @@
   border-color: var(--color-hairline);
 }
 
+.transcript-turn--animate {
+  animation: transcript-fade-in 0.35s ease-out;
+}
+
+@keyframes transcript-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transcript-new-badge {
+  font: var(--text-caption);
+  font-weight: 500;
+  color: var(--color-link-deep);
+  background: var(--color-link-bg-soft);
+  padding: 1px 8px;
+  border-radius: var(--rounded-pill);
+}
+
 .transcript-turn-header {
   display: flex;
   align-items: center;

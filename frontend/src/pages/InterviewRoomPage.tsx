@@ -857,10 +857,10 @@ export default function InterviewRoomPage() {
                   if (latestIdx + 1 < turns.length && turns[latestIdx + 1].role === 'candidate') {
                     visible.push(turns[latestIdx + 1]);
                   }
-                  return visible.map((turn) => (
+                  return visible.map((turn, i) => (
                     <article
                       key={turn.id}
-                      className={`transcript-turn${
+                      className={`transcript-turn transcript-turn--animate${
                         turn.role === 'interviewer'
                           ? ' transcript-turn--interviewer'
                           : ''
@@ -870,6 +870,9 @@ export default function InterviewRoomPage() {
                         <span className="transcript-role">
                           {turn.role === 'interviewer' ? '面试官' : '我'}
                         </span>
+                        {turn.role === 'interviewer' && i === 0 && (
+                          <span className="transcript-new-badge">新题目</span>
+                        )}
                       </div>
                       <p className="transcript-content">{turn.content}</p>
                     </article>
