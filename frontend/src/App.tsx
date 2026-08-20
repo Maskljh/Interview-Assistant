@@ -1,7 +1,8 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import CreateInterviewPage from './pages/CreateInterviewPage';
+import NotFoundPage from './pages/NotFoundPage';
 import InterviewDetailPage from './pages/InterviewDetailPage';
 import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
@@ -74,7 +75,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
