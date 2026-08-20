@@ -846,23 +846,35 @@ export default function InterviewRoomPage() {
               {turns.length === 0 ? (
                 <p className="interview-loading">正在连接面试间…</p>
               ) : (
-                turns.map((turn) => (
-                  <article
-                    key={turn.id}
-                    className={`transcript-turn${
-                      turn.role === 'interviewer'
-                        ? ' transcript-turn--interviewer'
-                        : ''
-                    }`}
-                  >
-                    <div className="transcript-turn-header">
-                      <span className="transcript-role">
-                        {turn.role === 'interviewer' ? '面试官' : '我'}
-                      </span>
-                    </div>
-                    <p className="transcript-content">{turn.content}</p>
-                  </article>
-                ))
+                (() => {
+                  // 只展示最新一题：找到最后一道面试官题目，以及紧随其后的候选回答
+                  let latestIdx = -1;
+                  for (let i = turns.length - 1; i >= 0; i--) {
+                    if (turns[i].role === 'interviewer') { latestIdx = i; break; }
+                  }
+                  if (latestIdx === -1) return null;
+                  const visible = [turns[latestIdx]];
+                  if (latestIdx + 1 < turns.length && turns[latestIdx + 1].role === 'candidate') {
+                    visible.push(turns[latestIdx + 1]);
+                  }
+                  return visible.map((turn) => (
+                    <article
+                      key={turn.id}
+                      className={`transcript-turn${
+                        turn.role === 'interviewer'
+                          ? ' transcript-turn--interviewer'
+                          : ''
+                      }`}
+                    >
+                      <div className="transcript-turn-header">
+                        <span className="transcript-role">
+                          {turn.role === 'interviewer' ? '面试官' : '我'}
+                        </span>
+                      </div>
+                      <p className="transcript-content">{turn.content}</p>
+                    </article>
+                  ));
+                })()
               )}
               {thinking && (
                 <p className="interview-room-thinking">面试官思考中…</p>
