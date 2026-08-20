@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -40,11 +40,8 @@ const DIM_COLORS: Record<string, string> = {
 
 // Spec §6: tooltip 只展示日期/分数/岗位标签，点击节点可跳转详情
 const totalTooltip = {
-  formatter: (value: number | string | readonly (number | string)[] | undefined) => [
-    `${value} 分`,
-    '总分',
-  ],
-  labelFormatter: (label: ReactNode, payload: readonly { payload?: TrendsPoint }[]) => {
+  formatter: (value: any) => [`${value} 分`, '总分'],
+  labelFormatter: (label: any, payload: any) => {
     const point = payload?.[0]?.payload;
     return point ? `${label} · ${point.job_tag}` : label;
   },
