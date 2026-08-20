@@ -40,12 +40,19 @@ describe('AppNav', () => {
   it('renders brand and all four tabs in header, current tab as span', () => {
     const { container } = renderNav({ tab: 'interviews' });
     const header = container.querySelector('.interview-header')!;
-    const links = [...header.querySelectorAll('a.interview-header-link')].map((a) => a.textContent);
+    const links = [...header.querySelectorAll('a.header-nav-link')].map((a) => a.textContent);
     // 当前页「面试」为 span，其余三个为链接
     expect(links).toEqual(['题库', '成长分析', '新建']);
-    const current = header.querySelector('span.interview-header-link[aria-current="page"]');
+    const current = header.querySelector('span.header-nav-link[aria-current="page"]');
     expect(current?.textContent).toBe('面试');
     expect(header.textContent).toContain('模拟面试助手');
+  });
+
+  it('renders create tab with the cta style for emphasis', () => {
+    const { container } = renderNav({ tab: 'interviews' });
+    const header = container.querySelector('.interview-header')!;
+    const createLink = header.querySelector('a.interview-header-cta');
+    expect(createLink?.textContent).toBe('新建');
   });
 
   it('shows current tab as an aria-current span, not a link', () => {

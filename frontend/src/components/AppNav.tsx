@@ -47,11 +47,15 @@ export default function AppNav({ tab, confirmLeave = false }: AppNavProps) {
           {APP_NAME}
         </Link>
         <div className="interview-header-actions">
-          {TAB_BAR_ITEMS.map((item) =>
-            item.tab === tab ? (
+          {TAB_BAR_ITEMS.map((item) => {
+            const isCreate = item.tab === 'create';
+            const linkClass = isCreate
+              ? 'interview-header-cta header-nav-link'
+              : 'interview-header-link header-nav-link';
+            return item.tab === tab ? (
               <span
                 key={item.to}
-                className="interview-header-link header-nav-link"
+                className={linkClass}
                 aria-current="page"
               >
                 {item.label}
@@ -59,14 +63,14 @@ export default function AppNav({ tab, confirmLeave = false }: AppNavProps) {
             ) : (
               <Link
                 key={item.to}
-                className="interview-header-link header-nav-link"
+                className={linkClass}
                 to={item.to}
                 onClick={(e) => handleClick(e)}
               >
                 {item.label}
               </Link>
-            ),
-          )}
+            );
+          })}
           <button type="button" className="interview-header-link" onClick={handleLogout}>
             退出登录
           </button>
