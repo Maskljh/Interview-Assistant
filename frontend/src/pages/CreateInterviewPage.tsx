@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   createInterview,
@@ -12,16 +12,14 @@ import {
 import { fetchFocusedQuestions } from '../api/questions';
 import { fetchProfile, type Profile } from '../api/profile';
 import { fetchPreCheck, type PreCheckOut } from '../api/precheck';
-import { useAuth } from '../auth/AuthContext';
 import {
-  APP_NAME,
   DIMENSION_LABELS,
   MODE_LABELS,
   PERSONA_LABELS,
 } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
 
@@ -34,7 +32,6 @@ const INPUT_MODES: { value: InputMode; label: string }[] = [
 ];
 
 export default function CreateInterviewPage() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
   const [jobJd, setJobJd] = useState('');
   const [resumeText, setResumeText] = useState('');
@@ -170,25 +167,10 @@ export default function CreateInterviewPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/questions">
-            题库
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/">
-            返回列表
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav
+        tab="create"
+        actions={[{ to: '/', label: '返回列表' }]}
+      />
       <main className="interview-main">
         <h1>新建面试</h1>
         <p className="interview-subtitle">粘贴职位描述，可选上传简历，并选择练习模式。</p>
@@ -369,7 +351,6 @@ export default function CreateInterviewPage() {
           </button>
         </form>
       </main>
-      <MobileTabBar />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   CartesianGrid,
@@ -13,10 +13,8 @@ import {
 } from 'recharts';
 import { fetchTrends, type TrendsData, type TrendsSource } from '../api/analytics';
 import type { InterviewMode } from '../api/interviews';
-import { useAuth } from '../auth/AuthContext';
-import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -64,7 +62,6 @@ function TotalTooltipContent({ active, payload }: any) {
 }
 
 export default function TrendsPage() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<TrendsData | null>(null);
   const [jobTag, setJobTag] = useState('');
@@ -98,25 +95,10 @@ export default function TrendsPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/">
-            面试列表
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/questions">
-            题库
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav
+        tab="trends"
+        actions={[{ to: '/', label: '面试列表' }]}
+      />
       <main className="interview-main">
         <h1>成长分析</h1>
         <p className="interview-subtitle">查看历史面试的分数趋势与维度变化。</p>
@@ -218,7 +200,7 @@ export default function TrendsPage() {
                         stroke="#fff"
                         strokeWidth={2}
                         style={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/interviews/${payload.session_id}`)}
+                        onClick={() => navigate(`/interviews/${payload.session_id}/report`)}
                       />
                     );
                   }}
@@ -248,7 +230,6 @@ export default function TrendsPage() {
           </>
         ) : null}
       </main>
-      <MobileTabBar />
     </div>
   );
 }

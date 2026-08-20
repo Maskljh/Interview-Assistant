@@ -14,10 +14,9 @@ import {
   patchQuestion,
   type Question,
 } from '../api/questions';
-import { useAuth } from '../auth/AuthContext';
 import { DIMENSION_LABELS, PERSONA_LABELS } from '../lib/labels';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -59,7 +58,6 @@ function groupBySession(questions: Question[]) {
 }
 
 export default function QuestionBankPage() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -200,26 +198,10 @@ export default function QuestionBankPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          面试助手
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/">
-            面试列表
-          </Link>
-          <span className="interview-header-link header-nav-link" aria-current="page">
-            题库
-          </span>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出
-          </button>
-        </div>
-      </header>
-
+      <AppNav
+        tab="questions"
+        actions={[{ to: '/', label: '面试列表' }]}
+      />
       <main className="interview-main">
         <h1>题库</h1>
         <p className="interview-subtitle">按面试分组浏览，收藏、筛选并多选题目开始练习</p>
@@ -300,6 +282,14 @@ export default function QuestionBankPage() {
                       {sampleDate && <span className="question-group-date">{sampleDate}</span>}
                       <span className="question-group-count">{items.length} 题</span>
                     </button>
+                    {sessionId != null && (
+                      <Link
+                        className="interview-inline-link question-group-view"
+                        to={`/interviews/${sessionId}`}
+                      >
+                        查看
+                      </Link>
+                    )}
                     <label className="question-group-select-all">
                       <input
                         type="checkbox"
@@ -458,7 +448,6 @@ export default function QuestionBankPage() {
           </button>
         </div>
       </main>
-      <MobileTabBar />
     </div>
   );
 }

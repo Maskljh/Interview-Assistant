@@ -9,10 +9,10 @@ import {
   type VoiceRecorder,
 } from '../lib/voiceRecorder';
 import { createVoicePlayer } from '../lib/voicePlayer';
-import { APP_NAME, PERSONA_LABELS } from '../lib/labels';
+import { PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 import VirtualPersona from '../components/VirtualPersona';
 import VideoPersona from '../components/VideoPersona';
 import UserCamera from '../components/UserCamera';
@@ -45,7 +45,7 @@ function clearStoredSessionId(interviewId: string) {
 }
 
 export default function InterviewRoomPage() {
-  const { logout, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const interviewId = Number(id);
@@ -769,25 +769,14 @@ export default function InterviewRoomPage() {
   const voiceBusy = voicePhase === 'transcribing' || voicePhase === 'sending';
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/">
-            返回列表
-          </Link>
-          <Link className="interview-header-link header-nav-link" to={`/interviews/${id}`}>
-            详情
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav
+        tab="interviews"
+        confirmLeave
+        actions={[
+          { to: '/', label: '返回列表' },
+          { to: `/interviews/${id}`, label: '详情' },
+        ]}
+      />
       <main className="interview-main interview-room">
         {loadingInterview ? (
           <p className="interview-loading">加载面试中…</p>
@@ -1104,7 +1093,6 @@ export default function InterviewRoomPage() {
           </>
         )}
       </main>
-      <MobileTabBar />
     </div>
   );
 }

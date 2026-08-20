@@ -7,16 +7,14 @@ import {
   type InputMode,
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
-import { useAuth } from '../auth/AuthContext';
 import {
-  APP_NAME,
   MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
   formatDateZh,
 } from '../lib/labels';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
   text: '文本作答',
@@ -31,7 +29,6 @@ function roleLabel(role: string): string {
 }
 
 export default function InterviewDetailPage() {
-  const { logout } = useAuth();
   const { id } = useParams<{ id: string }>();
   const interviewId = Number(id);
   const [interview, setInterview] = useState<Interview | null>(null);
@@ -95,25 +92,7 @@ export default function InterviewDetailPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/questions">
-            题库
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/">
-            返回列表
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav tab="interviews" />
       <main className="interview-main">
         <Link className="interview-back-link" to="/">
           ← 全部面试
@@ -201,7 +180,6 @@ export default function InterviewDetailPage() {
           </>
         ) : null}
       </main>
-      <MobileTabBar />
     </div>
   );
 }

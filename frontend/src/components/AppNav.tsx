@@ -55,7 +55,11 @@ export default function AppNav({
   return (
     <>
       <header className="interview-header">
-        <Link className="interview-brand" to="/">
+        <Link
+          className="interview-brand"
+          to="/"
+          onClick={(e) => handleClick(e)}
+        >
           {APP_NAME}
         </Link>
         <div className="interview-header-actions">
