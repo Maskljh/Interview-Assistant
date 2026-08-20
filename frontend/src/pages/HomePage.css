@@ -7,48 +7,56 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  height: 56px;
   padding: 0 var(--space-lg);
   border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .home-brand {
-  font: var(--text-body-sm-strong);
+  font: var(--text-body-md-strong);
   color: var(--color-ink);
+  letter-spacing: -0.01em;
 }
 
 .home-logout {
-  font: var(--text-button-md);
-  padding: var(--space-xxs) var(--space-sm);
-  color: var(--color-ink);
-  background: var(--color-canvas);
+  font: var(--text-body-sm);
+  font-weight: 500;
+  padding: 6px 14px;
+  color: var(--color-body);
+  background: transparent;
   border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-sm);
+  border-radius: var(--rounded-pill);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .home-logout:hover {
-  background: var(--color-canvas-soft);
+  color: var(--color-ink);
+  border-color: var(--color-hairline-strong);
 }
 
 .home-main {
-  max-width: 720px;
+  max-width: 640px;
   margin: 0 auto;
   padding: var(--space-3xl) var(--space-lg);
   text-align: center;
 }
 
 .home-main h1 {
-  margin: 0 0 var(--space-sm);
+  margin: 0 0 6px;
   font: var(--text-display-md);
   color: var(--color-ink);
-  letter-spacing: -0.96px;
+  letter-spacing: -0.03em;
 }
 
 .home-email {
   margin: 0 0 var(--space-xl);
   font: var(--text-body-md);
-  color: var(--color-body);
+  color: var(--color-mute);
 }
 
 .home-placeholder {

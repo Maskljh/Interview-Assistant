@@ -1,12 +1,12 @@
 :root {
-  /* Colors — mapped from DESIGN.md */
+  /* Colors — refined monochrome palette */
   --color-primary: #171717;
   --color-on-primary: #ffffff;
-  --color-ink: #171717;
-  --color-body: #4d4d4d;
-  --color-mute: #888888;
-  --color-hairline: #ebebeb;
-  --color-hairline-strong: #a1a1a1;
+  --color-ink: #1a1a1a;
+  --color-body: #525252;
+  --color-mute: #a3a3a3;
+  --color-hairline: #e8e8e8;
+  --color-hairline-strong: #d4d4d4;
   --color-canvas: #ffffff;
   --color-canvas-soft: #fafafa;
   --color-canvas-soft-2: #f5f5f5;
@@ -15,41 +15,47 @@
   --color-link-bg-soft: #d3e5ff;
   --color-success: #0070f3;
   --color-error: #ee0000;
-  --color-error-soft: #f7d4d6;
+  --color-error-soft: #fef2f2;
   --color-error-deep: #c50000;
   --color-warning: #f5a623;
   --color-warning-soft: #ffefcf;
   --color-warning-deep: #ab570a;
   --color-violet: #7928ca;
-  --color-violet-soft: #d8ccf1;
+  --color-violet-soft: #f3eeff;
   --color-violet-deep: #4c2889;
   --color-cyan: #50e3c2;
-  --color-cyan-soft: #aaffec;
+  --color-cyan-soft: #e6faf5;
   --color-cyan-deep: #29bc9b;
   --color-highlight-pink: #ff0080;
   --color-highlight-magenta: #eb367f;
   --color-selection-bg: #171717;
   --color-selection-fg: #f2f2f2;
 
-  /* Typography */
+  /* Shadows — ultra-subtle depth */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-focus: 0 0 0 3px rgba(0, 112, 243, 0.12);
+
+  /* Typography — refined scale with tighter line-heights */
   --font-sans: Geist, Inter, system-ui, -apple-system, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 
-  --text-display-xl: 600 48px/48px var(--font-sans);
-  --text-display-lg: 600 32px/40px var(--font-sans);
-  --text-display-md: 600 24px/32px var(--font-sans);
-  --text-display-sm: 600 20px/28px var(--font-sans);
-  --text-body-lg: 400 18px/28px var(--font-sans);
-  --text-body-md: 400 16px/24px var(--font-sans);
-  --text-body-md-strong: 500 16px/24px var(--font-sans);
-  --text-body-sm: 400 14px/20px var(--font-sans);
-  --text-body-sm-strong: 500 14px/20px var(--font-sans);
-  --text-caption: 400 12px/16px var(--font-sans);
-  --text-caption-mono: 400 12px/16px var(--font-mono);
-  --text-button-md: 500 14px/20px var(--font-sans);
-  --text-button-lg: 500 16px/24px var(--font-sans);
+  --text-display-xl: 600 44px/1.1 var(--font-sans);
+  --text-display-lg: 600 30px/1.2 var(--font-sans);
+  --text-display-md: 600 22px/1.3 var(--font-sans);
+  --text-display-sm: 600 18px/1.35 var(--font-sans);
+  --text-body-lg: 400 17px/1.6 var(--font-sans);
+  --text-body-md: 400 15px/1.6 var(--font-sans);
+  --text-body-md-strong: 500 15px/1.6 var(--font-sans);
+  --text-body-sm: 400 13px/1.5 var(--font-sans);
+  --text-body-sm-strong: 500 13px/1.5 var(--font-sans);
+  --text-caption: 400 12px/1.4 var(--font-sans);
+  --text-caption-mono: 400 12px/1.4 var(--font-mono);
+  --text-button-md: 500 13px/1 var(--font-sans);
+  --text-button-lg: 500 15px/1 var(--font-sans);
 
-  /* Rounded */
+  /* Rounded — softer, more cohesive */
   --rounded-none: 0px;
   --rounded-xs: 4px;
   --rounded-sm: 6px;
@@ -60,7 +66,7 @@
   --rounded-pill: 100px;
   --rounded-full: 9999px;
 
-  /* Spacing */
+  /* Spacing — slightly more generous */
   --space-xxs: 4px;
   --space-xs: 8px;
   --space-sm: 12px;
