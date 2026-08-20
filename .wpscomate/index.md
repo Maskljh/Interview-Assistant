@@ -1,7 +1,7 @@
 <!-- wps-comate:index v3 -->
 # Workspace Index
 
-Updated: 2026-08-20 15:04
+Updated: 2026-08-20 15:57
 Root: .
 Purpose: AI-powered mock interview practice: create sessions from a job description, answ.
 

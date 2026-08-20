@@ -54,32 +54,23 @@ func (s *Service) ImportFromSession(ctx context.Context, userID, sessionID int64
 		return 0, ErrNotFound
 	}
 
-	questions, err := s.repo.ListSessionQuestions(sessionID)
+	// 按面试实际提问顺序获取题目和用户作答（来自 turns）
+	userAnswers, err := s.repo.ListSessionUserAnswers(sessionID)
 	if err != nil {
 		return 0, err
 	}
-	followUps, err := s.repo.ListSessionFollowUps(sessionID)
-	if err != nil {
-		return 0, err
-	}
-	all := dedupeStrings(append(questions, followUps...))
-	if len(all) == 0 {
+	if len(userAnswers) == 0 {
 		return 0, ErrInvalidInput
 	}
 
-	// 获取用户作答：从 turns 表按顺序提取 candidate 回复
-	userAnswers, _ := s.repo.ListSessionUserAnswers(sessionID)
-	answerMap := make(map[string]string)
-	for _, ua := range userAnswers {
-		answerMap[ua.Question] = ua.Answer
-	}
-
 	var items []InsertQuestion
-	for _, q := range all {
+	var allTexts []string
+	for _, ua := range userAnswers {
 		items = append(items, InsertQuestion{
-			Question:   q,
-			UserAnswer: answerMap[q],
+			Question:   ua.Question,
+			UserAnswer: ua.Answer,
 		})
+		allTexts = append(allTexts, ua.Question)
 	}
 
 	jobTag := JobTagFromJD(session.JobJD)
@@ -87,7 +78,7 @@ func (s *Service) ImportFromSession(ctx context.Context, userID, sessionID int64
 	if err != nil {
 		return 0, err
 	}
-	s.classifyAsync(userID, all) // best-effort; never blocks or fails import
+	s.classifyAsync(userID, allTexts) // best-effort; never blocks or fails import
 	return imported, nil
 }
 

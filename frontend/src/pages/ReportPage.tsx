@@ -60,7 +60,7 @@ export default function ReportPage() {
           setFeedback(result.feedback);
           setAvailable(true);
           stopPolling();
-        } else if (pollCountRef.current >= 6) {
+        } else if (pollCountRef.current >= 12) {
           stopPolling();
           setPollFailed(true);
         }

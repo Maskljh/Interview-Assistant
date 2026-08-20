@@ -351,6 +351,27 @@ func (r *Repo) SaveEvaluationSuccess(sessionID int64, score int, feedbackJSON []
 	return err
 }
 
+// HasFeedback reports whether the session already has a stored evaluation.
+func (r *Repo) HasFeedback(sessionID int64) (bool, error) {
+	var n int
+	err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM interview_sessions WHERE id = ? AND feedback_json IS NOT NULL`,
+		sessionID,
+	).Scan(&n)
+	return n > 0, err
+}
+
+// SaveEvaluationSuccessIfEmpty writes the evaluation only when none is stored
+// yet, so concurrent background evaluations cannot overwrite each other.
+func (r *Repo) SaveEvaluationSuccessIfEmpty(sessionID int64, score int, feedbackJSON []byte) error {
+	_, err := r.db.Exec(
+		`UPDATE interview_sessions SET score = ?, feedback_json = ?, raw_feedback = NULL
+		 WHERE id = ? AND feedback_json IS NULL`,
+		score, feedbackJSON, sessionID,
+	)
+	return err
+}
+
 func (r *Repo) SaveEvaluationFailure(sessionID int64, rawFeedback string) error {
 	_, err := r.db.Exec(
 		`UPDATE interview_sessions SET raw_feedback = ? WHERE id = ?`,

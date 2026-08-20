@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -187,6 +188,52 @@ func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int
 	return resp.ID
 }
 
+// waitForFeedback polls until the session has a stored score + feedback_json,
+// which now happens in a background goroutine after the interview ends.
+func waitForFeedback(t *testing.T, sqlDB *sql.DB, sessionID int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var score sql.NullInt64
+		var feedbackJSON []byte
+		if err := sqlDB.QueryRow(
+			`SELECT score, feedback_json FROM interview_sessions WHERE id = ?`,
+			sessionID,
+		).Scan(&score, &feedbackJSON); err != nil {
+			t.Fatalf("query session: %v", err)
+		}
+		if score.Valid && len(feedbackJSON) > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("async evaluation did not complete in time")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// waitForRawFeedback polls until the session records an evaluation failure.
+func waitForRawFeedback(t *testing.T, sqlDB *sql.DB, sessionID int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var rawFeedback sql.NullString
+		if err := sqlDB.QueryRow(
+			`SELECT raw_feedback FROM interview_sessions WHERE id = ?`,
+			sessionID,
+		).Scan(&rawFeedback); err != nil {
+			t.Fatalf("query session: %v", err)
+		}
+		if rawFeedback.Valid && rawFeedback.String != "" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("async evaluation failure did not land in time")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func TestFinishWritesFeedbackJSON(t *testing.T) {
 	sqlDB := testDB(t)
 	ctx := context.Background()
@@ -224,6 +271,8 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 			break
 		}
 	}
+
+	waitForFeedback(t, sqlDB, sessionID)
 
 	var feedbackJSON []byte
 	var score sql.NullInt64
@@ -288,6 +337,8 @@ func TestFinishEvaluateFailureCompletedAvailableFalse(t *testing.T) {
 	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer", nil); err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
+
+	waitForRawFeedback(t, sqlDB, sessionID)
 
 	var status string
 	var feedbackJSON []byte

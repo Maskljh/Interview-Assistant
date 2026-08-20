@@ -423,16 +423,33 @@ func (s *Service) Finish(ctx context.Context, sessionID int64) error {
 	_ = s.store.Delete(ctx, sessionID)
 
 	if s.evaluator != nil {
-		score, fbJSON, err := s.evaluator.Evaluate(ctx, sessionID)
-		if err != nil {
-			_ = s.repo.SaveEvaluationFailure(sessionID, err.Error())
-			return nil
-		}
-		if err := s.repo.SaveEvaluationSuccess(sessionID, score, fbJSON); err != nil {
-			return err
-		}
+		s.evaluateAsync(sessionID)
 	}
 	return nil
+}
+
+// evaluationTimeout bounds a single background LLM evaluation.
+const evaluationTimeout = 2 * time.Minute
+
+// evaluateAsync scores a completed session in the background so ending an
+// interview never blocks on the LLM. It is safe to call more than once: the
+// first write wins via a conditional update, and already-scored sessions are
+// skipped up front.
+func (s *Service) evaluateAsync(sessionID int64) {
+	has, err := s.repo.HasFeedback(sessionID)
+	if err != nil || has {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), evaluationTimeout)
+	defer cancel()
+
+	score, fbJSON, err := s.evaluator.Evaluate(ctx, sessionID)
+	if err != nil {
+		_ = s.repo.SaveEvaluationFailure(sessionID, err.Error())
+		return
+	}
+	_ = s.repo.SaveEvaluationSuccessIfEmpty(sessionID, score, fbJSON)
 }
 
 func (s *Service) finishAndNotify(ctx context.Context, sessionID int64) error {
