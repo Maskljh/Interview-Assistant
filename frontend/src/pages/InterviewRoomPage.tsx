@@ -32,6 +32,18 @@ interface Turn {
   content: string;
 }
 type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'sending';
+// 视频面试驱动会话 localStorage 追踪：强刷/异常退出时清理残留会话，避免腾讯单配额占用
+const LIVE_SESSION_KEY_PREFIX = 'livestream_session_';
+function getStoredSessionId(interviewId: string): string | null {
+  try { return localStorage.getItem(LIVE_SESSION_KEY_PREFIX + interviewId); } catch { return null; }
+}
+function storeSessionId(interviewId: string, sessionId: string) {
+  try { localStorage.setItem(LIVE_SESSION_KEY_PREFIX + interviewId, sessionId); } catch {}
+}
+function clearStoredSessionId(interviewId: string) {
+  try { localStorage.removeItem(LIVE_SESSION_KEY_PREFIX + interviewId); } catch {}
+}
+
 export default function InterviewRoomPage() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
@@ -443,6 +455,12 @@ export default function InterviewRoomPage() {
         // 语音模式：V13 行为，不请求 sign、不建腾讯会话、不占配额。
         if (data.input_mode === 'video') {
           try {
+            // 先清理可能残留的旧会话（强刷/异常退出导致），释放腾讯单配额
+            const storedSid = getStoredSessionId(String(interviewId));
+            if (storedSid) {
+              void closeLivestream(storedSid).catch(() => {});
+              clearStoredSessionId(String(interviewId));
+            }
             const sign = await getLivestreamSign();
             if (cancelled) return;
             const session = await createLivestreamSession();
@@ -452,6 +470,7 @@ export default function InterviewRoomPage() {
               return;
             }
             liveSessionRef.current = session;
+            storeSessionId(String(interviewId), session.sessionId);
             liveAvailableRef.current = true;
             setLiveUnavailable(false);
             setLiveSign(sign);
@@ -497,6 +516,8 @@ export default function InterviewRoomPage() {
       setLiveUnavailable(false);
       liveReadyRef.current = false;
       if (session) void closeLivestream(session.sessionId).catch(() => {});
+    clearStoredSessionId(String(interviewId));
+      clearStoredSessionId(String(interviewId));
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
