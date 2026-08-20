@@ -101,6 +101,8 @@ export default function InterviewRoomPage() {
   const liveSessionRef = useRef<LivestreamSession | null>(null);
   const liveReadyRef = useRef(false);
   const liveSpeakTimerRef = useRef<number | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
     turnIdRef.current += 1;
     setTurns((prev) => [...prev, { id: turnIdRef.current, role, content }]);
@@ -112,7 +114,11 @@ export default function InterviewRoomPage() {
     (content: string, voiceDurationMs?: number) => {
       appendTurn('candidate', content);
       setAnswer('');
-      socketRef.current?.sendAnswer(content, voiceDurationMs);
+      const sent = socketRef.current?.sendAnswer(content, voiceDurationMs) ?? false;
+      if (!sent) {
+        pendingAnswersRef.current.push({ content, voiceDurationMs });
+        setPendingCount(pendingAnswersRef.current.length);
+      }
     },
     [appendTurn],
   );
@@ -388,6 +394,17 @@ export default function InterviewRoomPage() {
             attemptRef.current = 0; // 重连成功，重置退避
           }
           handleMessage(msg);
+          if (msg.type === 'session_started') {
+            const queue = pendingAnswersRef.current;
+            if (queue.length > 0) {
+              pendingAnswersRef.current = [];
+              for (const item of queue) {
+                socketRef.current?.sendAnswer(item.content, item.voiceDurationMs);
+              }
+              setPendingCount(0);
+              setStatusLine('连接已恢复，暂存回答已发送');
+            }
+          }
         },
         onClose: () => {
           if (!mountedRef.current || doneRef.current) return;
@@ -521,6 +538,8 @@ export default function InterviewRoomPage() {
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
+      pendingAnswersRef.current = [];
+      setPendingCount(0);
     };
   }, [connect, interviewId]);
   const effectiveInputMode: InputMode =
@@ -841,6 +860,11 @@ export default function InterviewRoomPage() {
               </div>
             )}
             {error && <p className="interview-error">{error}</p>}
+            {pendingCount > 0 && (
+              <p className="interview-room-status interview-room-pending">
+                未连接，回答已暂存（{pendingCount} 条），重连后自动发送
+              </p>
+            )}
             {statusLine && <p className="interview-room-status">{statusLine}</p>}
             <div className="interview-transcript interview-room-transcript">
               {turns.length === 0 ? (

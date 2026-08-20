@@ -1180,3 +1180,9 @@
   background: var(--color-error-soft);
   border-color: var(--color-error-deep);
 }
+
+/* V18: 断线暂存回答提示 */
+.interview-room-pending {
+  color: var(--color-warning);
+  font-weight: 500;
+}
