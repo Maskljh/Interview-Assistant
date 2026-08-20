@@ -117,11 +117,16 @@ func (r *Repo) ListSessionUserAnswers(sessionID int64) ([]UserAnswer, error) {
 		return nil, err
 	}
 
-	// Walk turns in order: pair each interviewer turn with the next candidate turn
+	// Walk turns in order: pair each interviewer turn with the next candidate turn.
+	// If the interviewer asks twice in a row (no answer in between), the first
+	// question was unanswered — skip it so it is not paired with the follow-up's answer.
 	var result []UserAnswer
 	for i, t := range turns {
 		if t.Role != "interviewer" {
 			continue
+		}
+		if i+1 < len(turns) && turns[i+1].Role == "interviewer" {
+			continue // 面试官连续问：当前题未回答，跳过
 		}
 		// Find next candidate turn
 		for j := i + 1; j < len(turns); j++ {
@@ -164,6 +169,16 @@ func (r *Repo) InsertBatch(userID int64, questions []InsertQuestion, sessionID i
 			return 0, err
 		}
 		if exists > 0 {
+			// 已存在：若 user_answer 为空则补全（覆盖面试中途导入后补答、重新导入的场景）
+			if q.UserAnswer != "" {
+				if _, err := tx.Exec(
+					`UPDATE question_bank SET user_answer = ?
+					 WHERE user_id = ? AND question = ? AND (user_answer IS NULL OR user_answer = '')`,
+					q.UserAnswer, userID, q.Question,
+				); err != nil {
+					return 0, err
+				}
+			}
 			continue
 		}
 		_, err := tx.Exec(

@@ -685,3 +685,93 @@ func TestImportFromSessionDeduplicates(t *testing.T) {
 		t.Fatalf("bank len = %d, want 2", len(items))
 	}
 }
+
+// TestImportBackfillsUserAnswer verifies that re-importing a session backfills
+// the user_answer of an existing bank question that was previously empty.
+// This covers the case where a user imports mid-interview (question not yet
+// answered → user_answer NULL), then answers later and re-imports.
+func TestImportBackfillsUserAnswer(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-backfill@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+
+	// 模拟旧数据：题库里已有 Q1，但 user_answer 为 NULL
+	userID := userIDByEmail(t, sqlDB, email)
+	insertBankQuestion(t, sqlDB, userID, "Q1", false, "")
+
+	imported := importFromSession(t, r, token, sessionID)
+	if imported != 0 {
+		t.Fatalf("imported = %d, want 0 (Q1 already exists)", imported)
+	}
+
+	var ua sql.NullString
+	if err := sqlDB.QueryRow(`SELECT user_answer FROM question_bank WHERE user_id = ? AND question = ?`, userID, "Q1").Scan(&ua); err != nil {
+		t.Fatalf("query user_answer: %v", err)
+	}
+	if !ua.Valid || ua.String != "A1" {
+		t.Fatalf("user_answer = %v, want A1", ua)
+	}
+}
+
+// TestImportStoresUserAnswerForFollowUps verifies that follow-up questions are
+// imported with their paired candidate answer (not null).
+func TestImportStoresUserAnswerForFollowUps(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-followup-ua@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
+	seedTurn(t, sqlDB, sessionID, 3, "interviewer", "follow_up", "F1")
+	seedTurn(t, sqlDB, sessionID, 4, "candidate", "answer", "A2")
+
+	importFromSession(t, r, token, sessionID)
+
+	userID := userIDByEmail(t, sqlDB, email)
+	var ua sql.NullString
+	if err := sqlDB.QueryRow(`SELECT user_answer FROM question_bank WHERE user_id = ? AND question = ?`, userID, "F1").Scan(&ua); err != nil {
+		t.Fatalf("query user_answer for F1: %v", err)
+	}
+	if !ua.Valid || ua.String != "A2" {
+		t.Fatalf("F1 user_answer = %v, want A2", ua)
+	}
+}
+
+// TestImportSkipsUnansweredQuestionBeforeFollowUp verifies that when the
+// interviewer asks a question and immediately follows up without an answer,
+// the unanswered question is not paired with the follow-up's answer.
+func TestImportSkipsUnansweredQuestionBeforeFollowUp(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-skip-unanswered@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
+	seedTurn(t, sqlDB, sessionID, 2, "interviewer", "follow_up", "F1")
+	seedTurn(t, sqlDB, sessionID, 3, "candidate", "answer", "A1")
+
+	imported := importFromSession(t, r, token, sessionID)
+	if imported != 1 {
+		t.Fatalf("imported = %d, want 1 (only F1)", imported)
+	}
+
+	items := listQuestions(t, r, token, "")
+	got := map[string]bool{}
+	for _, item := range items {
+		got[item.Question] = true
+	}
+	if got["Q1"] {
+		t.Fatal("Q1 should not be imported (unanswered before follow-up)")
+	}
+	if !got["F1"] {
+		t.Fatal("F1 should be imported")
+	}
+}
