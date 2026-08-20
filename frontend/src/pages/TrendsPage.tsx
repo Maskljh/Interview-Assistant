@@ -38,14 +38,25 @@ const DIM_COLORS: Record<string, string> = {
   job_match: '#50e3c2',
 };
 
-// Spec §6: tooltip 只展示日期/分数/岗位标签，点击节点可跳转详情
-const totalTooltip = {
-  formatter: (value: any) => [`${value} 分`, '总分'],
-  labelFormatter: (label: any, payload: any) => {
-    const point = payload?.[0]?.payload;
-    return point ? `${label} · ${point.job_tag}` : label;
-  },
-};
+// 自定义 Tooltip 内容，确保每个节点显示正确的分数
+function TotalTooltipContent({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  return (
+    <div style={{
+      background: '#fff',
+      border: '1px solid #e8e8e8',
+      borderRadius: 8,
+      padding: '8px 12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      fontSize: 13,
+      lineHeight: 1.5,
+    }}>
+      <div style={{ fontWeight: 500, marginBottom: 2 }}>{label}</div>
+      <div>{payload[0]?.value} 分 · {point?.job_tag}</div>
+    </div>
+  );
+}
 
 export default function TrendsPage() {
   const { logout } = useAuth();
@@ -167,7 +178,7 @@ export default function TrendsPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 100]} />
-                <Tooltip {...totalTooltip} />
+                <Tooltip content={<TotalTooltipContent />} />
                 <Line
                   type="monotone"
                   dataKey="total"
