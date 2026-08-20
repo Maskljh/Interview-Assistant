@@ -208,7 +208,12 @@ export default function ReportPage() {
         {loading ? (
           <p className="interview-loading">加载报告中…</p>
         ) : error && !feedback ? (
-          <p className="interview-error">{error}</p>
+          <div className="interview-stub">
+            <p className="interview-error">{error}</p>
+            <Link className="interview-inline-link" to="/">
+              ← 返回列表
+            </Link>
+          </div>
         ) : available === false ? (
           <div className="interview-stub">
             <p>

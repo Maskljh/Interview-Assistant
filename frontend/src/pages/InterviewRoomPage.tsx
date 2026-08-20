@@ -869,7 +869,23 @@ export default function InterviewRoomPage() {
             {statusLine && <p className="interview-room-status">{statusLine}</p>}
             <div className="interview-transcript interview-room-transcript">
               {turns.length === 0 ? (
-                <p className="interview-loading">正在连接面试间…</p>
+                error && !loadingInterview ? (
+                  <div className="interview-room-error">
+                    <p className="interview-error">{error}</p>
+                    <button
+                      type="button"
+                      className="interview-submit"
+                      onClick={() => window.location.reload()}
+                    >
+                      重新加载
+                    </button>
+                    <Link className="interview-inline-link" to="/">
+                      返回列表
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="interview-loading">正在连接面试间…</p>
+                )
               ) : (
                 (() => {
                   // 只展示最新一题：找到最后一道面试官题目，以及紧随其后的候选回答

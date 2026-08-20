@@ -1186,3 +1186,12 @@
   color: var(--color-warning);
   font-weight: 500;
 }
+
+/* V18: 房间加载失败错误态 */
+.interview-room-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-xl) 0;
+}
