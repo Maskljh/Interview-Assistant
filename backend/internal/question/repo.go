@@ -85,10 +85,40 @@ type UserAnswer struct {
 }
 
 // ListSessionUserAnswers pairs each interviewer question with the candidate's
-// answer from interview_turns, preserving order.
+// answer from interview_turns. It matches by text content: for each asked
+// question, find the interviewer turn with matching text, then take the next
+// candidate turn as the user's answer.
 func (r *Repo) ListSessionUserAnswers(sessionID int64) ([]UserAnswer, error) {
-	rows, err := r.db.Query(
-		`SELECT role, content FROM interview_turns
+	// First, get the asked questions in order
+	qRows, err := r.db.Query(
+		`SELECT seq, question FROM interview_questions
+		 WHERE session_id = ? AND asked = 1 ORDER BY seq`,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer qRows.Close()
+
+	type askedQ struct {
+		Seq      int
+		Question string
+	}
+	var asked []askedQ
+	for qRows.Next() {
+		var q askedQ
+		if err := qRows.Scan(&q.Seq, &q.Question); err != nil {
+			return nil, err
+		}
+		asked = append(asked, q)
+	}
+	if err := qRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get all turns in order
+	tRows, err := r.db.Query(
+		`SELECT seq, role, content FROM interview_turns
 		 WHERE session_id = ? AND role IN ('interviewer', 'candidate')
 		 ORDER BY seq`,
 		sessionID,
@@ -96,23 +126,52 @@ func (r *Repo) ListSessionUserAnswers(sessionID int64) ([]UserAnswer, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tRows.Close()
 
-	var result []UserAnswer
-	var lastQ string
-	for rows.Next() {
-		var role, content string
-		if err := rows.Scan(&role, &content); err != nil {
+	type turn struct {
+		Seq     int
+		Role    string
+		Content string
+	}
+	var turns []turn
+	for tRows.Next() {
+		var t turn
+		if err := tRows.Scan(&t.Seq, &t.Role, &t.Content); err != nil {
 			return nil, err
 		}
-		if role == "interviewer" {
-			lastQ = content
-		} else if role == "candidate" && lastQ != "" {
-			result = append(result, UserAnswer{Question: lastQ, Answer: content})
-			lastQ = ""
+		turns = append(turns, t)
+	}
+	if err := tRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Build index: seq -> turn
+	turnMap := make(map[int]turn)
+	for _, t := range turns {
+		turnMap[t.Seq] = t
+	}
+
+	// For each asked question, find the matching interviewer turn and get the answer
+	var result []UserAnswer
+	for _, q := range asked {
+		// Find interviewer turn with matching question text
+		for _, t := range turns {
+			if t.Role == "interviewer" && t.Content == q.Question {
+				// Find the next candidate turn
+				for _, t2 := range turns {
+					if t2.Role == "candidate" && t2.Seq > t.Seq {
+						result = append(result, UserAnswer{
+							Question: q.Question,
+							Answer:   t2.Content,
+						})
+						break
+					}
+				}
+				break
+			}
 		}
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 type InsertQuestion struct {
