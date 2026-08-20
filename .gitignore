@@ -10,3 +10,9 @@ backend/bin/
 .worktrees/
 
 .git-safe-commit.ps1
+.playwright-cli/
+*.log
+*.png
+pw_*.sh
+server.exe~
+start_backend.ps1
