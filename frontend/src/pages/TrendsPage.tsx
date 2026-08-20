@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   CartesianGrid,
@@ -38,13 +38,7 @@ const DIM_COLORS: Record<string, string> = {
   job_match: '#50e3c2',
 };
 
-const MODE_LABELS: Record<string, string> = {
-  behavioral: '行为面试',
-  technical: '技术面试',
-  mixed: '综合面试',
-};
-
-// Spec §6: the 总分趋势 tooltip must show 日期/分数/岗位标签/模式.
+// Spec §6: tooltip 只展示日期/分数/岗位标签，点击节点可跳转详情
 const totalTooltip = {
   formatter: (value: number | string | readonly (number | string)[] | undefined) => [
     `${value} 分`,
@@ -52,14 +46,13 @@ const totalTooltip = {
   ],
   labelFormatter: (label: ReactNode, payload: readonly { payload?: TrendsPoint }[]) => {
     const point = payload?.[0]?.payload;
-    return point
-      ? `${label} · ${point.job_tag} · ${MODE_LABELS[point.mode] ?? '综合面试'}`
-      : label;
+    return point ? `${label} · ${point.job_tag}` : label;
   },
 };
 
 export default function TrendsPage() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState<TrendsData | null>(null);
   const [jobTag, setJobTag] = useState('');
   const [mode, setMode] = useState('');
@@ -178,7 +171,28 @@ export default function TrendsPage() {
                 <XAxis dataKey="date" />
                 <YAxis domain={[0, 100]} />
                 <Tooltip {...totalTooltip} />
-                <Line type="monotone" dataKey="total" name="总分" stroke="#171717" strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  name="总分"
+                  stroke="#171717"
+                  strokeWidth={2}
+                  dot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={5}
+                        fill="#171717"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate(`/interviews/${payload.session_id}`)}
+                      />
+                    );
+                  }}
+                />
               </LineChart>
             </ResponsiveContainer>
 
