@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -39,6 +39,24 @@ function toggleSelected(ids: number[], id: number): number[] {
   return [...ids, id];
 }
 
+/** 按 source_session_id 分组，无来源的单独一组 */
+function groupBySession(questions: Question[]) {
+  const groups = new Map<number | null, Question[]>();
+  for (const q of questions) {
+    const key = q.source_session_id ?? null;
+    const arr = groups.get(key) ?? [];
+    arr.push(q);
+    groups.set(key, arr);
+  }
+  // 有 session 的在前（按 session id 倒序），无 session 的在后
+  const sorted = [...groups.entries()].sort((a, b) => {
+    if (a[0] === null) return 1;
+    if (b[0] === null) return -1;
+    return b[0] - a[0];
+  });
+  return sorted;
+}
+
 export default function QuestionBankPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -56,6 +74,11 @@ export default function QuestionBankPage() {
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [persona, setPersona] = useState<Persona>('standard');
+
+  // 展开的题目 ID 集合
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  // 展开的分组 session ID 集合
+  const [expandedGroups, setExpandedGroups] = useState<Set<number | null>>(new Set());
 
   const loadQuestions = useCallback(async () => {
     setLoading(true);
@@ -82,6 +105,26 @@ export default function QuestionBankPage() {
     void loadQuestions();
   }, [loadQuestions]);
 
+  const groups = useMemo(() => groupBySession(questions), [questions]);
+
+  function toggleExpand(id: number) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(sessionId: number | null) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
+
   async function handleToggleStar(item: Question) {
     const next = !item.starred;
     try {
@@ -99,9 +142,7 @@ export default function QuestionBankPage() {
   }
 
   async function handleDelete(item: Question) {
-    if (!window.confirm('确定删除这道题目吗？')) {
-      return;
-    }
+    if (!window.confirm('确定删除这道题目吗？')) return;
     try {
       await deleteQuestion(item.id);
       setQuestions((prev) => prev.filter((q) => q.id !== item.id));
@@ -157,7 +198,7 @@ export default function QuestionBankPage() {
 
       <main className="interview-main">
         <h1>题库</h1>
-        <p className="interview-subtitle">收藏、筛选并多选题目开始练习</p>
+        <p className="interview-subtitle">按面试分组浏览，收藏、筛选并多选题目开始练习</p>
 
         <div className="question-bank-filters">
           <div className="interview-field">
@@ -214,47 +255,108 @@ export default function QuestionBankPage() {
             <p>题库暂无题目。完成面试后可将题目存入题库。</p>
           </div>
         ) : (
-          <ul className="interview-list">
-            {questions.map((item) => {
-              const checked = selectedIds.includes(item.id);
+          <div className="question-bank-groups">
+            {groups.map(([sessionId, items]) => {
+              const groupExpanded = expandedGroups.has(sessionId);
+              const sampleTag = items[0]?.job_tag;
+              const sampleDate = items[0]?.created_at?.slice(0, 10);
               return (
-                <li key={item.id} className="interview-list-item question-bank-row">
-                  <label className="question-bank-select">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() =>
-                        setSelectedIds((prev) => toggleSelected(prev, item.id))
-                      }
-                    />
-                  </label>
-                  <div className="interview-list-meta question-bank-content">
-                    <span className="question-bank-text">{item.question}</span>
-                    {item.job_tag && (
-                      <span className="mode-pill">{item.job_tag}</span>
-                    )}
-                  </div>
-                  <div className="interview-list-links">
-                    <button
-                      type="button"
-                      className="interview-inline-link question-bank-star"
-                      onClick={() => void handleToggleStar(item)}
-                      aria-label={item.starred ? '取消收藏' : '收藏'}
-                    >
-                      {item.starred ? '★' : '☆'}
-                    </button>
-                    <button
-                      type="button"
-                      className="interview-inline-link"
-                      onClick={() => void handleDelete(item)}
-                    >
-                      删除
-                    </button>
-                  </div>
-                </li>
+                <div key={sessionId ?? 'none'} className="question-group">
+                  <button
+                    type="button"
+                    className="question-group-header"
+                    onClick={() => toggleGroup(sessionId)}
+                  >
+                    <span className="question-group-arrow">{groupExpanded ? '▾' : '▸'}</span>
+                    <span className="question-group-title">
+                      {sessionId ? `面试 #${sessionId}` : '独立题目'}
+                    </span>
+                    {sampleTag && <span className="mode-pill">{sampleTag}</span>}
+                    {sampleDate && <span className="question-group-date">{sampleDate}</span>}
+                    <span className="question-group-count">{items.length} 题</span>
+                  </button>
+
+                  {groupExpanded && (
+                    <ul className="interview-list question-group-list">
+                      {items.map((item) => {
+                        const checked = selectedIds.includes(item.id);
+                        const expanded = expandedIds.has(item.id);
+                        return (
+                          <li key={item.id} className="interview-list-item question-bank-row">
+                            <label className="question-bank-select">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setSelectedIds((prev) => toggleSelected(prev, item.id))
+                                }
+                              />
+                            </label>
+                            <div className="interview-list-meta question-bank-content">
+                              <button
+                                type="button"
+                                className="question-bank-text question-bank-expand-btn"
+                                onClick={() => toggleExpand(item.id)}
+                              >
+                                <span className="question-bank-arrow">{expanded ? '▾' : '▸'}</span>
+                                {item.question}
+                              </button>
+                              {item.dimension && (
+                                <span className="mode-pill">
+                                  {DIMENSION_LABELS[item.dimension] ?? item.dimension}
+                                </span>
+                              )}
+
+                              {expanded && (
+                                <div className="question-detail">
+                                  {item.user_answer && (
+                                    <div className="question-detail-section">
+                                      <span className="question-detail-label">你的作答</span>
+                                      <p className="question-detail-content question-detail-user">
+                                        {item.user_answer}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {item.answer && (
+                                    <div className="question-detail-section">
+                                      <span className="question-detail-label">参考答案</span>
+                                      <p className="question-detail-content">
+                                        {item.answer}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {!item.user_answer && !item.answer && (
+                                    <p className="question-detail-empty">暂无作答记录</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="interview-list-links">
+                              <button
+                                type="button"
+                                className="interview-inline-link question-bank-star"
+                                onClick={() => void handleToggleStar(item)}
+                                aria-label={item.starred ? '取消收藏' : '收藏'}
+                              >
+                                {item.starred ? '★' : '☆'}
+                              </button>
+                              <button
+                                type="button"
+                                className="interview-inline-link"
+                                onClick={() => void handleDelete(item)}
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
 
         <div className="question-bank-actions">

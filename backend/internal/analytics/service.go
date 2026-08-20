@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"strings"
 
 	"github.com/interview-assistant/backend/internal/question"
 )
@@ -27,7 +28,7 @@ func NewService(db *sql.DB) *Service {
 	return &Service{repo: NewRepo(db)}
 }
 
-func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string) (*Trends, error) {
+func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode, source string) (*Trends, error) {
 	rows, err := s.repo.ListCompletedScored(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -52,6 +53,9 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 		if mode != "" && row.Mode != mode {
 			continue
 		}
+		if source != "" && sourceOf(row.JobJD) != source {
+			continue
+		}
 
 		var d dims
 		if err := json.Unmarshal(row.FeedbackJSON, &d); err != nil {
@@ -63,6 +67,7 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 				SessionID:  row.ID,
 				JobTag:     tag,
 				Mode:       row.Mode,
+				Source:     sourceOf(row.JobJD),
 				Total:      row.Score,
 				Expression: d.Dimensions.Expression,
 				Logic:      d.Dimensions.Logic,
@@ -102,4 +107,14 @@ func (s *Service) Trends(ctx context.Context, userID int64, jobTag, mode string)
 		Delta:         points[len(points)-1].Total - points[0].Total,
 	}
 	return t, nil
+}
+
+// sourceOf classifies a session as bank practice or regular interview based on
+// its job_jd. Question-bank practice sessions are created with job_jd
+// "题库练习（N题）" by interview.Service.CreateFromBank.
+func sourceOf(jobJD string) string {
+	if strings.HasPrefix(jobJD, "题库练习（") {
+		return SourceBank
+	}
+	return SourceRegular
 }

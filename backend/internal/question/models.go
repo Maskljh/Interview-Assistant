@@ -7,6 +7,7 @@ type Item struct {
 	UserID          int64     `json:"-"`
 	Question        string    `json:"question"`
 	Answer          *string   `json:"answer"`
+	UserAnswer      *string   `json:"user_answer"`
 	Source          string    `json:"source"`
 	SourceSessionID *int64    `json:"source_session_id"`
 	JobTag          *string   `json:"job_tag"`

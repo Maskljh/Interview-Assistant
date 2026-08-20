@@ -31,7 +31,7 @@ func (h *Handler) Trends(c *gin.Context) {
 		return
 	}
 
-	trends, err := h.svc.Trends(c.Request.Context(), userID.(int64), c.Query("job_tag"), c.Query("mode"))
+	trends, err := h.svc.Trends(c.Request.Context(), userID.(int64), c.Query("job_tag"), c.Query("mode"), c.Query("source"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load trends"})
 		return

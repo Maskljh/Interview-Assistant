@@ -10,8 +10,8 @@ func TestJobTagFromJD(t *testing.T) {
 		want string
 	}{
 		{name: "short", in: "  Backend Go  ", want: "Backend Go"},
-		{name: "exact40", in: string([]rune("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十")), want: string([]rune("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十"))},
-		{name: "truncate41", in: string([]rune("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一")), want: string([]rune("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十")) + "…"},
+		{name: "exact20", in: string([]rune("一二三四五六七八九十一二三四五六七八九十")), want: string([]rune("一二三四五六七八九十一二三四五六七八九十"))},
+		{name: "truncate21", in: string([]rune("一二三四五六七八九十一二三四五六七八九十一")), want: string([]rune("一二三四五六七八九十一二三四五六七八九十")) + "…"},
 	}
 	for _, tc := range cases {
 		tc := tc

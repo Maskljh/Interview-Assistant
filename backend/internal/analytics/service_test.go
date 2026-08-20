@@ -141,7 +141,7 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 78, 82, 90), 2)
 	s3 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", 90, fmt.Sprintf(fb, 90, 88, 85, 90, 95), 1)
 
-	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
+	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "", "")
 	if err != nil {
 		t.Fatalf("trends: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestTrendsSkipsNonCompletedAndNullScore(t *testing.T) {
 	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", "draft", &score85, fmt.Sprintf(fb, 85, 85, 85, 85, 85), 2)
 	insertVariantSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", "completed", nil, nil, 1)
 
-	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
+	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "", "")
 	if err != nil {
 		t.Fatalf("trends: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestTrendsSkipsBadFeedbackJSON(t *testing.T) {
 	bad := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "mixed", 90,
 		`{"total_score":90,"dimensions":{"expression":"not-a-number","logic":90,"content":90,"job_match":90}}`, 1)
 
-	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
+	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "", "")
 	if err != nil {
 		t.Fatalf("trends: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 	svc := analytics.NewService(sqlDB)
 	ctx := context.Background()
 
-	byTag, err := svc.Trends(ctx, userID, "Backend Engineer JD", "")
+	byTag, err := svc.Trends(ctx, userID, "Backend Engineer JD", "", "")
 	if err != nil {
 		t.Fatalf("trends by tag: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 		t.Fatalf("by tag summary = %+v, want avg75 max80 min70", byTag.Summary)
 	}
 
-	byMode, err := svc.Trends(ctx, userID, "", "technical")
+	byMode, err := svc.Trends(ctx, userID, "", "technical", "")
 	if err != nil {
 		t.Fatalf("trends by mode: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 		t.Fatalf("by mode totals = %d,%d, want 70,90", byMode.Points[0].Total, byMode.Points[1].Total)
 	}
 
-	both, err := svc.Trends(ctx, userID, "Frontend Engineer JD", "technical")
+	both, err := svc.Trends(ctx, userID, "Frontend Engineer JD", "technical", "")
 	if err != nil {
 		t.Fatalf("trends by tag+mode: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestTrendsIsolation(t *testing.T) {
 	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "mixed", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 1)
 	b1 := insertCompletedSession(t, sqlDB, userB, "Frontend Engineer JD", "behavioral", 95, fmt.Sprintf(fb, 95, 95, 95, 95, 95), 1)
 
-	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userA, "", "")
+	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userA, "", "", "")
 	if err != nil {
 		t.Fatalf("trends: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestTrendsEmpty(t *testing.T) {
 	r := testRouter(t, sqlDB)
 	userID, _ := registerUser(t, r, "test-trends-empty@example.com")
 
-	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "")
+	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "", "")
 	if err != nil {
 		t.Fatalf("trends: %v", err)
 	}
@@ -380,5 +380,62 @@ func TestTrendsEmpty(t *testing.T) {
 	}
 	if len(tr.JobTags) != 0 {
 		t.Fatalf("job_tags = %v, want empty", tr.JobTags)
+	}
+}
+
+// TestTrendsFiltersBySource verifies that regular JD-driven interviews and
+// question-bank practice sessions can be queried separately via the source
+// filter, and that each point carries its source kind.
+func TestTrendsFiltersBySource(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB)
+	userID, _ := registerUser(t, r, "test-trends-source@example.com")
+
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
+	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)
+	insertCompletedSession(t, sqlDB, userID, "题库练习（2题）", "technical", 60, fmt.Sprintf(fb, 60, 60, 60, 60, 60), 2)
+	insertCompletedSession(t, sqlDB, userID, "题库练习（2题）", "mixed", 50, fmt.Sprintf(fb, 50, 50, 50, 50, 50), 1)
+
+	svc := analytics.NewService(sqlDB)
+	ctx := context.Background()
+
+	regular, err := svc.Trends(ctx, userID, "", "", analytics.SourceRegular)
+	if err != nil {
+		t.Fatalf("trends regular: %v", err)
+	}
+	if regular.Summary.TotalSessions != 2 || len(regular.Points) != 2 {
+		t.Fatalf("regular: total=%d points=%d, want 2/2", regular.Summary.TotalSessions, len(regular.Points))
+	}
+	for _, p := range regular.Points {
+		if p.Source != analytics.SourceRegular {
+			t.Fatalf("regular point source = %q, want regular", p.Source)
+		}
+	}
+	if regular.Summary.AvgScore != 75 {
+		t.Fatalf("regular avg = %d, want 75", regular.Summary.AvgScore)
+	}
+
+	bank, err := svc.Trends(ctx, userID, "", "", analytics.SourceBank)
+	if err != nil {
+		t.Fatalf("trends bank: %v", err)
+	}
+	if bank.Summary.TotalSessions != 2 || len(bank.Points) != 2 {
+		t.Fatalf("bank: total=%d points=%d, want 2/2", bank.Summary.TotalSessions, len(bank.Points))
+	}
+	for _, p := range bank.Points {
+		if p.Source != analytics.SourceBank {
+			t.Fatalf("bank point source = %q, want bank", p.Source)
+		}
+	}
+	if bank.Summary.AvgScore != 55 {
+		t.Fatalf("bank avg = %d, want 55", bank.Summary.AvgScore)
+	}
+
+	all, err := svc.Trends(ctx, userID, "", "", "")
+	if err != nil {
+		t.Fatalf("trends all: %v", err)
+	}
+	if all.Summary.TotalSessions != 4 {
+		t.Fatalf("all: total=%d, want 4", all.Summary.TotalSessions)
 	}
 }

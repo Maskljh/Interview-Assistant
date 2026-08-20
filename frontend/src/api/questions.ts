@@ -4,6 +4,7 @@ export interface Question {
   id: number;
   question: string;
   answer: string | null;
+  user_answer: string | null;
   source: string;
   source_session_id: number | null;
   job_tag: string | null;

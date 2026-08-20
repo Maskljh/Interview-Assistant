@@ -58,17 +58,56 @@ func (s *Service) ImportFromSession(ctx context.Context, userID, sessionID int64
 	if err != nil {
 		return 0, err
 	}
-	if len(questions) == 0 {
-		return 0, ErrInvalidInput
-	}
-
-	jobTag := JobTagFromJD(session.JobJD)
-	imported, err := s.repo.InsertBatch(userID, questions, sessionID, jobTag)
+	followUps, err := s.repo.ListSessionFollowUps(sessionID)
 	if err != nil {
 		return 0, err
 	}
-	s.classifyAsync(userID, questions) // best-effort; never blocks or fails import
+	all := dedupeStrings(append(questions, followUps...))
+	if len(all) == 0 {
+		return 0, ErrInvalidInput
+	}
+
+	// 获取用户作答：从 turns 表按顺序提取 candidate 回复
+	userAnswers, _ := s.repo.ListSessionUserAnswers(sessionID)
+	answerMap := make(map[string]string)
+	for _, ua := range userAnswers {
+		answerMap[ua.Question] = ua.Answer
+	}
+
+	var items []InsertQuestion
+	for _, q := range all {
+		items = append(items, InsertQuestion{
+			Question:   q,
+			UserAnswer: answerMap[q],
+		})
+	}
+
+	jobTag := JobTagFromJD(session.JobJD)
+	imported, err := s.repo.InsertBatch(userID, items, sessionID, jobTag)
+	if err != nil {
+		return 0, err
+	}
+	s.classifyAsync(userID, all) // best-effort; never blocks or fails import
 	return imported, nil
+}
+
+// dedupeStrings removes duplicate strings while preserving first-occurrence
+// order. Comparison is whitespace-trimmed so near-identical text collapses.
+func dedupeStrings(items []string) []string {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		key := strings.TrimSpace(it)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, it)
+	}
+	return out
 }
 
 // classifyAsync tags freshly imported questions with an LLM dimension. Any

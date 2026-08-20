@@ -600,3 +600,80 @@ func TestFocusedInvalidDimensionRejected(t *testing.T) {
 		t.Fatalf("err = %v, want ErrInvalidInput", err)
 	}
 }
+
+// TestImportFromSessionIncludesFollowUps verifies that interviewer follow-up
+// questions (stored in interview_turns) are imported into the bank together
+// with the main questions.
+func TestImportFromSessionIncludesFollowUps(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-followup@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	for i, q := range []string{"Q1", "Q2"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
+			sessionID, i+1, q,
+		); err != nil {
+			t.Fatalf("seed question: %v", err)
+		}
+	}
+	for i, f := range []string{"F1", "F2"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, ?, 'interviewer', 'follow_up', ?)`,
+			sessionID, 10+i, f,
+		); err != nil {
+			t.Fatalf("seed follow-up: %v", err)
+		}
+	}
+
+	imported := importFromSession(t, r, token, sessionID)
+	if imported != 4 {
+		t.Fatalf("imported = %d, want 4", imported)
+	}
+
+	items := listQuestions(t, r, token, "")
+	got := map[string]bool{}
+	for _, item := range items {
+		got[item.Question] = true
+	}
+	for _, q := range []string{"Q1", "Q2", "F1", "F2"} {
+		if !got[q] {
+			t.Fatalf("question %q missing from bank", q)
+		}
+	}
+}
+
+// TestImportFromSessionDeduplicates verifies that importing the same session
+// twice does not duplicate bank rows.
+func TestImportFromSessionDeduplicates(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-question-dedupe@example.com"
+	token := registerUser(t, r, email)
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+	for i, q := range []string{"Q1", "Q2"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO interview_questions (session_id, seq, question, intent) VALUES (?, ?, ?, 'assessment')`,
+			sessionID, i+1, q,
+		); err != nil {
+			t.Fatalf("seed question: %v", err)
+		}
+	}
+
+	first := importFromSession(t, r, token, sessionID)
+	if first != 2 {
+		t.Fatalf("first import = %d, want 2", first)
+	}
+	second := importFromSession(t, r, token, sessionID)
+	if second != 0 {
+		t.Fatalf("second import = %d, want 0 (deduplicated)", second)
+	}
+
+	items := listQuestions(t, r, token, "")
+	if len(items) != 2 {
+		t.Fatalf("bank len = %d, want 2", len(items))
+	}
+}

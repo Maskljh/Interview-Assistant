@@ -53,7 +53,76 @@ func (r *Repo) ListSessionQuestions(sessionID int64) ([]string, error) {
 	return questions, rows.Err()
 }
 
-func (r *Repo) InsertBatch(userID int64, questions []string, sessionID int64, jobTag string) (int, error) {
+// ListSessionFollowUps returns the interviewer's follow-up questions asked
+// during a session, in order. Follow-ups live in interview_turns (kind =
+// 'follow_up'), not in interview_questions, so they must be read separately.
+func (r *Repo) ListSessionFollowUps(sessionID int64) ([]string, error) {
+	rows, err := r.db.Query(
+		`SELECT content FROM interview_turns
+		 WHERE session_id = ? AND role = 'interviewer' AND kind = 'follow_up'
+		 ORDER BY seq`,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var followUps []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			return nil, err
+		}
+		followUps = append(followUps, f)
+	}
+	return followUps, rows.Err()
+}
+
+type UserAnswer struct {
+	Question string
+	Answer   string
+}
+
+// ListSessionUserAnswers pairs each interviewer question with the candidate's
+// answer from interview_turns, preserving order.
+func (r *Repo) ListSessionUserAnswers(sessionID int64) ([]UserAnswer, error) {
+	rows, err := r.db.Query(
+		`SELECT role, content FROM interview_turns
+		 WHERE session_id = ? AND role IN ('interviewer', 'candidate')
+		 ORDER BY seq`,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []UserAnswer
+	var lastQ string
+	for rows.Next() {
+		var role, content string
+		if err := rows.Scan(&role, &content); err != nil {
+			return nil, err
+		}
+		if role == "interviewer" {
+			lastQ = content
+		} else if role == "candidate" && lastQ != "" {
+			result = append(result, UserAnswer{Question: lastQ, Answer: content})
+			lastQ = ""
+		}
+	}
+	return result, rows.Err()
+}
+
+type InsertQuestion struct {
+	Question   string
+	UserAnswer string
+}
+
+// InsertBatch inserts questions into the bank, skipping any the user already
+// has (matched by exact question text). Returns the number actually inserted.
+func (r *Repo) InsertBatch(userID int64, questions []InsertQuestion, sessionID int64, jobTag string) (int, error) {
 	if len(questions) == 0 {
 		return 0, nil
 	}
@@ -63,20 +132,39 @@ func (r *Repo) InsertBatch(userID int64, questions []string, sessionID int64, jo
 	}
 	defer tx.Rollback()
 
+	imported := 0
 	for _, q := range questions {
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM question_bank WHERE user_id = ? AND question = ?`,
+			userID, q.Question,
+		).Scan(&exists); err != nil {
+			return 0, err
+		}
+		if exists > 0 {
+			continue
+		}
 		_, err := tx.Exec(
-			`INSERT INTO question_bank (user_id, question, source, source_session_id, job_tag, starred)
-			 VALUES (?, ?, 'interview', ?, ?, 0)`,
-			userID, q, sessionID, jobTag,
+			`INSERT INTO question_bank (user_id, question, answer, user_answer, source, source_session_id, job_tag, starred)
+			 VALUES (?, ?, NULL, ?, 'interview', ?, ?, 0)`,
+			userID, q.Question, nullStr(q.UserAnswer), sessionID, jobTag,
 		)
 		if err != nil {
 			return 0, err
 		}
+		imported++
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
-	return len(questions), nil
+	return imported, nil
+}
+
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
@@ -107,7 +195,7 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
 		 FROM question_bank
 		 WHERE %s
 		 ORDER BY created_at DESC`,
@@ -132,7 +220,7 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 
 func (r *Repo) GetByID(id int64) (*Item, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
 		 FROM question_bank WHERE id = ?`,
 		id,
 	)
@@ -160,7 +248,7 @@ func (r *Repo) UpdateDimensionByText(userID int64, questionText, dimension strin
 // one dimension, capped at limit, belonging to the user.
 func (r *Repo) ListByDimensionForFocused(userID int64, dimension string, limit int) ([]Item, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, question, answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
 		 FROM question_bank
 		 WHERE user_id = ? AND dimension = ?
 		 ORDER BY starred DESC, created_at DESC
@@ -203,18 +291,22 @@ type scanner interface {
 func scanItem(row scanner) (*Item, error) {
 	var item Item
 	var answer sql.NullString
+	var userAnswer sql.NullString
 	var sourceSessionID sql.NullInt64
 	var jobTag sql.NullString
 	var dimension sql.NullString
 	var starred int
 	if err := row.Scan(
-		&item.ID, &item.UserID, &item.Question, &answer,
+		&item.ID, &item.UserID, &item.Question, &answer, &userAnswer,
 		&item.Source, &sourceSessionID, &jobTag, &dimension, &starred, &item.CreatedAt,
 	); err != nil {
 		return nil, err
 	}
 	if answer.Valid {
 		item.Answer = &answer.String
+	}
+	if userAnswer.Valid {
+		item.UserAnswer = &userAnswer.String
 	}
 	if sourceSessionID.Valid {
 		v := sourceSessionID.Int64

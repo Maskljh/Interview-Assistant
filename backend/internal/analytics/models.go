@@ -1,5 +1,12 @@
 package analytics
 
+// Session source kinds used to split trends between regular JD-driven
+// interviews and question-bank practice sessions.
+const (
+	SourceRegular = "regular"
+	SourceBank    = "bank"
+)
+
 type Summary struct {
 	TotalSessions int `json:"total_sessions"`
 	AvgScore      int `json:"avg_score"`
@@ -15,6 +22,7 @@ type TrendPoint struct {
 	SessionID  int64  `json:"session_id"`
 	JobTag     string `json:"job_tag"`
 	Mode       string `json:"mode"`
+	Source     string `json:"source"`
 	Total      int    `json:"total"`
 	Expression int    `json:"expression"`
 	Logic      int    `json:"logic"`

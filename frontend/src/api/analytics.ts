@@ -1,6 +1,8 @@
 import { fetchJSON } from './client';
 import type { InterviewMode } from './interviews';
 
+export type TrendsSource = 'regular' | 'bank';
+
 export interface TrendsSummary {
   total_sessions: number;
   avg_score: number;
@@ -16,6 +18,7 @@ export interface TrendsPoint {
   session_id: number;
   job_tag: string;
   mode: InterviewMode;
+  source: TrendsSource;
   total: number;
   expression: number;
   logic: number;
@@ -32,6 +35,7 @@ export interface TrendsData {
 export async function fetchTrends(params?: {
   job_tag?: string;
   mode?: InterviewMode;
+  source?: TrendsSource;
 }): Promise<TrendsData> {
   const search = new URLSearchParams();
   if (params?.job_tag) {
@@ -39,6 +43,9 @@ export async function fetchTrends(params?: {
   }
   if (params?.mode) {
     search.set('mode', params.mode);
+  }
+  if (params?.source) {
+    search.set('source', params.source);
   }
   const qs = search.toString();
   return fetchJSON<TrendsData>(`/api/analytics/trends${qs ? `?${qs}` : ''}`);

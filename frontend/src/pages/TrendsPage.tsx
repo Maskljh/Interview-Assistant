@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { fetchTrends, type TrendsData } from '../api/analytics';
+import { fetchTrends, type TrendsData, type TrendsSource } from '../api/analytics';
 import type { InterviewMode } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
@@ -22,6 +22,11 @@ const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
   { value: 'technical', label: '技术面试' },
   { value: 'mixed', label: '综合面试' },
+];
+
+const SOURCE_TABS: { value: TrendsSource; label: string }[] = [
+  { value: 'regular', label: '常规面试' },
+  { value: 'bank', label: '题库练习' },
 ];
 
 const DIM_LINES: { key: 'expression' | 'logic' | 'content' | 'job_match'; label: string }[] = [
@@ -64,6 +69,7 @@ export default function TrendsPage() {
   const [data, setData] = useState<TrendsData | null>(null);
   const [jobTag, setJobTag] = useState('');
   const [mode, setMode] = useState('');
+  const [source, setSource] = useState<TrendsSource>('regular');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -74,6 +80,7 @@ export default function TrendsPage() {
       const result = await fetchTrends({
         ...(jobTag ? { job_tag: jobTag } : {}),
         ...(mode ? { mode: mode as InterviewMode } : {}),
+        source,
       });
       setData(result);
     } catch (err) {
@@ -81,7 +88,7 @@ export default function TrendsPage() {
     } finally {
       setLoading(false);
     }
-  }, [jobTag, mode]);
+  }, [jobTag, mode, source]);
 
   useEffect(() => {
     void load();
@@ -116,6 +123,19 @@ export default function TrendsPage() {
 
         {error && <p className="interview-error">{error}</p>}
 
+        <div className="trends-tabs">
+          {SOURCE_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              className={`trends-tab${source === tab.value ? ' trends-tab-active' : ''}`}
+              onClick={() => setSource(tab.value)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div className="interview-filter-row">
           <select value={jobTag} onChange={(e) => setJobTag(e.target.value)}>
             <option value="">全部岗位</option>
@@ -139,7 +159,9 @@ export default function TrendsPage() {
           <p className="interview-loading">加载中…</p>
         ) : data && data.points.length === 0 ? (
           <p className="interview-empty">
-            还没有已完成评分的面试，完成一场面试后再来看成长趋势吧。
+            {source === 'bank'
+              ? '还没有题库练习记录，去题库页选择题目开始练习吧。'
+              : '还没有已完成评分的常规面试，完成一场面试后再来看成长趋势吧。'}
           </p>
         ) : data ? (
           <>
