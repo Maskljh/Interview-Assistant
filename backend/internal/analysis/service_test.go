@@ -215,7 +215,7 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
 		t.Fatalf("BeginLive: %v", err)
 	}
-	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer", nil)
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "I have solid experience building backend services with Go and SQL, and I can explain my approach to designing scalable APIs in detail.", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
@@ -406,6 +406,15 @@ func TestRetryReportGeneratesFeedback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mark completed: %v", err)
 	}
+	// Seed a substantive candidate answer so the evaluation guard passes and
+	// the LLM is actually asked to score.
+	_, err = sqlDB.Exec(
+		`INSERT INTO interview_turns (session_id, seq, role, kind, content) VALUES (?, 1, 'candidate', 'answer', 'I have solid experience building backend services with Go and SQL, and I can explain my approach to designing scalable APIs in detail.')`,
+		sessionID,
+	)
+	if err != nil {
+		t.Fatalf("insert answer turn: %v", err)
+	}
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/report/retry", sessionID), nil)
@@ -447,5 +456,133 @@ func TestGetReportForeignSessionReturnsNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("foreign report status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+}
+
+// TestEvaluateNoAnswersReturnsLowScoreWithoutLLM verifies that a session with
+// zero candidate answers is scored low by the hard guard and never reaches the
+// LLM (which would otherwise fabricate a mid-range score).
+func TestEvaluateNoAnswersReturnsLowScoreWithoutLLM(t *testing.T) {
+	sqlDB := testDB(t)
+	ctx := context.Background()
+	llmClient := fakeLLM{fn: func(system, user string, out any) error {
+		if gen, ok := out.(*llm.GenQuestionsOut); ok {
+			gen.Questions = make([]llm.GenQuestion, 5)
+			for i := 0; i < 5; i++ {
+				gen.Questions[i] = llm.GenQuestion{Seq: i + 1, Question: fmt.Sprintf("Question %d?", i+1), Intent: "assessment"}
+			}
+			return nil
+		}
+		if _, ok := out.(*llm.EvaluateOut); ok {
+			t.Fatalf("LLM eval must not be called when candidate gave no answers")
+		}
+		return nil
+	}}
+	r, svc := testRouter(t, sqlDB, llmClient)
+	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
+	svc.SetEvaluator(analysisSvc)
+
+	token := registerUser(t, r, "test-analysis-no-answer@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var userID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-analysis-no-answer@example.com").Scan(&userID); err != nil {
+		t.Fatalf("query user: %v", err)
+	}
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+
+	score, fbJSON, err := analysisSvc.Evaluate(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if score != 10 {
+		t.Fatalf("score = %d, want 10", score)
+	}
+	var fb analysis.Feedback
+	if err := json.Unmarshal(fbJSON, &fb); err != nil {
+		t.Fatalf("decode feedback: %v", err)
+	}
+	if fb.TotalScore != 10 {
+		t.Fatalf("feedback total_score = %d, want 10", fb.TotalScore)
+	}
+	if len(fb.Strengths) == 0 || len(fb.Weaknesses) == 0 || len(fb.Suggestions) == 0 {
+		t.Fatalf("feedback arrays must be non-empty")
+	}
+}
+
+// TestEvaluateTooBriefAnswersReturnsLowScore verifies that a session whose
+// answers are trivially short is scored low by the hard guard without asking
+// the LLM to evaluate.
+func TestEvaluateTooBriefAnswersReturnsLowScore(t *testing.T) {
+	sqlDB := testDB(t)
+	ctx := context.Background()
+	llmClient := fakeLLM{fn: func(system, user string, out any) error {
+		if gen, ok := out.(*llm.GenQuestionsOut); ok {
+			gen.Questions = make([]llm.GenQuestion, 5)
+			for i := 0; i < 5; i++ {
+				gen.Questions[i] = llm.GenQuestion{Seq: i + 1, Question: fmt.Sprintf("Question %d?", i+1), Intent: "assessment"}
+			}
+			return nil
+		}
+		if decide, ok := out.(*llm.DecideNextOut); ok {
+			decide.Action = "next_question"
+			return nil
+		}
+		if _, ok := out.(*llm.EvaluateOut); ok {
+			t.Fatalf("LLM eval must not be called for too-brief answers")
+		}
+		return nil
+	}}
+	r, svc := testRouter(t, sqlDB, llmClient)
+	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
+	svc.SetEvaluator(analysisSvc)
+
+	token := registerUser(t, r, "test-analysis-too-brief@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var userID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE email = ?`, "test-analysis-too-brief@example.com").Scan(&userID); err != nil {
+		t.Fatalf("query user: %v", err)
+	}
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "嗯", nil); err != nil {
+		t.Fatalf("HandleAnswer: %v", err)
+	}
+
+	score, fbJSON, err := analysisSvc.Evaluate(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if score != 20 {
+		t.Fatalf("score = %d, want 20", score)
+	}
+	var fb analysis.Feedback
+	if err := json.Unmarshal(fbJSON, &fb); err != nil {
+		t.Fatalf("decode feedback: %v", err)
+	}
+	if fb.TotalScore != 20 {
+		t.Fatalf("feedback total_score = %d, want 20", fb.TotalScore)
 	}
 }

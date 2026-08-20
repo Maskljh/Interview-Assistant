@@ -25,12 +25,21 @@ func NewService(db *sql.DB, llmClient llm.Client) *Service {
 
 // JobTagFromJD derives the job tag from a JD: trim, truncate to 40 runes, append "…".
 func JobTagFromJD(jd string) string {
+	// 清理换行和多余空格，只取第一行有意义的内容
 	jd = strings.TrimSpace(jd)
+	// 取第一个非空行
+	for _, line := range strings.Split(jd, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			jd = line
+			break
+		}
+	}
 	runes := []rune(jd)
-	if len(runes) <= 40 {
+	if len(runes) <= 20 {
 		return jd
 	}
-	return string(runes[:40]) + "…"
+	return string(runes[:20]) + "…"
 }
 
 func (s *Service) ImportFromSession(ctx context.Context, userID, sessionID int64) (int, error) {

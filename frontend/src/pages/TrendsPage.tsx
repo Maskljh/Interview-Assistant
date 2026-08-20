@@ -39,7 +39,7 @@ const DIM_COLORS: Record<string, string> = {
 };
 
 // 自定义 Tooltip 内容，确保每个节点显示正确的分数
-function TotalTooltipContent({ active, payload, label }: any) {
+function TotalTooltipContent({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload;
   return (
@@ -52,7 +52,7 @@ function TotalTooltipContent({ active, payload, label }: any) {
       fontSize: 13,
       lineHeight: 1.5,
     }}>
-      <div style={{ fontWeight: 500, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontWeight: 500, marginBottom: 2 }}>{point?.date}</div>
       <div>{payload[0]?.value} 分 · {point?.job_tag}</div>
     </div>
   );
@@ -174,9 +174,9 @@ export default function TrendsPage() {
 
             <h2 className="interview-section-title">总分趋势</h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.points}>
+              <LineChart data={data.points.map((p, i) => ({ ...p, idx: i }))}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
+                <XAxis dataKey="idx" tick={{ fontSize: 12 }} />
                 <YAxis domain={[0, 100]} />
                 <Tooltip content={<TotalTooltipContent />} />
                 <Line
@@ -206,9 +206,9 @@ export default function TrendsPage() {
 
             <h2 className="interview-section-title">维度趋势</h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.points}>
+              <LineChart data={data.points.map((p, i) => ({ ...p, idx: i }))}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
+                <XAxis dataKey="idx" tick={{ fontSize: 12 }} />
                 <YAxis domain={[0, 100]} />
                 <Tooltip />
                 <Legend />

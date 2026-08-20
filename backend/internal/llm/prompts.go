@@ -16,7 +16,8 @@ Rules:
 - seq must be 1-based and consecutive
 - question should be clear and answerable in a live interview
 - intent briefly describes what the question assesses (skills, behavior, etc.)
-- Match the interview mode: behavioral (soft skills, past experience), technical (skills, problem-solving), or mixed`
+- Match the interview mode: behavioral (soft skills, past experience), technical (skills, problem-solving), or mixed
+- All question and intent text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
 // DimensionLabels maps dimension keys to Chinese labels for prompt text.
@@ -134,7 +135,8 @@ Rules:
 - action "follow_up": ask a focused clarifying follow-up; follow_up_text is required
 - action "next_question": move on when the current topic is sufficiently explored
 - action "finish": end when all main questions are adequately covered
-- Keep follow-ups concise and interview-appropriate`
+- Keep follow-ups concise and interview-appropriate
+- follow_up_text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
 func DecideNextUser(jobJD, mode, currentQuestion string, followUpsOnCurrent int, turns []TurnContext, latestAnswer string, persona string) string {
@@ -203,7 +205,10 @@ Rules:
 - strengths, weaknesses, and suggestions must be non-empty arrays of specific, actionable strings
 - Avoid vague praise like "good communication" without evidence; cite what the candidate did well or poorly
 - suggestions must be concrete actions the candidate can take to improve
-- model_version may be omitted`
+- model_version may be omitted
+- If the candidate gave no answers, or only very brief or perfunctory answers (e.g. "I don't know", "嗯", empty), then total_score and every dimension score must be at most 30, and weaknesses/suggestions must reflect the lack of substantive answers
+- NEVER invent or fabricate candidate answers, behaviors, or experiences that do not appear in the transcript. Base every score strictly on the transcript content. If the transcript contains no candidate answer for a question, do not credit the candidate for it
+- All strengths, weaknesses, and suggestions text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
 func EvaluateSessionUser(jobJD, resume, mode string, questions []QuestionContext, turns []TurnContext) string {
@@ -246,7 +251,8 @@ Respond with valid JSON only, no markdown fences or extra text. Use this exact s
 Rules:
 - match_score must be an integer from 0 to 100
 - gaps must be a non-empty array of specific, concrete gaps between the resume and the job description (missing skills, insufficient experience, etc.)
-- suggestions must be a non-empty array of actionable preparation advice`
+- suggestions must be a non-empty array of actionable preparation advice
+- All gaps and suggestions text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
 // PreCheckUser builds the user prompt for a match precheck. An empty resume

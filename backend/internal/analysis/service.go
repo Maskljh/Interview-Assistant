@@ -18,6 +18,19 @@ var (
 	ErrLLMFailure   = errors.New("llm failure")
 )
 
+// Hard guards applied before asking the LLM to score. A session where the
+// candidate gave no answers (or only trivially short ones) must never receive
+// a mid-range score, because the LLM tends to fabricate plausible-sounding
+// feedback from the questions alone.
+const (
+	// minAnswerCount is the minimum number of candidate answer turns required
+	// to ask the LLM for a real evaluation.
+	minAnswerCount = 1
+	// minAnswerChars is the minimum total (whitespace-trimmed) answer length
+	// required to ask the LLM for a real evaluation.
+	minAnswerChars = 20
+)
+
 type Feedback struct {
 	TotalScore   int `json:"total_score"`
 	Dimensions   struct {
@@ -82,6 +95,13 @@ func (s *Service) evaluate(ctx context.Context, sessionID int64) (*Feedback, err
 	questions, err := s.repo.ListQuestions(sessionID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Hard guard: never let the LLM score a session where the candidate gave
+	// no real answers. The LLM otherwise fabricates feedback from the question
+	// text alone and returns mid-range scores (e.g. 70+) for empty sessions.
+	if fb := guardNoAnswer(turns, s.modelVersion); fb != nil {
+		return fb, nil
 	}
 
 	if s.llm == nil {
@@ -172,6 +192,61 @@ func checkScore(n int) error {
 		return fmt.Errorf("score %d out of range 0-100", n)
 	}
 	return nil
+}
+
+// guardNoAnswer inspects the candidate's answer turns. It returns a fixed
+// low-score Feedback (nil otherwise) when the candidate gave no answers or
+// only trivially short ones, so the LLM is never asked to score an empty
+// session.
+func guardNoAnswer(turns []interview.Turn, modelVersion string) *Feedback {
+	var count int
+	var chars int
+	for _, t := range turns {
+		if t.Role != "candidate" {
+			continue
+		}
+		count++
+		chars += len([]rune(strings.TrimSpace(t.Content)))
+	}
+	if count == 0 {
+		return noAnswerFeedback(modelVersion)
+	}
+	if chars < minAnswerChars {
+		return tooBriefFeedback(modelVersion)
+	}
+	return nil
+}
+
+func noAnswerFeedback(modelVersion string) *Feedback {
+	return &Feedback{
+		TotalScore: 10,
+		Dimensions: struct {
+			Expression int `json:"expression"`
+			Logic      int `json:"logic"`
+			Content    int `json:"content"`
+			JobMatch   int `json:"job_match"`
+		}{},
+		Strengths:    []string{"面试已结束，但未检测到任何候选人回答。"},
+		Weaknesses:   []string{"未回答任何问题，无法评估表达能力、逻辑结构、内容质量与岗位匹配。"},
+		Suggestions:  []string{"重新开始一次面试，并完整回答每个问题后再查看评估报告。"},
+		ModelVersion: modelVersion,
+	}
+}
+
+func tooBriefFeedback(modelVersion string) *Feedback {
+	return &Feedback{
+		TotalScore: 20,
+		Dimensions: struct {
+			Expression int `json:"expression"`
+			Logic      int `json:"logic"`
+			Content    int `json:"content"`
+			JobMatch   int `json:"job_match"`
+		}{},
+		Strengths:    []string{"面试已结束，但候选人回答内容过少。"},
+		Weaknesses:   []string{"回答过于简短，缺乏实质内容，无法有效评估各项能力。"},
+		Suggestions:  []string{"重新开始一次面试，针对每个问题给出具体、完整的回答。"},
+		ModelVersion: modelVersion,
+	}
 }
 
 func (s *Service) GetReport(ctx context.Context, userID, sessionID int64) (*Report, error) {

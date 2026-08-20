@@ -180,6 +180,34 @@ func TestClassifyDimensionsSystemRequiresSchema(t *testing.T) {
 	}
 }
 
+func TestEvaluateSessionSystemRequiresLowScoreForNoAnswers(t *testing.T) {
+	sys := EvaluateSessionSystem()
+	if !strings.Contains(sys, "at most 30") {
+		t.Fatalf("no-answer low-score rule missing: %s", sys)
+	}
+}
+
+func TestEvaluateSessionSystemForbidsFabrication(t *testing.T) {
+	sys := strings.ToLower(EvaluateSessionSystem())
+	if !strings.Contains(sys, "fabricate") && !strings.Contains(sys, "invent") {
+		t.Fatalf("fabrication rule missing: %s", sys)
+	}
+}
+
+func TestAllUserFacingSystemPromptsRequireChinese(t *testing.T) {
+	cases := map[string]string{
+		"GenerateQuestionsSystem": GenerateQuestionsSystem(),
+		"DecideNextSystem":        DecideNextSystem(),
+		"EvaluateSessionSystem":   EvaluateSessionSystem(),
+		"PreCheckSystem":          PreCheckSystem(),
+	}
+	for name, sys := range cases {
+		if !strings.Contains(sys, "Chinese (Simplified)") {
+			t.Fatalf("%s must require Chinese output: %s", name, sys)
+		}
+	}
+}
+
 func TestClassifyDimensionsUserListsQuestions(t *testing.T) {
 	got := ClassifyDimensionsUser([]string{"Q1", "Q2"})
 	if !strings.Contains(got, "- Q1") || !strings.Contains(got, "- Q2") {
