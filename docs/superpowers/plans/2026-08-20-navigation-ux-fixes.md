@@ -17,7 +17,7 @@
 - 不重构现有大文件结构（`InterviewRoomPage.tsx` 1069 行保持现状，仅增量修改）
 - 每个任务结束时 `cd frontend && npm run build`（`tsc -b && vite build`）与 `npm run lint` 必须通过
 - `tsconfig.app.json` 开启 `noUnusedLocals`/`noUnusedParameters`/`verbatimModuleSyntax`：删除使用点后必须同步删除导入，类型导入用 `import type`
-- 分支：main（当前工作区）
+- 分支：`nav-ux-fixes`（2026-08-20 从 main 分出；因另一进程并发实现 V18 room-ux 计划提交同一 main，经用户批准本计划改在独立分支执行，完成后合并回 main）
 - 提交信息遵循仓库习惯：`feat(nav): ...` / `test(nav): ...` / `docs(nav): ...`
 - 移动端（<600px）header 链接隐藏、底部 TabBar 显示的规则保持不变（`styles/mobile.css`）
 - 品牌名统一为 `APP_NAME = '模拟面试助手'`（`src/lib/labels.ts`），AppNav 统一渲染，题库页不再单独写死「面试助手」
