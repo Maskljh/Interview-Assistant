@@ -137,10 +137,7 @@ export default function ReportPage() {
 
   return (
     <div className="interview-page">
-      <AppNav
-        tab="interviews"
-        actions={[{ to: `/interviews/${id}`, label: '详情' }]}
-      />
+      <AppNav tab="interviews" />
       <main className="interview-main">
         <Link className="interview-back-link" to="/">
           ← 全部面试

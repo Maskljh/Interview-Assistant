@@ -86,10 +86,7 @@ export default function InterviewListPage() {
 
   return (
     <div className="interview-page">
-      <AppNav
-        tab="interviews"
-        actions={[{ to: '/interviews/new', label: '新建面试', variant: 'cta' }]}
-      />
+      <AppNav tab="interviews" />
       <main className="interview-main">
         <h1>我的面试</h1>
         <p className="interview-subtitle">练习记录与历史回看</p>

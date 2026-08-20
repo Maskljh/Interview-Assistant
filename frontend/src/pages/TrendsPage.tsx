@@ -95,10 +95,7 @@ export default function TrendsPage() {
 
   return (
     <div className="interview-page">
-      <AppNav
-        tab="trends"
-        actions={[{ to: '/', label: '面试列表' }]}
-      />
+      <AppNav tab="trends" />
       <main className="interview-main">
         <h1>成长分析</h1>
         <p className="interview-subtitle">查看历史面试的分数趋势与维度变化。</p>

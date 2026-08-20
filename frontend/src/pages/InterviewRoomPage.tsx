@@ -769,14 +769,7 @@ export default function InterviewRoomPage() {
   const voiceBusy = voicePhase === 'transcribing' || voicePhase === 'sending';
   return (
     <div className="interview-page">
-      <AppNav
-        tab="interviews"
-        confirmLeave
-        actions={[
-          { to: '/', label: '返回列表' },
-          { to: `/interviews/${id}`, label: '详情' },
-        ]}
-      />
+      <AppNav tab="interviews" confirmLeave />
       <main className="interview-main interview-room">
         {loadingInterview ? (
           <p className="interview-loading">加载面试中…</p>

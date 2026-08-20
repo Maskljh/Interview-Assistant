@@ -198,10 +198,7 @@ export default function QuestionBankPage() {
 
   return (
     <div className="interview-page">
-      <AppNav
-        tab="questions"
-        actions={[{ to: '/', label: '面试列表' }]}
-      />
+      <AppNav tab="questions" />
       <main className="interview-main">
         <h1>题库</h1>
         <p className="interview-subtitle">按面试分组浏览，收藏、筛选并多选题目开始练习</p>

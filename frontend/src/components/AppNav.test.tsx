@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import AppNav, { type NavAction, type NavTab } from './AppNav';
+import AppNav, { type NavTab } from './AppNav';
 import { AuthProvider } from '../auth/AuthContext';
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
@@ -12,7 +12,7 @@ function LocationProbe() {
 }
 
 function renderNav(
-  props: { tab: NavTab; actions?: NavAction[]; confirmLeave?: boolean },
+  props: { tab: NavTab; confirmLeave?: boolean },
   options: { initialEntries?: string[] } = {},
 ) {
   return render(
@@ -37,30 +37,23 @@ function mockConfirm(value: boolean) {
 }
 
 describe('AppNav', () => {
-  it('renders brand and only non-current global tabs in header', () => {
+  it('renders brand and all four tabs in header, current tab as span', () => {
     const { container } = renderNav({ tab: 'interviews' });
     const header = container.querySelector('.interview-header')!;
     const links = [...header.querySelectorAll('a.interview-header-link')].map((a) => a.textContent);
-    expect(links).toEqual(['题库', '成长分析']);
+    // 当前页「面试」为 span，其余三个为链接
+    expect(links).toEqual(['题库', '成长分析', '新建']);
+    const current = header.querySelector('span.interview-header-link[aria-current="page"]');
+    expect(current?.textContent).toBe('面试');
     expect(header.textContent).toContain('模拟面试助手');
   });
 
-  it('shows current global tab as an aria-current span, not a link', () => {
+  it('shows current tab as an aria-current span, not a link', () => {
     const { container } = renderNav({ tab: 'questions' });
     const header = container.querySelector('.interview-header')!;
     const current = header.querySelector('span.interview-header-link[aria-current="page"]');
     expect(current?.textContent).toBe('题库');
     expect(header.querySelector('a[href="/questions"]')).toBeNull();
-  });
-
-  it('renders page actions, with cta variant using the cta class', () => {
-    const { container } = renderNav({
-      tab: 'interviews',
-      actions: [{ to: '/interviews/new', label: '新建面试', variant: 'cta' }],
-    });
-    const header = container.querySelector('.interview-header')!;
-    const cta = header.querySelector('a.interview-header-cta');
-    expect(cta?.textContent).toBe('新建面试');
   });
 
   it('always renders all four tab-bar items, active from the tab prop', () => {

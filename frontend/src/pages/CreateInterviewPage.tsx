@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   createInterview,
@@ -167,11 +167,11 @@ export default function CreateInterviewPage() {
 
   return (
     <div className="interview-page">
-      <AppNav
-        tab="create"
-        actions={[{ to: '/', label: '返回列表' }]}
-      />
+      <AppNav tab="create" />
       <main className="interview-main">
+        <Link className="interview-back-link" to="/">
+          ← 全部面试
+        </Link>
         <h1>新建面试</h1>
         <p className="interview-subtitle">粘贴职位描述，可选上传简历，并选择练习模式。</p>
 
