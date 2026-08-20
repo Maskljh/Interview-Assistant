@@ -112,7 +112,7 @@ export async function fetchJSON<T>(
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (err && (err as Error).name === 'AbortError') {
       throw new ApiError(0, '请求超时，请检查网络后重试', 'request timeout');
     }
     throw new ApiError(0, '网络异常或请求超时，请检查连接后重试', String(err));

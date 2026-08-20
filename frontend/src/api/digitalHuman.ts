@@ -1,4 +1,4 @@
-import { ApiError, getApiBase, getToken } from './client';
+import { ApiError, getApiBase, getToken, toUserMessage } from './client';
 
 async function readError(res: Response): Promise<ApiError> {
   let message = res.statusText || 'Request failed';
@@ -10,7 +10,7 @@ async function readError(res: Response): Promise<ApiError> {
   } catch {
     // Keep the status text when the response is not JSON.
   }
-  return new ApiError(res.status, message);
+  return new ApiError(res.status, toUserMessage(res.status, message), message);
 }
 
 export interface VideoTaskResult {
