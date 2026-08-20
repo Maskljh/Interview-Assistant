@@ -34,7 +34,7 @@ func (r *Repo) GetSession(sessionID int64) (*sessionRow, error) {
 
 func (r *Repo) ListSessionQuestions(sessionID int64) ([]string, error) {
 	rows, err := r.db.Query(
-		`SELECT question FROM interview_questions WHERE session_id = ? ORDER BY seq`,
+		`SELECT question FROM interview_questions WHERE session_id = ? AND asked = 1 ORDER BY seq`,
 		sessionID,
 	)
 	if err != nil {
