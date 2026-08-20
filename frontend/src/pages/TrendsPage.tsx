@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { fetchTrends, type TrendsData, type TrendsPoint } from '../api/analytics';
+import { fetchTrends, type TrendsData } from '../api/analytics';
 import type { InterviewMode } from '../api/interviews';
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME } from '../lib/labels';
