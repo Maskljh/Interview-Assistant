@@ -2,17 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
-  getInterview,
   getReport,
   retryReport,
   type InterviewFeedback,
 } from '../api/interviews';
-import { importQuestionsFromSession } from '../api/questions';
 import { fetchExpression, type ExpressionResult } from '../api/expression';
-import { useAuth } from '../auth/AuthContext';
-import { APP_NAME } from '../lib/labels';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: string }[] =
   [
@@ -23,19 +19,14 @@ const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: str
   ];
 
 export default function ReportPage() {
-  const { logout } = useAuth();
   const { id } = useParams<{ id: string }>();
   const interviewId = Number(id);
 
   const [feedback, setFeedback] = useState<InterviewFeedback | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
-  const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState('');
-  const [savingToBank, setSavingToBank] = useState(false);
-  const [bankMessage, setBankMessage] = useState('');
-  const [bankError, setBankError] = useState('');
   const [expression, setExpression] = useState<ExpressionResult | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const pollCountRef = useRef(0);
@@ -84,12 +75,8 @@ export default function ReportPage() {
       setLoading(true);
       setError('');
       try {
-        const [result, interview] = await Promise.all([
-          getReport(interviewId),
-          getInterview(interviewId),
-        ]);
+        const result = await getReport(interviewId);
         if (cancelled) return;
-        setQuestionCount(interview.questions.length);
         if (result.available) {
           setFeedback(result.feedback);
           setAvailable(true);
@@ -125,20 +112,6 @@ export default function ReportPage() {
     };
   }, [interviewId, startPolling]);
 
-  async function handleSaveToBank() {
-    setSavingToBank(true);
-    setBankMessage('');
-    setBankError('');
-    try {
-      const { imported } = await importQuestionsFromSession(interviewId);
-      setBankMessage(`已存入 ${imported} 题`);
-    } catch (err) {
-      setBankError(err instanceof ApiError ? err.message : '存入题库失败');
-    } finally {
-      setSavingToBank(false);
-    }
-  }
-
   async function handleRetry() {
     setRetrying(true);
     setError('');
@@ -164,25 +137,10 @@ export default function ReportPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/questions">
-            题库
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <Link className="interview-header-link header-nav-link" to={`/interviews/${id}`}>
-            详情
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav
+        tab="interviews"
+        actions={[{ to: `/interviews/${id}`, label: '详情' }]}
+      />
       <main className="interview-main">
         <Link className="interview-back-link" to="/">
           ← 全部面试
@@ -190,20 +148,11 @@ export default function ReportPage() {
 
         <h1>面试报告</h1>
 
-        {questionCount > 0 && !loading && (
-          <div className="interview-list-links" style={{ marginBottom: 'var(--space-md)' }}>
-            <button
-              type="button"
-              className="interview-inline-link"
-              onClick={() => void handleSaveToBank()}
-              disabled={savingToBank}
-            >
-              {savingToBank ? '存入中…' : '存入题库'}
-            </button>
-          </div>
-        )}
-        {bankMessage && <p className="interview-success">{bankMessage}</p>}
-        {bankError && <p className="interview-error">{bankError}</p>}
+        <div className="interview-list-links" style={{ marginBottom: 'var(--space-md)' }}>
+          <Link className="interview-inline-link" to={`/interviews/${id}`}>
+            查看本场对话 →
+          </Link>
+        </div>
 
         {loading ? (
           <p className="interview-loading">加载报告中…</p>
@@ -290,7 +239,6 @@ export default function ReportPage() {
           </>
         ) : null}
       </main>
-      <MobileTabBar />
     </div>
   );
 }
