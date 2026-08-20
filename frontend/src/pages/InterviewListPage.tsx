@@ -5,16 +5,14 @@ import {
   listInterviews,
   type InterviewListItem,
 } from '../api/interviews';
-import { useAuth } from '../auth/AuthContext';
 import {
-  APP_NAME,
   MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
   formatDateZh,
 } from '../lib/labels';
 import './InterviewPages.css';
-import MobileTabBar from '../components/MobileTabBar';
+import AppNav from '../components/AppNav';
 
 function InterviewRow({ item }: { item: InterviewListItem }) {
   return (
@@ -38,9 +36,6 @@ function InterviewRow({ item }: { item: InterviewListItem }) {
         </div>
       </div>
       <div className="interview-list-links">
-        <Link className="interview-inline-link" to={`/interviews/${item.id}`}>
-          详情
-        </Link>
         {item.status === 'in_progress' && (
           <Link className="interview-inline-link" to={`/interviews/${item.id}/room`}>
             进入面试
@@ -57,7 +52,6 @@ function InterviewRow({ item }: { item: InterviewListItem }) {
 }
 
 export default function InterviewListPage() {
-  const { logout } = useAuth();
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -92,25 +86,10 @@ export default function InterviewListPage() {
 
   return (
     <div className="interview-page">
-      <header className="interview-header">
-        <Link className="interview-brand" to="/">
-          {APP_NAME}
-        </Link>
-        <div className="interview-header-actions">
-          <Link className="interview-header-link header-nav-link" to="/questions">
-            题库
-          </Link>
-          <Link className="interview-header-link header-nav-link" to="/trends">
-            成长分析
-          </Link>
-          <Link className="interview-header-cta header-nav-link" to="/interviews/new">
-            新建面试
-          </Link>
-          <button type="button" className="interview-header-link" onClick={logout}>
-            退出登录
-          </button>
-        </div>
-      </header>
+      <AppNav
+        tab="interviews"
+        actions={[{ to: '/interviews/new', label: '新建面试', variant: 'cta' }]}
+      />
       <main className="interview-main">
         <h1>我的面试</h1>
         <p className="interview-subtitle">练习记录与历史回看</p>
@@ -134,7 +113,6 @@ export default function InterviewListPage() {
           </ul>
         )}
       </main>
-      <MobileTabBar />
     </div>
   );
 }
