@@ -1,4 +1,4 @@
-import { fetchJSON } from './client';
+import { ApiError, fetchJSON, getApiBase, getToken, toUserMessage } from './client';
 
 export interface Question {
   id: number;
@@ -9,6 +9,7 @@ export interface Question {
   source_session_id: number | null;
   job_tag: string | null;
   dimension: string | null;
+  reference: string | null;
   starred: boolean;
   created_at: string;
 }
@@ -83,5 +84,59 @@ export async function deleteQuestions(ids: number[]): Promise<void> {
   await fetchJSON<{ deleted: number }>('/api/questions/batch-delete', {
     method: 'POST',
     body: JSON.stringify({ ids }),
+  });
+}
+
+export interface ImportItem {
+  question: string;
+  answer?: string;
+  reference?: string;
+}
+
+export interface ImportParseResult {
+  items: ImportItem[];
+  raw: string;
+  ocr_text: string;
+}
+
+export async function parseImportText(text: string): Promise<ImportParseResult> {
+  return fetchJSON<ImportParseResult>('/api/questions/import/parse', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function parseImportImage(file: File): Promise<ImportParseResult> {
+  // multipart：fetchJSON 会默认加 JSON Content-Type，图片必须走原生 fetch
+  const token = getToken();
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${getApiBase()}/api/questions/import/parse`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!res.ok) {
+    let message = res.statusText || 'Request failed';
+    try {
+      const data = (await res.json()) as unknown;
+      if (data && typeof data === 'object' && 'error' in data) {
+        message = String((data as { error: unknown }).error);
+      }
+    } catch {
+      // keep status text
+    }
+    throw new ApiError(res.status, toUserMessage(res.status, message), message);
+  }
+  return (await res.json()) as ImportParseResult;
+}
+
+export async function confirmImport(
+  items: ImportItem[],
+  jobTag?: string,
+): Promise<{ imported: number; skipped: number }> {
+  return fetchJSON<{ imported: number; skipped: number }>('/api/questions/import/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ items, job_tag: jobTag ?? '' }),
   });
 }

@@ -54,3 +54,9 @@ export const DIMENSION_LABELS: Record<string, string> = {
   content: '内容质量',
   job_match: '岗位匹配',
 };
+
+// 题库题目来源标记（single source of truth 与 backend question_bank.source 一致）
+export const SOURCE_LABELS: Record<string, string> = {
+  interview: '面试',
+  import: '导入',
+};
