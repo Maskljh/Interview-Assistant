@@ -3,8 +3,10 @@ package question
 import (
 	"database/sql"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/auth"
@@ -26,6 +28,8 @@ func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Clie
 	protected.Use(auth.Middleware(secret))
 	protected.GET("", h.List)
 	protected.POST("/from-session/:sessionId", h.ImportFromSession)
+	protected.POST("/import/parse", h.ImportParse)
+	protected.POST("/import/confirm", h.ImportConfirm)
 	protected.POST("/question-bank/focused", h.Focused)
 	protected.PATCH("/:id", h.Patch)
 	protected.DELETE("/:id", h.Delete)
@@ -188,4 +192,124 @@ func (h *Handler) BatchDelete(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
+}
+
+const maxImportImageBytes = 5 << 20
+
+type parseRequest struct {
+	Text string `json:"text"`
+}
+
+type confirmItem struct {
+	Question  string `json:"question"`
+	Answer    string `json:"answer"`
+	Reference string `json:"reference"`
+}
+
+type confirmRequest struct {
+	Items  []confirmItem `json:"items"`
+	JobTag string        `json:"job_tag"`
+}
+
+func (h *Handler) ImportParse(c *gin.Context) {
+	_, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// 图片（multipart）或文本（JSON）二选一
+	var res ParseResult
+	if strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+			return
+		}
+		if file.Size > maxImportImageBytes {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "image is too large"})
+			return
+		}
+		f, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read image"})
+			return
+		}
+		defer f.Close()
+		image, err := io.ReadAll(f)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read image"})
+			return
+		}
+		res, err = h.svc.ParseFromImage(c.Request.Context(), image)
+		if errors.Is(err, ErrOCRUnavailable) {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "image recognition unavailable, please use text input"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not parse image"})
+			return
+		}
+	} else {
+		var req parseRequest
+		if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "text is required"})
+			return
+		}
+		var err error
+		res, err = h.svc.ParseFromText(c.Request.Context(), req.Text)
+		if errors.Is(err, ErrInvalidInput) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "text is required"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not parse text"})
+			return
+		}
+	}
+
+	type itemJSON struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer,omitempty"`
+	}
+	items := make([]itemJSON, 0, len(res.Items))
+	for _, it := range res.Items {
+		items = append(items, itemJSON{Question: it.Question, Answer: it.Answer})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"items":    items,
+		"raw":      res.Raw,
+		"ocr_text": res.OcrText,
+	})
+}
+
+func (h *Handler) ImportConfirm(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req confirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	items := make([]ParsedQuestion, 0, len(req.Items))
+	for _, it := range req.Items {
+		items = append(items, ParsedQuestion{
+			Question:  it.Question,
+			Answer:    it.Answer,
+			Reference: it.Reference,
+		})
+	}
+	res, err := h.svc.ImportConfirmed(c.Request.Context(), userID.(int64), items, req.JobTag)
+	if errors.Is(err, ErrInvalidInput) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "items are required"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not import questions"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"imported": res.Imported, "skipped": res.Skipped})
 }

@@ -909,3 +909,81 @@ func TestParseFromTextStructuredAndFallback(t *testing.T) {
 		t.Fatalf("fallback = %+v, want empty items + raw", res)
 	}
 }
+
+func TestImportParseTextHandler(t *testing.T) {
+	sqlDB := testDB(t)
+	svcOut := parseLLM{out: llm.ParseImportOut{}}
+	svcOut.out.Items = append(svcOut.out.Items, struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer,omitempty"`
+	}{Question: "解析题", Answer: "解析答案"})
+	r := testRouter(t, sqlDB, &svcOut)
+
+	token := registerUser(t, r, "test-import-parse@example.com")
+	body, _ := json.Marshal(map[string]string{"text": "面经内容"})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("parse status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Question string `json:"question"`
+			Answer   string `json:"answer"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode parse: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].Question != "解析题" {
+		t.Fatalf("items = %+v", resp.Items)
+	}
+}
+
+func TestImportConfirmHandler(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, r, "test-import-confirm-h@example.com")
+	body, _ := json.Marshal(map[string]any{
+		"items": []map[string]any{
+			{"question": "接口入库题", "answer": "答", "reference": "出处"},
+		},
+		"job_tag": "前端开发",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/confirm", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("confirm status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Imported int `json:"imported"`
+		Skipped  int `json:"skipped"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode confirm: %v", err)
+	}
+	if resp.Imported != 1 || resp.Skipped != 0 {
+		t.Fatalf("imported=%d skipped=%d, want 1/0", resp.Imported, resp.Skipped)
+	}
+
+	items := listQuestions(t, r, token, "")
+	found := false
+	for _, it := range items {
+		if it.Question == "接口入库题" {
+			found = true
+			if it.Source != "import" {
+				t.Fatalf("source = %q, want import", it.Source)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("imported question not in list")
+	}
+}
