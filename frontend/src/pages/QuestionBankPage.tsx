@@ -14,7 +14,7 @@ import {
   patchQuestion,
   type Question,
 } from '../api/questions';
-import { DIMENSION_LABELS, PERSONA_LABELS } from '../lib/labels';
+import { DIMENSION_LABELS, PERSONA_LABELS, SOURCE_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import ConfirmModal from '../components/ConfirmModal';
@@ -304,7 +304,9 @@ export default function QuestionBankPage() {
                     >
                       <span className="question-group-arrow">{groupExpanded ? '▾' : '▸'}</span>
                       <span className="question-group-title">
-                        {sessionId ? `面试 #${sessionId}` : '独立题目'}
+                        {sessionId
+                          ? `面试 #${sessionId}`
+                          : `独立题目${SOURCE_LABELS[items[0]?.source ?? ''] ?? ''}`}
                       </span>
                       {sampleTag && <span className="mode-pill">{sampleTag}</span>}
                       {sampleDate && <span className="question-group-date">{sampleDate}</span>}
@@ -358,6 +360,11 @@ export default function QuestionBankPage() {
                                   {DIMENSION_LABELS[item.dimension] ?? item.dimension}
                                 </span>
                               )}
+                              {item.source === 'import' && (
+                                <span className="mode-pill">
+                                  {SOURCE_LABELS.import}
+                                </span>
+                              )}
 
                               {expanded && (
                                 <div className="question-detail">
@@ -374,6 +381,14 @@ export default function QuestionBankPage() {
                                       <span className="question-detail-label">参考答案</span>
                                       <p className="question-detail-content">
                                         {item.answer}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {item.reference && (
+                                    <div className="question-detail-section">
+                                      <span className="question-detail-label">出处</span>
+                                      <p className="question-detail-content">
+                                        {item.reference}
                                       </p>
                                     </div>
                                   )}
