@@ -145,12 +145,6 @@ export default function ReportPage() {
 
         <h1>面试报告</h1>
 
-        <div className="interview-list-links" style={{ marginBottom: 'var(--space-md)' }}>
-          <Link className="interview-inline-link" to={`/interviews/${id}`}>
-            查看本场对话 →
-          </Link>
-        </div>
-
         {loading ? (
           <p className="interview-loading">加载报告中…</p>
         ) : error && !feedback ? (
