@@ -35,25 +35,27 @@ func testDB(t *testing.T) *sql.DB {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = sqlDB.Exec(`
-			DELETE qb FROM question_bank qb
-			INNER JOIN users u ON u.id = qb.user_id
-			WHERE u.email LIKE 'test-question-%@example.com'`)
-		_, _ = sqlDB.Exec(`
-			DELETE t FROM interview_turns t
-			INNER JOIN interview_sessions s ON s.id = t.session_id
-			INNER JOIN users u ON u.id = s.user_id
-			WHERE u.email LIKE 'test-question-%@example.com'`)
-		_, _ = sqlDB.Exec(`
-			DELETE q FROM interview_questions q
-			INNER JOIN interview_sessions s ON s.id = q.session_id
-			INNER JOIN users u ON u.id = s.user_id
-			WHERE u.email LIKE 'test-question-%@example.com'`)
-		_, _ = sqlDB.Exec(`
-			DELETE s FROM interview_sessions s
-			INNER JOIN users u ON u.id = s.user_id
-			WHERE u.email LIKE 'test-question-%@example.com'`)
-		_, _ = sqlDB.Exec("DELETE FROM users WHERE email LIKE 'test-question-%@example.com'")
+		for _, pattern := range []string{"test-question-%@example.com", "test-import-%@example.com"} {
+			_, _ = sqlDB.Exec(`
+				DELETE qb FROM question_bank qb
+				INNER JOIN users u ON u.id = qb.user_id
+				WHERE u.email LIKE ?`, pattern)
+			_, _ = sqlDB.Exec(`
+				DELETE t FROM interview_turns t
+				INNER JOIN interview_sessions s ON s.id = t.session_id
+				INNER JOIN users u ON u.id = s.user_id
+				WHERE u.email LIKE ?`, pattern)
+			_, _ = sqlDB.Exec(`
+				DELETE q FROM interview_questions q
+				INNER JOIN interview_sessions s ON s.id = q.session_id
+				INNER JOIN users u ON u.id = s.user_id
+				WHERE u.email LIKE ?`, pattern)
+			_, _ = sqlDB.Exec(`
+				DELETE s FROM interview_sessions s
+				INNER JOIN users u ON u.id = s.user_id
+				WHERE u.email LIKE ?`, pattern)
+			_, _ = sqlDB.Exec("DELETE FROM users WHERE email LIKE ?", pattern)
+		}
 		sqlDB.Close()
 	})
 	return sqlDB
@@ -773,5 +775,137 @@ func TestImportSkipsUnansweredQuestionBeforeFollowUp(t *testing.T) {
 	}
 	if !got["F1"] {
 		t.Fatal("F1 should be imported")
+	}
+}
+
+type parseLLM struct{ out llm.ParseImportOut }
+
+func (p *parseLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	dest, ok := out.(*llm.ParseImportOut)
+	if !ok {
+		return fmt.Errorf("unexpected out type")
+	}
+	*dest = p.out
+	return nil
+}
+
+func TestImportConfirmedStoresImportSource(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-import-confirm@example.com"
+	_ = registerUser(t, r, email)
+	userID := userIDByEmail(t, sqlDB, email)
+
+	svc := question.NewService(sqlDB, nil)
+	_, err := svc.ImportConfirmed(context.Background(), userID, []question.ParsedQuestion{
+		{Question: "导入题A", Answer: "答A", Reference: "出处A"},
+		{Question: "导入题B"},
+	}, "后端开发")
+	if err != nil {
+		t.Fatalf("import confirmed: %v", err)
+	}
+
+	var source, ref sql.NullString
+	var sessionID sql.NullInt64
+	if err := sqlDB.QueryRow(`SELECT source, source_session_id, reference FROM question_bank WHERE user_id = ? AND question = ?`, userID, "导入题A").Scan(&source, &sessionID, &ref); err != nil {
+		t.Fatalf("query imported row: %v", err)
+	}
+	if !source.Valid || source.String != "import" {
+		t.Fatalf("source = %v, want import", source)
+	}
+	if sessionID.Valid {
+		t.Fatalf("source_session_id should be NULL, got %d", sessionID.Int64)
+	}
+	if !ref.Valid || ref.String != "出处A" {
+		t.Fatalf("reference = %v, want 出处A", ref)
+	}
+}
+
+func TestImportConfirmedDeduplicates(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-import-confirm-dedupe@example.com"
+	_ = registerUser(t, r, email)
+	userID := userIDByEmail(t, sqlDB, email)
+
+	svc := question.NewService(sqlDB, nil)
+	items := []question.ParsedQuestion{{Question: "重复题", Answer: "答", Reference: ""}}
+	first, err := svc.ImportConfirmed(context.Background(), userID, items, "")
+	if err != nil || first.Imported != 1 {
+		t.Fatalf("first import = %+v, err = %v", first, err)
+	}
+	second, err := svc.ImportConfirmed(context.Background(), userID, items, "")
+	if err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	if second.Imported != 0 || second.Skipped != 1 {
+		t.Fatalf("second import = %+v, want imported=0 skipped=1", second)
+	}
+}
+
+func TestImportConfirmedEmptyRejected(t *testing.T) {
+	sqlDB := testDB(t)
+	svc := question.NewService(sqlDB, nil)
+	_, err := svc.ImportConfirmed(context.Background(), 1, nil, "")
+	if !errors.Is(err, question.ErrInvalidInput) {
+		t.Fatalf("err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestImportConfirmedClassifiesDimensions(t *testing.T) {
+	sqlDB := testDB(t)
+	classOut := llm.ClassifyOut{}
+	classOut.Classifications = append(classOut.Classifications, struct {
+		Question  string `json:"question"`
+		Dimension string `json:"dimension"`
+	}{Question: "导入分类题", Dimension: "content"})
+	r := testRouter(t, sqlDB, &classifyingLLM{out: classOut})
+
+	const email = "test-import-confirm-classify@example.com"
+	_ = registerUser(t, r, email)
+	userID := userIDByEmail(t, sqlDB, email)
+
+	svc := question.NewService(sqlDB, &classifyingLLM{out: classOut})
+	if _, err := svc.ImportConfirmed(context.Background(), userID, []question.ParsedQuestion{{Question: "导入分类题"}}, ""); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	var dim sql.NullString
+	if err := sqlDB.QueryRow(`SELECT dimension FROM question_bank WHERE user_id = ? AND question = ?`, userID, "导入分类题").Scan(&dim); err != nil {
+		t.Fatalf("read dimension: %v", err)
+	}
+	if !dim.Valid || dim.String != "content" {
+		t.Fatalf("dimension = %v, want content", dim)
+	}
+}
+
+func TestParseFromTextStructuredAndFallback(t *testing.T) {
+	sqlDB := testDB(t)
+
+	// 成功：LLM 返回结构化
+	svcOut := parseLLM{out: llm.ParseImportOut{}}
+	svcOut.out.Items = append(svcOut.out.Items, struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer,omitempty"`
+	}{Question: "Q1", Answer: "A1"})
+	svc := question.NewService(sqlDB, &svcOut)
+	res, err := svc.ParseFromText(context.Background(), "面经原文")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(res.Items) != 1 || res.Items[0].Question != "Q1" {
+		t.Fatalf("items = %+v, want one Q1", res.Items)
+	}
+
+	// 失败降级：LLM 报错 → 返回 raw
+	svc = question.NewService(sqlDB, failingLLM{})
+	res, err = svc.ParseFromText(context.Background(), "无法解析的原文")
+	if err != nil {
+		t.Fatalf("fallback parse should not error, got %v", err)
+	}
+	if len(res.Items) != 0 || res.Raw != "无法解析的原文" {
+		t.Fatalf("fallback = %+v, want empty items + raw", res)
 	}
 }

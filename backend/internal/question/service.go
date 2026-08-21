@@ -7,20 +7,29 @@ import (
 	"strings"
 
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/ocr"
 )
 
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrInvalidInput = errors.New("invalid input")
+	ErrNotFound       = errors.New("not found")
+	ErrInvalidInput   = errors.New("invalid input")
+	ErrOCRUnavailable = errors.New("ocr unavailable")
 )
 
 type Service struct {
 	repo *Repo
 	llm  llm.Client
+	ocr  ocr.Client
 }
 
 func NewService(db *sql.DB, llmClient llm.Client) *Service {
 	return &Service{repo: NewRepo(db), llm: llmClient}
+}
+
+// SetOCR injects the OCR client used for image import parsing. SetOCR(nil)
+// makes image parsing return ErrOCRUnavailable; text parsing is unaffected.
+func (s *Service) SetOCR(c ocr.Client) {
+	s.ocr = c
 }
 
 // JobTagFromJD derives the job tag from a JD: trim, truncate to 40 runes, append "…".
@@ -198,4 +207,69 @@ func (s *Service) Delete(ctx context.Context, userID, id int64) error {
 		return ErrNotFound
 	}
 	return s.repo.Delete(id)
+}
+
+// ParseFromText extracts candidate questions from a transcript using the LLM.
+// On LLM failure it degrades to returning the raw text for manual editing;
+// it never fails the request.
+func (s *Service) ParseFromText(ctx context.Context, text string) (ParseResult, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ParseResult{}, ErrInvalidInput
+	}
+	var out llm.ParseImportOut
+	if err := s.llm.ChatJSON(ctx, llm.ParseImportSystem(), llm.ParseImportUser(text), &out); err != nil {
+		return ParseResult{Raw: text}, nil // 降级：返回原文供手动编辑
+	}
+	var res ParseResult
+	for _, it := range out.Items {
+		q := strings.TrimSpace(it.Question)
+		if q == "" {
+			continue
+		}
+		res.Items = append(res.Items, ParsedQuestion{
+			Question: q,
+			Answer:   strings.TrimSpace(it.Answer),
+		})
+	}
+	if len(res.Items) == 0 {
+		res.Raw = text
+	}
+	return res, nil
+}
+
+// ParseFromImage OCRs an image then runs ParseFromText on the recognized text.
+func (s *Service) ParseFromImage(ctx context.Context, image []byte) (ParseResult, error) {
+	if s.ocr == nil {
+		return ParseResult{}, ErrOCRUnavailable
+	}
+	text, err := s.ocr.Recognize(ctx, image)
+	if err != nil {
+		return ParseResult{}, ErrOCRUnavailable
+	}
+	res, err := s.ParseFromText(ctx, text)
+	res.OcrText = text
+	return res, err
+}
+
+// ImportConfirmed inserts user-confirmed parsed questions with source='import'
+// and classifies their dimensions via the existing async pipeline.
+func (s *Service) ImportConfirmed(ctx context.Context, userID int64, items []ParsedQuestion, jobTag string) (ImportResult, error) {
+	if len(items) == 0 {
+		return ImportResult{}, ErrInvalidInput
+	}
+	res, err := s.repo.InsertImportedBatch(userID, items, jobTag)
+	if err != nil {
+		return ImportResult{}, err
+	}
+	if res.Imported > 0 {
+		texts := make([]string, 0, len(items))
+		for _, it := range items {
+			if strings.TrimSpace(it.Question) != "" {
+				texts = append(texts, it.Question)
+			}
+		}
+		s.classifyAsync(userID, texts) // best-effort dimension tagging
+	}
+	return res, nil
 }

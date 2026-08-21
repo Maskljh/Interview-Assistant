@@ -204,6 +204,51 @@ func nullStr(s string) any {
 	return s
 }
 
+// InsertImportedBatch inserts user-confirmed imported questions with
+// source='import', source_session_id NULL, and an optional reference. It
+// reuses the exact-question-text dedupe rule and returns imported/skipped.
+func (r *Repo) InsertImportedBatch(userID int64, questions []ParsedQuestion, jobTag string) (ImportResult, error) {
+	if len(questions) == 0 {
+		return ImportResult{}, nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	defer tx.Rollback()
+
+	var res ImportResult
+	for _, q := range questions {
+		if strings.TrimSpace(q.Question) == "" {
+			continue
+		}
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM question_bank WHERE user_id = ? AND question = ?`,
+			userID, q.Question,
+		).Scan(&exists); err != nil {
+			return ImportResult{}, err
+		}
+		if exists > 0 {
+			res.Skipped++
+			continue
+		}
+		_, err := tx.Exec(
+			`INSERT INTO question_bank (user_id, question, answer, user_answer, source, source_session_id, job_tag, reference, starred)
+			 VALUES (?, ?, ?, NULL, 'import', NULL, ?, ?, 0)`,
+			userID, q.Question, nullStr(q.Answer), nullStr(jobTag), nullStr(q.Reference),
+		)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		res.Imported++
+	}
+	if err := tx.Commit(); err != nil {
+		return ImportResult{}, err
+	}
+	return res, nil
+}
+
 func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 	var clauses []string
 	var args []any
@@ -232,7 +277,7 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
 		 FROM question_bank
 		 WHERE %s
 		 ORDER BY created_at DESC`,
@@ -257,7 +302,7 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 
 func (r *Repo) GetByID(id int64) (*Item, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
 		 FROM question_bank WHERE id = ?`,
 		id,
 	)
@@ -285,7 +330,7 @@ func (r *Repo) UpdateDimensionByText(userID int64, questionText, dimension strin
 // one dimension, capped at limit, belonging to the user.
 func (r *Repo) ListByDimensionForFocused(userID int64, dimension string, limit int) ([]Item, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, starred, created_at
+		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
 		 FROM question_bank
 		 WHERE user_id = ? AND dimension = ?
 		 ORDER BY starred DESC, created_at DESC
@@ -332,10 +377,11 @@ func scanItem(row scanner) (*Item, error) {
 	var sourceSessionID sql.NullInt64
 	var jobTag sql.NullString
 	var dimension sql.NullString
+	var reference sql.NullString
 	var starred int
 	if err := row.Scan(
 		&item.ID, &item.UserID, &item.Question, &answer, &userAnswer,
-		&item.Source, &sourceSessionID, &jobTag, &dimension, &starred, &item.CreatedAt,
+		&item.Source, &sourceSessionID, &jobTag, &dimension, &reference, &starred, &item.CreatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -354,6 +400,9 @@ func scanItem(row scanner) (*Item, error) {
 	}
 	if dimension.Valid {
 		item.Dimension = &dimension.String
+	}
+	if reference.Valid {
+		item.Reference = &reference.String
 	}
 	item.Starred = starred != 0
 	return &item, nil

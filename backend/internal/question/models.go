@@ -12,8 +12,26 @@ type Item struct {
 	SourceSessionID *int64    `json:"source_session_id"`
 	JobTag          *string   `json:"job_tag"`
 	Dimension       *string   `json:"dimension"`
+	Reference       *string   `json:"reference"`
 	Starred         bool      `json:"starred"`
 	CreatedAt       time.Time `json:"created_at"`
+}
+
+type ParsedQuestion struct {
+	Question  string
+	Answer    string
+	Reference string
+}
+
+type ParseResult struct {
+	Items   []ParsedQuestion
+	Raw     string
+	OcrText string
+}
+
+type ImportResult struct {
+	Imported int
+	Skipped  int
 }
 
 type ListFilter struct {
