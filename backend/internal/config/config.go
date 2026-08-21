@@ -18,6 +18,9 @@ type Config struct {
 	AliyunAccessKeyID     string
 	AliyunAccessKeySecret string
 	AliyunNLSAppKey       string
+	OCRAccessKeyID        string
+	OCRAccessKeySecret    string
+	OCREndpoint           string
 	OSSBucket             string
 	OSSRegion             string
 	OSSEndpoint           string
@@ -41,6 +44,9 @@ func Load() (*Config, error) {
 		AliyunAccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
 		AliyunAccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 		AliyunNLSAppKey:       os.Getenv("ALIYUN_NLS_APP_KEY"),
+		OCRAccessKeyID:        getenv("ALIYUN_OCR_ACCESS_KEY_ID", os.Getenv("ALIYUN_ACCESS_KEY_ID")),
+		OCRAccessKeySecret:    getenv("ALIYUN_OCR_ACCESS_KEY_SECRET", os.Getenv("ALIYUN_ACCESS_KEY_SECRET")),
+		OCREndpoint:           os.Getenv("ALIYUN_OCR_ENDPOINT"),
 		OSSBucket:             os.Getenv("OSS_BUCKET"),
 		OSSRegion:             os.Getenv("OSS_REGION"),
 		OSSEndpoint:           os.Getenv("OSS_ENDPOINT"),

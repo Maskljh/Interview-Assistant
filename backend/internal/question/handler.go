@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/auth"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/ocr"
 )
 
 type Handler struct {
@@ -21,8 +22,9 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client) {
+func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string, llmClient llm.Client, ocrClient ocr.Client) {
 	svc := NewService(db, llmClient)
+	svc.SetOCR(ocrClient)
 	h := NewHandler(svc)
 	protected := r.Group("/api/questions")
 	protected.Use(auth.Middleware(secret))

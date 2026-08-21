@@ -13,6 +13,7 @@ import (
 	"github.com/interview-assistant/backend/internal/expression"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/ocr"
 	"github.com/interview-assistant/backend/internal/precheck"
 	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/question"
@@ -65,6 +66,22 @@ func main() {
 		log.Println("warning: Aliyun speech keys not set; /api/speech/asr and /api/speech/tts return 502")
 	}
 
+	var ocrClient ocr.Client
+	if cfg.OCRAccessKeyID != "" && cfg.OCRAccessKeySecret != "" {
+		oc, err := ocr.NewClient(ocr.Config{
+			AccessKeyID:     cfg.OCRAccessKeyID,
+			AccessKeySecret: cfg.OCRAccessKeySecret,
+			Endpoint:        cfg.OCREndpoint,
+		})
+		if err != nil {
+			log.Fatalf("ocr client: %v", err)
+		}
+		ocrClient = oc
+		log.Println("Aliyun OCR client enabled")
+	} else {
+		log.Println("warning: Aliyun OCR credentials not set; /api/questions/import/parse image input returns 502")
+	}
+
 	svc := interview.NewService(sqlDB, llmClient, store)
 	analysisSvc := analysis.NewService(sqlDB, llmClient, cfg.DeepSeekModel)
 	svc.SetEvaluator(analysisSvc)
@@ -83,7 +100,7 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
-	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient)
+	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, ocrClient)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)

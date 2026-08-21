@@ -83,7 +83,7 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
-	question.RegisterRoutes(r, sqlDB, secret, llmClient)
+	question.RegisterRoutes(r, sqlDB, secret, llmClient, nil)
 	return r
 }
 
