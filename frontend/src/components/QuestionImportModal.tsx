@@ -7,6 +7,7 @@ import {
   type ImportParseResult,
 } from '../api/questions';
 import { ApiError } from '../api/client';
+import './QuestionImportModal.css';
 
 interface Props {
   open: boolean;
