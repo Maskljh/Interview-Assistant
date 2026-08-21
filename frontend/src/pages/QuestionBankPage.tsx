@@ -382,7 +382,7 @@ export default function QuestionBankPage() {
                               </button>
                               <button
                                 type="button"
-                                className="interview-inline-link"
+                                className="interview-inline-link interview-inline-link--danger"
                                 onClick={() => void handleDelete(item)}
                               >
                                 删除

@@ -1206,3 +1206,11 @@
     transform: none !important;
   }
 }
+
+/* ─── Danger inline link (delete actions) ─── */
+.interview-inline-link--danger {
+  color: var(--color-error-deep);
+}
+.interview-inline-link--danger:hover {
+  color: var(--color-error);
+}
