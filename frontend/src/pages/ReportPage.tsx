@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   getReport,
@@ -8,6 +8,7 @@ import {
 } from '../api/interviews';
 import { fetchExpression, type ExpressionResult } from '../api/expression';
 import './InterviewPages.css';
+import { isFromTrends } from '../lib/detailSource';
 import AppNav from '../components/AppNav';
 
 const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: string }[] =
@@ -20,6 +21,8 @@ const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: str
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const fromTrends = isFromTrends(searchParams.get('from'));
   const interviewId = Number(id);
 
   const [feedback, setFeedback] = useState<InterviewFeedback | null>(null);
@@ -137,11 +140,17 @@ export default function ReportPage() {
 
   return (
     <div className="interview-page">
-      <AppNav tab="interviews" />
+      <AppNav tab={fromTrends ? 'trends' : 'interviews'} />
       <main className="interview-main">
-        <Link className="interview-back-link" to="/">
-          ← 全部面试
-        </Link>
+        {fromTrends ? (
+          <Link className="interview-back-link" to="/trends">
+            ← 返回成长分析
+          </Link>
+        ) : (
+          <Link className="interview-back-link" to="/">
+            ← 全部面试
+          </Link>
+        )}
 
         <h1>面试报告</h1>
 
