@@ -384,3 +384,33 @@ func ClassifyDimensionsUser(questions []string) string {
 	}
 	return fmt.Sprintf("Classify each of these interview questions into one dimension.\n\nQuestions:\n%s", sb.String())
 }
+
+type ParseImportOut struct {
+	Items []struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer,omitempty"`
+	} `json:"items"`
+}
+
+// ParseImportSystem instructs the model to extract interview questions from a
+// real interview transcript (面经). It only extracts; dimension classification
+// is a separate later step.
+func ParseImportSystem() string {
+	return `You are an interview coach. Extract the interview questions from the provided real interview transcript (面经).
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"items":[{"question":"...","answer":"..."}]}
+
+Rules:
+- Extract each interview question asked to the candidate, including follow-ups
+- question must be the complete, self-contained question text, verbatim from the source
+- answer is optional; include the candidate's answer to that question when present, otherwise omit it
+- Skip narrative noise, headings, timestamps, and non-question content
+- Do not invent questions that are not in the source
+- All question and answer text must be written in Chinese (Simplified) unless the source itself is in another language`
+}
+
+// ParseImportUser builds the user prompt with the source text to parse.
+func ParseImportUser(text string) string {
+	return fmt.Sprintf("Extract the interview questions from this real interview transcript (面经).\n\nSource:\n%s", text)
+}

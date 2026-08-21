@@ -214,3 +214,20 @@ func TestClassifyDimensionsUserListsQuestions(t *testing.T) {
 		t.Fatalf("questions missing from prompt: %s", got)
 	}
 }
+
+func TestParseImportSystem(t *testing.T) {
+	s := ParseImportSystem()
+	if !strings.Contains(s, "JSON") || !strings.Contains(s, "items") {
+		t.Fatalf("ParseImportSystem should instruct JSON output with items, got: %s", s)
+	}
+	if strings.Contains(s, "expression") || strings.Contains(s, "logic") {
+		t.Fatalf("ParseImportSystem should not mention dimension classification, got: %s", s)
+	}
+}
+
+func TestParseImportUser(t *testing.T) {
+	u := ParseImportUser("第一题：请介绍你自己。\n答案：我是……")
+	if !strings.Contains(u, "第一题") {
+		t.Fatalf("ParseImportUser should embed the source text, got: %s", u)
+	}
+}
