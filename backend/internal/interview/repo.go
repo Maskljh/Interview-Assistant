@@ -14,11 +14,11 @@ func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db: db}
 }
 
-func (r *Repo) Create(userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
+func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
 	res, err := r.db.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, nullString(resume), string(mode), string(inputMode), persona, difficulty, style, nullGapsJSON(precheckGaps), string(StatusDraft),
+		`INSERT INTO interview_sessions (user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, nullGapsJSON(precheckGaps), string(StatusDraft),
 	)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (r *Repo) Create(userID int64, jobJD string, resume *string, mode Mode, inp
 
 func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE user_id = ?
@@ -57,7 +57,7 @@ func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 
 func (r *Repo) GetByID(id int64) (*Session, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE id = ?`,
@@ -132,14 +132,14 @@ type rowScanner interface {
 
 func scanSession(row rowScanner) (*Session, error) {
 	var s Session
-	var resume sql.NullString
+	var resume, resumeFileURL, jdFileURL sql.NullString
 	var score sql.NullInt64
 	var feedback []byte
 	var mode, inputMode, persona, difficulty, style, status string
 	var gaps []byte
 
 	err := row.Scan(
-		&s.ID, &s.UserID, &s.JobJD, &resume, &mode, &inputMode, &persona, &difficulty, &style, &gaps, &status, &score, &feedback,
+		&s.ID, &s.UserID, &s.JobJD, &jdFileURL, &resume, &resumeFileURL, &mode, &inputMode, &persona, &difficulty, &style, &gaps, &status, &score, &feedback,
 		&s.StartedAt, &s.EndedAt, &s.CreatedAt,
 	)
 	if err != nil {
@@ -148,6 +148,14 @@ func scanSession(row rowScanner) (*Session, error) {
 	if resume.Valid {
 		v := resume.String
 		s.ResumeText = &v
+	}
+	if resumeFileURL.Valid {
+		v := resumeFileURL.String
+		s.ResumeFileURL = &v
+	}
+	if jdFileURL.Valid {
+		v := jdFileURL.String
+		s.JDFileURL = &v
 	}
 	if score.Valid {
 		v := int(score.Int64)

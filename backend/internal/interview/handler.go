@@ -15,14 +15,16 @@ type Handler struct {
 }
 
 type createRequest struct {
-	JobJD        string    `json:"job_jd"`
-	ResumeText   *string   `json:"resume_text"`
-	Mode         Mode      `json:"mode"`
-	InputMode    InputMode `json:"input_mode"`
-	Persona      string    `json:"persona"`
-	Difficulty   string    `json:"difficulty"`
-	CompanyStyle string    `json:"company_style"`
-	PrecheckGaps []string  `json:"precheck_gaps"`
+	JobJD         string    `json:"job_jd"`
+	ResumeText    *string   `json:"resume_text"`
+	ResumeFileURL *string   `json:"resume_file_url"`
+	JDFileURL     *string   `json:"jd_file_url"`
+	Mode          Mode      `json:"mode"`
+	InputMode     InputMode `json:"input_mode"`
+	Persona       string    `json:"persona"`
+	Difficulty    string    `json:"difficulty"`
+	CompanyStyle  string    `json:"company_style"`
+	PrecheckGaps  []string  `json:"precheck_gaps"`
 }
 
 type fromBankRequest struct {
@@ -47,23 +49,25 @@ type listItemResponse struct {
 }
 
 type sessionResponse struct {
-	ID           int64              `json:"id"`
-	JobJD        string             `json:"job_jd"`
-	ResumeText   *string            `json:"resume_text"`
-	Mode         Mode               `json:"mode"`
-	InputMode    InputMode          `json:"input_mode"`
-	Persona      string             `json:"persona"`
-	Difficulty   string             `json:"difficulty"`
-	CompanyStyle string             `json:"company_style"`
-	PrecheckGaps []string           `json:"precheck_gaps,omitempty"`
-	Status       Status             `json:"status"`
-	Score        *int            `json:"score"`
-	FeedbackJSON any             `json:"feedback_json"`
-	StartedAt    *time.Time      `json:"started_at"`
-	EndedAt      *time.Time      `json:"ended_at"`
-	CreatedAt    time.Time       `json:"created_at"`
-	Questions    []questionResponse `json:"questions"`
-	Turns        []turnResponse     `json:"turns"`
+	ID            int64              `json:"id"`
+	JobJD         string             `json:"job_jd"`
+	ResumeText    *string            `json:"resume_text"`
+	ResumeFileURL *string            `json:"resume_file_url"`
+	JDFileURL     *string            `json:"jd_file_url"`
+	Mode          Mode               `json:"mode"`
+	InputMode     InputMode          `json:"input_mode"`
+	Persona       string             `json:"persona"`
+	Difficulty    string             `json:"difficulty"`
+	CompanyStyle  string             `json:"company_style"`
+	PrecheckGaps  []string           `json:"precheck_gaps,omitempty"`
+	Status        Status             `json:"status"`
+	Score         *int            `json:"score"`
+	FeedbackJSON  any             `json:"feedback_json"`
+	StartedAt     *time.Time      `json:"started_at"`
+	EndedAt       *time.Time      `json:"ended_at"`
+	CreatedAt     time.Time       `json:"created_at"`
+	Questions     []questionResponse `json:"questions"`
+	Turns         []turnResponse     `json:"turns"`
 }
 
 type questionResponse struct {
@@ -111,7 +115,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -263,23 +267,25 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 		feedback = session.FeedbackJSON
 	}
 	resp := sessionResponse{
-		ID:           session.ID,
-		JobJD:        session.JobJD,
-		ResumeText:   session.ResumeText,
-		Mode:         session.Mode,
-		InputMode:    session.InputMode,
-		Persona:      session.Persona,
-		Difficulty:   session.Difficulty,
-		CompanyStyle: session.CompanyStyle,
-		PrecheckGaps: session.PrecheckGaps,
-		Status:       session.Status,
-		Score:        session.Score,
-		FeedbackJSON: feedback,
-		StartedAt:    session.StartedAt,
-		EndedAt:      session.EndedAt,
-		CreatedAt:    session.CreatedAt,
-		Questions:    []questionResponse{},
-		Turns:        []turnResponse{},
+		ID:            session.ID,
+		JobJD:         session.JobJD,
+		ResumeText:    session.ResumeText,
+		ResumeFileURL: session.ResumeFileURL,
+		JDFileURL:     session.JDFileURL,
+		Mode:          session.Mode,
+		InputMode:     session.InputMode,
+		Persona:       session.Persona,
+		Difficulty:    session.Difficulty,
+		CompanyStyle:  session.CompanyStyle,
+		PrecheckGaps:  session.PrecheckGaps,
+		Status:        session.Status,
+		Score:         session.Score,
+		FeedbackJSON:  feedback,
+		StartedAt:     session.StartedAt,
+		EndedAt:       session.EndedAt,
+		CreatedAt:     session.CreatedAt,
+		Questions:     []questionResponse{},
+		Turns:         []turnResponse{},
 	}
 	for _, q := range questions {
 		resp.Questions = append(resp.Questions, questionResponse{

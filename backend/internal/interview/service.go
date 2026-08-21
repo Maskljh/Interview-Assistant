@@ -71,7 +71,7 @@ func (s *Service) SetProfileProvider(p SessionProfileProvider) {
 	s.profileProvider = p
 }
 
-func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
+func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
 	jobJD = strings.TrimSpace(jobJD)
 	if jobJD == "" {
 		return nil, ErrInvalidInput
@@ -103,7 +103,7 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 	if err := validateCompanyStyle(style); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(userID, jobJD, resume, mode, inputMode, persona, difficulty, style, precheckGaps)
+	return s.repo.Create(userID, jobJD, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps)
 }
 
 func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, []Question, error) {

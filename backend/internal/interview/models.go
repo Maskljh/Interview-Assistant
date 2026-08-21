@@ -37,22 +37,24 @@ const (
 )
 
 type Session struct {
-	ID           int64
-	UserID       int64
-	JobJD        string
-	ResumeText   *string
-	Mode         Mode
-	InputMode    InputMode
-	Persona      string
-	Difficulty   string
-	CompanyStyle string
-	PrecheckGaps []string
-	Status       Status
-	Score        *int
-	FeedbackJSON json.RawMessage
-	StartedAt    *time.Time
-	EndedAt      *time.Time
-	CreatedAt    time.Time
+	ID            int64
+	UserID        int64
+	JobJD         string
+	ResumeText    *string
+	ResumeFileURL *string
+	JDFileURL     *string
+	Mode          Mode
+	InputMode     InputMode
+	Persona       string
+	Difficulty    string
+	CompanyStyle  string
+	PrecheckGaps  []string
+	Status        Status
+	Score         *int
+	FeedbackJSON  json.RawMessage
+	StartedAt     *time.Time
+	EndedAt       *time.Time
+	CreatedAt     time.Time
 }
 
 type Question struct {
