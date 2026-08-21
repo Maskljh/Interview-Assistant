@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   getInterview,
@@ -14,6 +14,7 @@ import {
   formatDateZh,
 } from '../lib/labels';
 import './InterviewPages.css';
+import { isFromQuestions } from '../lib/detailSource';
 import AppNav from '../components/AppNav';
 
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
@@ -30,6 +31,8 @@ function roleLabel(role: string): string {
 
 export default function InterviewDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const fromQuestions = isFromQuestions(searchParams.get('from'));
   const interviewId = Number(id);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,11 +95,17 @@ export default function InterviewDetailPage() {
 
   return (
     <div className="interview-page">
-      <AppNav tab="interviews" />
+      <AppNav tab={fromQuestions ? 'questions' : 'interviews'} />
       <main className="interview-main">
-        <Link className="interview-back-link" to="/">
-          ← 全部面试
-        </Link>
+        {fromQuestions ? (
+          <Link className="interview-back-link" to="/questions">
+            ← 返回题库页
+          </Link>
+        ) : (
+          <Link className="interview-back-link" to="/">
+            ← 全部面试
+          </Link>
+        )}
 
         {loading ? (
           <p className="interview-loading">加载中…</p>
@@ -132,7 +141,7 @@ export default function InterviewDetailPage() {
                   继续面试
                 </Link>
               )}
-              {interview.questions.length > 0 && (
+              {!fromQuestions && interview.questions.length > 0 && (
                 <button
                   type="button"
                   className="interview-inline-link"
