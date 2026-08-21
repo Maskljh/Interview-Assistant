@@ -20,6 +20,7 @@ import (
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/speech"
+	"github.com/interview-assistant/backend/internal/upload"
 	"github.com/interview-assistant/backend/internal/user"
 	"github.com/interview-assistant/backend/internal/ws"
 	"github.com/redis/go-redis/v9"
@@ -105,6 +106,14 @@ func main() {
 	svc.SetEvaluator(analysisSvc)
 	svc.SetProfileProvider(profile.NewService(sqlDB))
 
+	uploadSvc := upload.NewService(upload.OSSConfig{
+		Bucket:          cfg.OSSBucket,
+		Region:          cfg.OSSRegion,
+		Endpoint:        cfg.OSSEndpoint,
+		AccessKeyID:     cfg.OSSAccessKeyID,
+		AccessKeySecret: cfg.OSSAccessKeySecret,
+	}, 0)
+
 	r := gin.Default()
 	r.Use(corsMiddleware())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
@@ -115,6 +124,7 @@ func main() {
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
+	upload.RegisterRoutes(r, cfg.JWTSecret, uploadSvc)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	digitalhuman.RegisterRoutes(r, cfg.JWTSecret, dhProvider)

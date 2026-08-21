@@ -1,9 +1,10 @@
 module github.com/interview-assistant/backend
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -41,6 +42,7 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

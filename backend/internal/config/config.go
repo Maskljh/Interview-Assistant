@@ -18,6 +18,11 @@ type Config struct {
 	AliyunAccessKeyID     string
 	AliyunAccessKeySecret string
 	AliyunNLSAppKey       string
+	OSSBucket             string
+	OSSRegion             string
+	OSSEndpoint           string
+	OSSAccessKeyID        string
+	OSSAccessKeySecret    string
 	DigitalHumanProvider  string
 	DigitalHumanAPIKey    string
 	DigitalHumanSecret    string
@@ -46,6 +51,11 @@ func Load() (*Config, error) {
 		AliyunAccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
 		AliyunAccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 		AliyunNLSAppKey:       os.Getenv("ALIYUN_NLS_APP_KEY"),
+		OSSBucket:             os.Getenv("OSS_BUCKET"),
+		OSSRegion:             os.Getenv("OSS_REGION"),
+		OSSEndpoint:           os.Getenv("OSS_ENDPOINT"),
+		OSSAccessKeyID:        os.Getenv("OSS_ACCESS_KEY_ID"),
+		OSSAccessKeySecret:    os.Getenv("OSS_ACCESS_KEY_SECRET"),
 		DigitalHumanProvider:  os.Getenv("DIGITAL_HUMAN_PROVIDER"),
 		DigitalHumanAPIKey:    os.Getenv("DIGITAL_HUMAN_API_KEY"),
 		DigitalHumanSecret:    os.Getenv("DIGITAL_HUMAN_SECRET"),
