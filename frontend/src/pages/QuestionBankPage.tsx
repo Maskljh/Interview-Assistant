@@ -18,6 +18,7 @@ import { DIMENSION_LABELS, PERSONA_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import ConfirmModal from '../components/ConfirmModal';
+import QuestionImportModal from '../components/QuestionImportModal';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -74,6 +75,7 @@ export default function QuestionBankPage() {
   const [jobTag, setJobTag] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dimension, setDimension] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [persona, setPersona] = useState<Persona>('standard');
@@ -221,6 +223,16 @@ export default function QuestionBankPage() {
       <main className="interview-main">
         <h1>题库</h1>
         <p className="interview-subtitle">按面试分组浏览，收藏、筛选并多选题目开始练习</p>
+
+        <div className="question-bank-actions question-bank-import-row">
+          <button
+            type="button"
+            className="interview-submit"
+            onClick={() => setImportOpen(true)}
+          >
+            导入题目
+          </button>
+        </div>
 
         <div className="question-bank-filters">
           <div className="interview-field">
@@ -463,6 +475,12 @@ export default function QuestionBankPage() {
             {starting ? '创建中…' : '开始练习'}
           </button>
         </div>
+
+        <QuestionImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onImported={() => void loadQuestions()}
+        />
       </main>
 
       <ConfirmModal
