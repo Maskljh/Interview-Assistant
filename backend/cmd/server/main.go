@@ -112,7 +112,7 @@ func main() {
 		Endpoint:        cfg.OSSEndpoint,
 		AccessKeyID:     cfg.OSSAccessKeyID,
 		AccessKeySecret: cfg.OSSAccessKeySecret,
-	}, 0)
+	})
 
 	r := gin.Default()
 	r.Use(corsMiddleware())

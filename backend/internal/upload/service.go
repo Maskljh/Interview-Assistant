@@ -17,6 +17,10 @@ const (
 	KindJD     = "jd"
 )
 
+// ErrNotConfigured is returned by SignUpload when OSS is not configured
+// (missing endpoint/bucket/access key). Handlers map it to 503.
+var ErrNotConfigured = errors.New("oss not configured")
+
 var allowedExts = map[string]bool{
 	".txt": true, ".md": true, ".pdf": true, ".docx": true,
 }
@@ -59,17 +63,16 @@ type OSSConfig struct {
 }
 
 type Service struct {
-	cfg    OSSConfig
-	userID int64
+	cfg OSSConfig
 }
 
-func NewService(cfg OSSConfig, userID int64) *Service {
-	return &Service{cfg: cfg, userID: userID}
+func NewService(cfg OSSConfig) *Service {
+	return &Service{cfg: cfg}
 }
 
-func (s *Service) SignUpload(kind, filename, contentType string, size int64) (key, putURL, objectURL string, expiresIn int, err error) {
+func (s *Service) SignUpload(userID int64, kind, filename, contentType string, size int64) (key, putURL, objectURL string, expiresIn int, err error) {
 	if s.cfg.Endpoint == "" || s.cfg.Bucket == "" || s.cfg.AccessKeyID == "" {
-		return "", "", "", 0, errors.New("oss not configured")
+		return "", "", "", 0, ErrNotConfigured
 	}
 	if err = validateSignRequest(kind, filename, contentType, size); err != nil {
 		return "", "", "", 0, err
@@ -85,7 +88,7 @@ func (s *Service) SignUpload(kind, filename, contentType string, size int64) (ke
 
 	dot := strings.LastIndexByte(filename, '.')
 	ext := strings.ToLower(filename[dot:])
-	key = fmt.Sprintf("uploads/%d/%d%s", s.userID, time.Now().UnixNano(), ext)
+	key = fmt.Sprintf("uploads/%d/%d%s", userID, time.Now().UnixNano(), ext)
 
 	putURL, err = bucket.SignURL(key, oss.HTTPPut, int64(PutURLTTL.Seconds()))
 	if err != nil {
