@@ -132,14 +132,6 @@ export default function InterviewDetailPage() {
                   继续面试
                 </Link>
               )}
-              {interview.status === 'completed' && (
-                <Link
-                  className="interview-inline-link"
-                  to={`/interviews/${interview.id}/report`}
-                >
-                  查看报告
-                </Link>
-              )}
               {interview.questions.length > 0 && (
                 <button
                   type="button"
