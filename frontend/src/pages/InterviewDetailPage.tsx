@@ -163,6 +163,33 @@ export default function InterviewDetailPage() {
                 </button>
               )}
             </div>
+            {(interview.resume_file_url || interview.jd_file_url) && (
+              <div
+                className="interview-list-links"
+                style={{ marginBottom: 'var(--space-md)' }}
+              >
+                {interview.resume_file_url && (
+                  <a
+                    className="interview-inline-link"
+                    href={interview.resume_file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    查看简历原文件
+                  </a>
+                )}
+                {interview.jd_file_url && (
+                  <a
+                    className="interview-inline-link"
+                    href={interview.jd_file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    查看 JD 原文件
+                  </a>
+                )}
+              </div>
+            )}
             {bankMessage && <p className="interview-success">{bankMessage}</p>}
             {bankError && <p className="interview-error">{bankError}</p>}
 
