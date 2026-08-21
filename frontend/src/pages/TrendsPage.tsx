@@ -197,7 +197,7 @@ export default function TrendsPage() {
                         stroke="#fff"
                         strokeWidth={2}
                         style={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/interviews/${payload.session_id}/report`)}
+                        onClick={() => navigate(`/interviews/${payload.session_id}/report?from=trends`)}
                       />
                     );
                   }}
