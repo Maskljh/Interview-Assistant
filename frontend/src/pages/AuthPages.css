@@ -117,3 +117,16 @@
 .auth-footer a:hover {
   color: var(--color-link-deep);
 }
+
+/* ─── Unified keyboard focus ─── */
+.auth-submit:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-submit {
+    transition: none;
+    transform: none !important;
+  }
+}

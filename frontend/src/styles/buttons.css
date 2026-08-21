@@ -1,0 +1,98 @@
+/* ─── Button system ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 24px;
+  font: var(--text-button-lg);
+  line-height: 1.2;
+  border: none;
+  border-radius: var(--rounded-pill);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+/* primary — 黑底白字 */
+.btn--primary {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+.btn--primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-xs);
+}
+
+/* secondary — 白底描边 */
+.btn--secondary {
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline-strong);
+}
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--color-ink);
+  background: var(--color-canvas-soft);
+}
+
+/* ghost — 无边框，hover 淡灰 */
+.btn--ghost {
+  color: var(--color-body);
+  background: transparent;
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--color-ink);
+  background: var(--color-canvas-soft-2);
+}
+
+/* danger — 红底白字 */
+.btn--danger {
+  color: var(--color-on-primary);
+  background: var(--color-error);
+  box-shadow: var(--shadow-sm);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--color-error-deep);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.btn--danger:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-xs);
+}
+
+/* link — 文本链接式动作 */
+.btn--link {
+  padding: 4px 8px;
+  font: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-link);
+  background: transparent;
+  border-radius: var(--rounded-sm);
+}
+.btn--link:hover:not(:disabled) {
+  color: var(--color-link-deep);
+  background: var(--color-link-bg-soft);
+}

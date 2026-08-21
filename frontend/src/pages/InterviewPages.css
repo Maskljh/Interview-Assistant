@@ -1184,3 +1184,25 @@
   gap: var(--space-md);
   padding: var(--space-xl) 0;
 }
+
+/* ─── Button system: unified keyboard focus ─── */
+.interview-submit:focus-visible,
+.interview-header-cta:focus-visible,
+.interview-header-link:focus-visible,
+.interview-back-link:focus-visible,
+.interview-inline-link:focus-visible,
+.interview-file-clear:focus-visible,
+.question-bank-bulk-delete:focus-visible,
+.question-bank-expand-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interview-submit,
+  .interview-header-cta,
+  .question-bank-bulk-delete {
+    transition: none;
+    transform: none !important;
+  }
+}
