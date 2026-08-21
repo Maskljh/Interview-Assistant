@@ -12,6 +12,7 @@ import {
   formatDateZh,
 } from '../lib/labels';
 import './InterviewPages.css';
+import { entryLinksFor, type EntryStatus } from '../lib/listEntries';
 import AppNav from '../components/AppNav';
 
 function InterviewRow({ item }: { item: InterviewListItem }) {
@@ -36,16 +37,19 @@ function InterviewRow({ item }: { item: InterviewListItem }) {
         </div>
       </div>
       <div className="interview-list-links">
-        {item.status === 'in_progress' && (
-          <Link className="interview-inline-link" to={`/interviews/${item.id}/room`}>
-            进入面试
+        {entryLinksFor((item.status === 'completed' || item.status === 'in_progress' ? item.status : 'other') as EntryStatus).map((link) => (
+          <Link
+            key={link.label}
+            className="interview-inline-link"
+            to={
+              link.to === ''
+                ? `/interviews/${item.id}`
+                : `/interviews/${item.id}/${link.to}`
+            }
+          >
+            {link.label}
           </Link>
-        )}
-        {item.status === 'completed' && (
-          <Link className="interview-inline-link" to={`/interviews/${item.id}/report`}>
-            报告
-          </Link>
-        )}
+        ))}
       </div>
     </li>
   );
