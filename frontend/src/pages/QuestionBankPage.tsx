@@ -17,6 +17,7 @@ import {
 import { DIMENSION_LABELS, PERSONA_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
+import ConfirmModal from '../components/ConfirmModal';
 
 const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
   { value: 'behavioral', label: '行为面试' },
@@ -65,6 +66,9 @@ export default function QuestionBankPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [starredOnly, setStarredOnly] = useState(false);
   const [jobTag, setJobTag] = useState('');
@@ -140,26 +144,41 @@ export default function QuestionBankPage() {
     }
   }
 
-  async function handleDelete(item: Question) {
-    if (!window.confirm('确定删除这道题目吗？')) return;
+  function handleDelete(item: Question) {
+    setDeleteTarget(item);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await deleteQuestion(item.id);
-      setQuestions((prev) => prev.filter((q) => q.id !== item.id));
-      setSelectedIds((prev) => prev.filter((id) => id !== item.id));
+      await deleteQuestion(deleteTarget.id);
+      setQuestions((prev) => prev.filter((q) => q.id !== deleteTarget.id));
+      setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
+      setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '删除失败');
+    } finally {
+      setDeleting(false);
     }
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`确定删除选中的 ${selectedIds.length} 道题目吗？`)) return;
+    setBulkDeleteOpen(true);
+  }
+
+  async function confirmBulkDelete() {
+    setDeleting(true);
     try {
       await deleteQuestions(selectedIds);
       setQuestions((prev) => prev.filter((q) => !selectedIds.includes(q.id)));
       setSelectedIds([]);
+      setBulkDeleteOpen(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '批量删除失败');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -445,6 +464,29 @@ export default function QuestionBankPage() {
           </button>
         </div>
       </main>
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="删除题目"
+        description={
+          deleteTarget
+            ? `确定删除这道题目吗？\n「${deleteTarget.question.slice(0, 50)}」`
+            : ''
+        }
+        confirmLabel="删除这道题目"
+        loading={deleting}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmModal
+        open={bulkDeleteOpen}
+        title="批量删除"
+        description={`确定删除选中的 ${selectedIds.length} 道题目吗？删除后不可恢复。`}
+        confirmLabel={`删除选中的 ${selectedIds.length} 道`}
+        loading={deleting}
+        onConfirm={() => void confirmBulkDelete()}
+        onCancel={() => setBulkDeleteOpen(false)}
+      />
     </div>
   );
 }
