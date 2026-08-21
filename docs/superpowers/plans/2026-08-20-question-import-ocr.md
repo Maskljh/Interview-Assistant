@@ -113,17 +113,17 @@ git commit -m "feat(llm): add ParseImportSystem/User prompts for transcript ques
 
 ---
 
-### Task 2: 数据库迁移 `010_question_import.sql`
+### Task 2: 数据库迁移 `011_question_import.sql`
 
 **Files:**
-- Create: `backend/migrations/010_question_import.sql`
+- Create: `backend/migrations/011_question_import.sql`
 
 **Interfaces:**
 - Produces: `question_bank.reference TEXT NULL` 列（`source='import'` 时可能非空，存题目原文出处）
 
 - [ ] **Step 1: 写迁移文件**
 
-`backend/migrations/010_question_import.sql`:
+`backend/migrations/011_question_import.sql`:
 
 ```sql
 ALTER TABLE question_bank
@@ -133,7 +133,7 @@ ALTER TABLE question_bank
 - [ ] **Step 2: 应用迁移**
 
 ```bash
-docker compose exec -T mysql mysql -uroot -proot interview < backend/migrations/010_question_import.sql
+docker compose exec -T mysql mysql -uroot -proot interview < backend/migrations/011_question_import.sql
 ```
 
 （若用外部 MySQL，用对应客户端执行同一文件。）
@@ -148,7 +148,7 @@ Expected: 一行 `reference | text | YES | (NULL) |`
 - [ ] **Step 4: 提交**
 
 ```bash
-git add backend/migrations/010_question_import.sql
+git add backend/migrations/011_question_import.sql
 git commit -m "feat(question-bank): add reference column for imported question provenance"
 ```
 
@@ -1781,7 +1781,7 @@ Expected: 全部 PASS、构建成功（仅既有 chunk 大小提示）
 - [ ] **Step 3: 应用迁移**
 
 ```bash
-docker compose exec -T mysql mysql -uroot -proot interview < backend/migrations/010_question_import.sql
+docker compose exec -T mysql mysql -uroot -proot interview < backend/migrations/011_question_import.sql
 ```
 
 - [ ] **Step 4: 对照 spec 逐条验收**
