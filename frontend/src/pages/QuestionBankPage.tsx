@@ -282,7 +282,7 @@ export default function QuestionBankPage() {
                     {sessionId != null && (
                       <Link
                         className="interview-inline-link question-group-view"
-                        to={`/interviews/${sessionId}`}
+                        to={`/interviews/${sessionId}?from=questions`}
                       >
                         查看
                       </Link>
