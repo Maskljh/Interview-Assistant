@@ -6,6 +6,8 @@ import {
   type InterviewListItem,
 } from '../api/interviews';
 import {
+  COMPANY_STYLE_LABELS,
+  DIFFICULTY_LABELS,
   MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
@@ -30,6 +32,12 @@ function InterviewRow({ item }: { item: InterviewListItem }) {
           <span className="mode-pill">{MODE_LABELS[item.mode]}</span>
           {item.persona !== 'standard' && (
             <span className="mode-pill">{PERSONA_LABELS[item.persona]}</span>
+          )}
+          {item.difficulty !== 'medium' && (
+            <span className="mode-pill">{DIFFICULTY_LABELS[item.difficulty]}</span>
+          )}
+          {item.company_style !== 'general' && (
+            <span className="mode-pill">{COMPANY_STYLE_LABELS[item.company_style]}</span>
           )}
           {item.score != null && (
             <span className="mode-pill">得分 {item.score}</span>

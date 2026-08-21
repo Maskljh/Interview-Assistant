@@ -8,6 +8,8 @@ import {
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
 import {
+  COMPANY_STYLE_LABELS,
+  DIFFICULTY_LABELS,
   MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
@@ -20,7 +22,6 @@ import AppNav from '../components/AppNav';
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
   text: '文本作答',
   voice: '语音作答',
-  video: '视频作答',
 };
 
 function roleLabel(role: string): string {
@@ -125,6 +126,16 @@ export default function InterviewDetailPage() {
               {interview.persona !== 'standard' && (
                 <span className="mode-pill">
                   {PERSONA_LABELS[interview.persona]}
+                </span>
+              )}
+              {interview.difficulty !== 'medium' && (
+                <span className="mode-pill">
+                  {DIFFICULTY_LABELS[interview.difficulty]}
+                </span>
+              )}
+              {interview.company_style !== 'general' && (
+                <span className="mode-pill">
+                  {COMPANY_STYLE_LABELS[interview.company_style]}
                 </span>
               )}
               {interview.score != null && (

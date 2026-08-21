@@ -33,7 +33,7 @@ type InputMode string
 const (
 	InputModeText  InputMode = "text"
 	InputModeVoice InputMode = "voice"
-	InputModeVideo InputMode = "video"
+
 )
 
 type Session struct {
@@ -44,6 +44,8 @@ type Session struct {
 	Mode         Mode
 	InputMode    InputMode
 	Persona      string
+	Difficulty   string
+	CompanyStyle string
 	PrecheckGaps []string
 	Status       Status
 	Score        *int
@@ -84,7 +86,7 @@ func ValidateMode(mode Mode) error {
 
 func ValidateInputMode(m InputMode) error {
 	switch m {
-	case InputModeText, InputModeVoice, InputModeVideo:
+	case InputModeText, InputModeVoice:
 		return nil
 	default:
 		return ErrInvalidInput
@@ -100,4 +102,31 @@ func validatePersona(p string) error {
 		}
 	}
 	return ErrInvalidPersona
+}
+
+var ErrInvalidDifficulty = errors.New("invalid difficulty")
+var ErrInvalidCompanyStyle = errors.New("invalid company style")
+
+func validateDifficulty(d string) error {
+	if d == "" {
+		return nil
+	}
+	for _, k := range llm.Difficulties {
+		if d == k {
+			return nil
+		}
+	}
+	return ErrInvalidDifficulty
+}
+
+func validateCompanyStyle(s string) error {
+	if s == "" {
+		return nil
+	}
+	for _, k := range llm.CompanyStyles {
+		if s == k {
+			return nil
+		}
+	}
+	return ErrInvalidCompanyStyle
 }

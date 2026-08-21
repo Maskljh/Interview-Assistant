@@ -31,6 +31,22 @@ export const PERSONA_LABELS: Record<string, string> = {
   stress: '压力面',
 };
 
+// Single source of truth for difficulty labels is backend llm.DifficultyLabels.
+export const DIFFICULTY_LABELS: Record<string, string> = {
+  easy: '容易',
+  medium: '中等',
+  hard: '困难',
+};
+
+// Single source of truth for company style labels is backend llm.CompanyStyleLabels.
+export const COMPANY_STYLE_LABELS: Record<string, string> = {
+  general: '通用',
+  foreign: '外企',
+  bigtech: '大厂',
+  stateowned: '国企',
+  startup: '创业公司',
+};
+
 // Single source of truth for dimension labels is backend llm.DimensionLabels.
 export const DIMENSION_LABELS: Record<string, string> = {
   expression: '表达能力',

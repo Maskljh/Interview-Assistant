@@ -6,7 +6,7 @@ import (
 )
 
 func TestGenerateQuestionsUserEmptyWeakMatchesLegacy(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "technical", nil, StandardPersona, nil)
+	got := GenerateQuestionsUser("jd", "resume", "technical", nil, StandardPersona, StandardDifficulty, StandardCompanyStyle, nil)
 	if strings.Contains(got, "Targeted focus") {
 		t.Fatalf("weak=nil should not inject directive, got: %s", got)
 	}
@@ -16,7 +16,7 @@ func TestGenerateQuestionsUserEmptyWeakMatchesLegacy(t *testing.T) {
 }
 
 func TestGenerateQuestionsUserInjectsWeakDirective(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic", "expression"}, StandardPersona, nil)
+	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic", "expression"}, StandardPersona, StandardDifficulty, StandardCompanyStyle, nil)
 	if !strings.Contains(got, "Targeted focus: this user's weak dimensions are 逻辑结构, 表达能力") {
 		t.Fatalf("directive missing or labels wrong: %s", got)
 	}
@@ -26,29 +26,29 @@ func TestGenerateQuestionsUserInjectsWeakDirective(t *testing.T) {
 }
 
 func TestGenerateQuestionsUserIgnoresUnknownKeys(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"unknown"}, StandardPersona, nil)
+	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"unknown"}, StandardPersona, StandardDifficulty, StandardCompanyStyle, nil)
 	if strings.Contains(got, "Targeted focus") {
 		t.Fatalf("unknown key should not inject directive: %s", got)
 	}
 }
 
 func TestGenerateQuestionsUserStandardMatchesNoPersona(t *testing.T) {
-	with := GenerateQuestionsUser("jd", "resume", "technical", []string{"logic"}, StandardPersona, nil)
-	empty := GenerateQuestionsUser("jd", "resume", "technical", []string{"logic"}, "", nil)
+	with := GenerateQuestionsUser("jd", "resume", "technical", []string{"logic"}, StandardPersona, StandardDifficulty, StandardCompanyStyle, nil)
+	empty := GenerateQuestionsUser("jd", "resume", "technical", []string{"logic"}, "", StandardDifficulty, StandardCompanyStyle, nil)
 	if with != empty {
 		t.Fatalf("standard persona must not alter prompt:\nwith: %s\nempty: %s", with, empty)
 	}
 }
 
 func TestGenerateQuestionsUserInjectsPersona(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, "strict_tech", nil)
+	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, "strict_tech", StandardDifficulty, StandardCompanyStyle, nil)
 	if !strings.Contains(got, "strict senior technical interviewer") {
 		t.Fatalf("persona directive missing: %s", got)
 	}
 }
 
 func TestGenerateQuestionsUserUnknownPersonaNoInjection(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, "evil", nil)
+	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, "evil", StandardDifficulty, StandardCompanyStyle, nil)
 	if strings.Contains(got, "strict senior technical interviewer") {
 		t.Fatalf("unknown persona must not inject: %s", got)
 	}
@@ -74,7 +74,7 @@ func TestFollowUpLimit(t *testing.T) {
 }
 
 func TestDecideNextUserStandardNoInjection(t *testing.T) {
-	got := DecideNextUser("jd", "technical", "Q", 0, nil, "answer", StandardPersona)
+	got := DecideNextUser("jd", "technical", "Q", 0, nil, "answer", StandardPersona, StandardDifficulty, StandardCompanyStyle)
 	if strings.Contains(got, "interviewer") && !strings.Contains(got, "strict senior") {
 		// "interviewer" appears in persona text only; base prompt has none
 	}
@@ -87,7 +87,7 @@ func TestDecideNextUserStandardNoInjection(t *testing.T) {
 }
 
 func TestDecideNextUserInjectsPersona(t *testing.T) {
-	got := DecideNextUser("jd", "technical", "Q", 0, nil, "answer", "stress")
+	got := DecideNextUser("jd", "technical", "Q", 0, nil, "answer", "stress", StandardDifficulty, StandardCompanyStyle)
 	if !strings.Contains(got, "fast-paced stress interviewer") {
 		t.Fatalf("stress directive missing: %s", got)
 	}
@@ -141,22 +141,22 @@ func TestPreCheckUserWithoutResume(t *testing.T) {
 }
 
 func TestGenerateQuestionsUserInjectsPrecheckGaps(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, StandardPersona, []string{"缺少 Kubernetes 经验", "无高并发项目"})
+	got := GenerateQuestionsUser("jd", "resume", "mixed", nil, StandardPersona, StandardDifficulty, StandardCompanyStyle, []string{"缺少 Kubernetes 经验", "无高并发项目"})
 	if !strings.Contains(got, "Targeted focus (pre-check):") || !strings.Contains(got, "缺少 Kubernetes 经验") {
 		t.Fatalf("precheck directive missing: %s", got)
 	}
 }
 
 func TestGenerateQuestionsUserEmptyGapsMatchesLegacy(t *testing.T) {
-	noGaps := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", nil)
-	withEmpty := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", []string{})
+	noGaps := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", StandardDifficulty, StandardCompanyStyle, nil)
+	withEmpty := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", StandardDifficulty, StandardCompanyStyle, []string{})
 	if noGaps != withEmpty {
 		t.Fatalf("empty gaps must not alter prompt:\nnoGaps: %s\nwithEmpty: %s", noGaps, withEmpty)
 	}
 }
 
 func TestGenerateQuestionsUserInjectionsCoexist(t *testing.T) {
-	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", []string{"缺经验"})
+	got := GenerateQuestionsUser("jd", "resume", "mixed", []string{"logic"}, "strict_tech", StandardDifficulty, StandardCompanyStyle, []string{"缺经验"})
 	if !strings.Contains(got, "Targeted focus: this user's weak dimensions are") {
 		t.Fatalf("weak directive missing: %s", got)
 	}

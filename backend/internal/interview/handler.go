@@ -20,6 +20,8 @@ type createRequest struct {
 	Mode         Mode      `json:"mode"`
 	InputMode    InputMode `json:"input_mode"`
 	Persona      string    `json:"persona"`
+	Difficulty   string    `json:"difficulty"`
+	CompanyStyle string    `json:"company_style"`
 	PrecheckGaps []string  `json:"precheck_gaps"`
 }
 
@@ -28,16 +30,20 @@ type fromBankRequest struct {
 	Mode         Mode      `json:"mode"`
 	InputMode    InputMode `json:"input_mode"`
 	Persona      string    `json:"persona"`
+	Difficulty   string    `json:"difficulty"`
+	CompanyStyle string    `json:"company_style"`
 	PrecheckGaps []string  `json:"precheck_gaps"`
 }
 
 type listItemResponse struct {
 	ID        int64     `json:"id"`
 	Mode      Mode      `json:"mode"`
-	Status    Status    `json:"status"`
-	Persona   string    `json:"persona"`
-	CreatedAt time.Time `json:"created_at"`
-	Score     *int      `json:"score"`
+	Status       Status    `json:"status"`
+	Persona      string    `json:"persona"`
+	Difficulty   string    `json:"difficulty"`
+	CompanyStyle string    `json:"company_style"`
+	CreatedAt    time.Time `json:"created_at"`
+	Score        *int      `json:"score"`
 }
 
 type sessionResponse struct {
@@ -47,6 +53,8 @@ type sessionResponse struct {
 	Mode         Mode               `json:"mode"`
 	InputMode    InputMode          `json:"input_mode"`
 	Persona      string             `json:"persona"`
+	Difficulty   string             `json:"difficulty"`
+	CompanyStyle string             `json:"company_style"`
 	PrecheckGaps []string           `json:"precheck_gaps,omitempty"`
 	Status       Status             `json:"status"`
 	Score        *int            `json:"score"`
@@ -103,8 +111,8 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode, req.Persona, req.PrecheckGaps)
-	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) {
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
+	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -126,8 +134,8 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.PrecheckGaps)
-	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) {
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
+	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -156,12 +164,14 @@ func (h *Handler) List(c *gin.Context) {
 	items := make([]listItemResponse, 0, len(sessions))
 	for _, s := range sessions {
 		items = append(items, listItemResponse{
-			ID:        s.ID,
-			Mode:      s.Mode,
-			Status:    s.Status,
-			Persona:   s.Persona,
-			CreatedAt: s.CreatedAt,
-			Score:     s.Score,
+			ID:           s.ID,
+			Mode:         s.Mode,
+			Status:       s.Status,
+			Persona:      s.Persona,
+			Difficulty:   s.Difficulty,
+			CompanyStyle: s.CompanyStyle,
+			CreatedAt:    s.CreatedAt,
+			Score:        s.Score,
 		})
 	}
 	c.JSON(http.StatusOK, items)
@@ -259,6 +269,8 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 		Mode:         session.Mode,
 		InputMode:    session.InputMode,
 		Persona:      session.Persona,
+		Difficulty:   session.Difficulty,
+		CompanyStyle: session.CompanyStyle,
 		PrecheckGaps: session.PrecheckGaps,
 		Status:       session.Status,
 		Score:        session.Score,

@@ -5,6 +5,8 @@ import {
   createInterview,
   createInterviewFromBank,
   startInterview,
+  type CompanyStyle,
+  type Difficulty,
   type InputMode,
   type InterviewMode,
   type Persona,
@@ -13,6 +15,8 @@ import { fetchFocusedQuestions } from '../api/questions';
 import { fetchProfile, type Profile } from '../api/profile';
 import { fetchPreCheck, type PreCheckOut } from '../api/precheck';
 import {
+  COMPANY_STYLE_LABELS,
+  DIFFICULTY_LABELS,
   DIMENSION_LABELS,
   MODE_LABELS,
   PERSONA_LABELS,
@@ -25,10 +29,13 @@ const MODES: InterviewMode[] = ['behavioral', 'technical', 'mixed'];
 
 const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
 
+const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
+
+const COMPANY_STYLES: CompanyStyle[] = ['general', 'foreign', 'bigtech', 'stateowned', 'startup'];
+
 const INPUT_MODES: { value: InputMode; label: string }[] = [
   { value: 'text', label: '文本' },
   { value: 'voice', label: '语音' },
-  { value: 'video', label: '视频' },
 ];
 
 export default function CreateInterviewPage() {
@@ -40,6 +47,8 @@ export default function CreateInterviewPage() {
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [persona, setPersona] = useState<Persona>('standard');
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [companyStyle, setCompanyStyle] = useState<CompanyStyle>('general');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -128,6 +137,8 @@ export default function CreateInterviewPage() {
         mode,
         input_mode: inputMode,
         persona,
+        difficulty,
+        company_style: companyStyle,
       });
       navigate(`/interviews/${created.id}/room`, { replace: true });
     } catch (err) {
@@ -153,6 +164,8 @@ export default function CreateInterviewPage() {
         mode,
         input_mode: inputMode,
         persona,
+        difficulty,
+        company_style: companyStyle,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
         ...(precheck && !precheckStale ? { precheck_gaps: precheck.gaps } : {}),
       });
@@ -337,6 +350,36 @@ export default function CreateInterviewPage() {
               {PERSONAS.map((value) => (
                 <option key={value} value={value}>
                   {PERSONA_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="interview-field">
+            <label htmlFor="difficulty">面试难度</label>
+            <select
+              id="difficulty"
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+            >
+              {DIFFICULTIES.map((value) => (
+                <option key={value} value={value}>
+                  {DIFFICULTY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="interview-field">
+            <label htmlFor="companyStyle">企业风格</label>
+            <select
+              id="companyStyle"
+              value={companyStyle}
+              onChange={(e) => setCompanyStyle(e.target.value as CompanyStyle)}
+            >
+              {COMPANY_STYLES.map((value) => (
+                <option key={value} value={value}>
+                  {COMPANY_STYLE_LABELS[value]}
                 </option>
               ))}
             </select>

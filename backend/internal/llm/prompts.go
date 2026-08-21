@@ -50,6 +50,55 @@ var PersonaPrompts = map[string]string{
 	"stress":      "You are a fast-paced stress interviewer. Ask rapid successive follow-ups, apply pressure, and keep the pace quick to test composure under stress.",
 }
 
+// Difficulty levels.
+const (
+	StandardDifficulty = "medium"
+	DifficultyEasy     = "easy"
+	DifficultyMedium   = "medium"
+	DifficultyHard     = "hard"
+)
+
+// Difficulties lists all selectable difficulty levels (single source of truth).
+var Difficulties = []string{DifficultyEasy, DifficultyMedium, DifficultyHard}
+
+// DifficultyLabels maps difficulty keys to Chinese labels for UI display.
+var DifficultyLabels = map[string]string{
+	DifficultyEasy:   "容易",
+	DifficultyMedium: "中等",
+	DifficultyHard:   "困难",
+}
+
+// DifficultyPrompts maps difficulty keys to directives injected into
+// question-generation and follow-up prompts. medium/unknown has no entry.
+var DifficultyPrompts = map[string]string{
+	DifficultyEasy: "Keep the interview at a moderate difficulty: favor clear, well-known topics, avoid obscure edge cases, and keep a comfortable pace.",
+	DifficultyHard: "Make the interview demanding: ask challenging, detail-oriented questions, include edge cases and deeper reasoning, and probe for depth.",
+}
+
+// StandardCompanyStyle is the default company style; it never alters prompts.
+const StandardCompanyStyle = "general"
+
+// CompanyStyles lists all selectable company styles (single source of truth).
+var CompanyStyles = []string{StandardCompanyStyle, "foreign", "bigtech", "stateowned", "startup"}
+
+// CompanyStyleLabels maps company style keys to Chinese labels for UI display.
+var CompanyStyleLabels = map[string]string{
+	StandardCompanyStyle: "通用",
+	"foreign":            "外企",
+	"bigtech":            "大厂",
+	"stateowned":         "国企",
+	"startup":            "创业公司",
+}
+
+// CompanyStylePrompts maps company style keys to context injected into
+// question-generation and follow-up prompts. general has no entry.
+var CompanyStylePrompts = map[string]string{
+	"foreign":    "Adopt a foreign-company interview style: emphasize English proficiency when relevant, STAR-structured behavioral questions, and cross-cultural communication.",
+	"bigtech":    "Adopt a big-tech interview style: emphasize algorithms, system design, and fundamentals, with a fast-paced technical bar.",
+	"stateowned": "Adopt a state-owned enterprise interview style: emphasize structured, well-rounded questions, institutional awareness, stability, and soft qualities.",
+	"startup":    "Adopt a startup interview style: emphasize full-stack breadth, ownership, resilience, and practical problem-solving under constraints.",
+}
+
 // MaxFollowUpsByPersona caps follow-up turns per main question per persona.
 // standard/unknown fall back to 2 (legacy behavior).
 var MaxFollowUpsByPersona = map[string]int{
@@ -76,7 +125,25 @@ func personaInjection(persona string) string {
 	return PersonaPrompts[persona]
 }
 
-func GenerateQuestionsUser(jobJD, resume, mode string, weak []string, persona string, precheckGaps []string) string {
+// difficultyInjection returns the difficulty instruction block, or "" when the
+// difficulty is medium/empty/unknown so prompts stay byte-identical to legacy.
+func difficultyInjection(difficulty string) string {
+	if difficulty == "" || difficulty == StandardDifficulty {
+		return ""
+	}
+	return DifficultyPrompts[difficulty]
+}
+
+// companyStyleInjection returns the company style context block, or "" when the
+// style is general/empty/unknown so prompts stay byte-identical to legacy.
+func companyStyleInjection(style string) string {
+	if style == "" || style == StandardCompanyStyle {
+		return ""
+	}
+	return CompanyStylePrompts[style]
+}
+
+func GenerateQuestionsUser(jobJD, resume, mode string, weak []string, persona, difficulty, style string, precheckGaps []string) string {
 	base := fmt.Sprintf(`Generate interview questions for this session.
 
 Job description:
@@ -102,6 +169,12 @@ Targeted focus: this user's weak dimensions are %s. Generate at least half of th
 	}
 
 	if inj := personaInjection(persona); inj != "" {
+		base += "\n\n" + inj
+	}
+	if inj := difficultyInjection(difficulty); inj != "" {
+		base += "\n\n" + inj
+	}
+	if inj := companyStyleInjection(style); inj != "" {
 		base += "\n\n" + inj
 	}
 
@@ -139,7 +212,7 @@ Rules:
 - follow_up_text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
-func DecideNextUser(jobJD, mode, currentQuestion string, followUpsOnCurrent int, turns []TurnContext, latestAnswer string, persona string) string {
+func DecideNextUser(jobJD, mode, currentQuestion string, followUpsOnCurrent int, turns []TurnContext, latestAnswer, persona, difficulty, style string) string {
 	var transcript strings.Builder
 	for _, t := range turns {
 		fmt.Fprintf(&transcript, "[%s/%s] %s\n", t.Role, t.Kind, t.Content)
@@ -163,6 +236,12 @@ Latest candidate answer:
 %s`, jobJD, mode, currentQuestion, followUpsOnCurrent, transcript.String(), latestAnswer)
 
 	if inj := personaInjection(persona); inj != "" {
+		prompt += "\n\n" + inj
+	}
+	if inj := difficultyInjection(difficulty); inj != "" {
+		prompt += "\n\n" + inj
+	}
+	if inj := companyStyleInjection(style); inj != "" {
 		prompt += "\n\n" + inj
 	}
 	return prompt

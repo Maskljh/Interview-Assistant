@@ -957,26 +957,6 @@
   color: var(--color-ink);
 }
 
-/* ─── Live unavailable (video fallback) ─── */
-.live-unavailable {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  width: min(640px, 100%);
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--rounded-md);
-  background: var(--color-warning-soft);
-  border: 1px solid rgba(245, 166, 35, 0.25);
-  font: var(--text-body-sm);
-  color: var(--color-ink);
-}
-
-.live-unavailable p {
-  margin: 0;
-}
-
 /* ─── Question bank groups ─── */
 .question-bank-groups {
   display: flex;

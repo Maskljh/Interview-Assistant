@@ -23,16 +23,6 @@ type Config struct {
 	OSSEndpoint           string
 	OSSAccessKeyID        string
 	OSSAccessKeySecret    string
-	DigitalHumanProvider  string
-	DigitalHumanAPIKey    string
-	DigitalHumanSecret    string
-	DigitalHumanAvatarID  string
-	DigitalHumanVoice     string
-	LivestreamProvider    string
-	LivestreamStreamURL   string
-	TencentAppKey         string
-	TencentAccessToken    string
-	TencentProjectID      string
 }
 
 func Load() (*Config, error) {
@@ -56,16 +46,6 @@ func Load() (*Config, error) {
 		OSSEndpoint:           os.Getenv("OSS_ENDPOINT"),
 		OSSAccessKeyID:        os.Getenv("OSS_ACCESS_KEY_ID"),
 		OSSAccessKeySecret:    os.Getenv("OSS_ACCESS_KEY_SECRET"),
-		DigitalHumanProvider:  os.Getenv("DIGITAL_HUMAN_PROVIDER"),
-		DigitalHumanAPIKey:    os.Getenv("DIGITAL_HUMAN_API_KEY"),
-		DigitalHumanSecret:    os.Getenv("DIGITAL_HUMAN_SECRET"),
-		DigitalHumanAvatarID:  os.Getenv("DIGITAL_HUMAN_AVATAR_ID"),
-		DigitalHumanVoice:     os.Getenv("DIGITAL_HUMAN_VOICE"),
-		LivestreamProvider:    os.Getenv("LIVESTREAM_PROVIDER"),
-		LivestreamStreamURL:   os.Getenv("LIVESTREAM_STREAM_URL"),
-		TencentAppKey:         os.Getenv("TENCENT_APPKEY"),
-		TencentAccessToken:    os.Getenv("TENCENT_ACCESSTOKEN"),
-		TencentProjectID:      os.Getenv("TENCENT_PROJECT_ID"),
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET required")

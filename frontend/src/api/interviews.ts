@@ -9,14 +9,25 @@ export type InterviewStatus =
   | 'completed'
   | 'failed';
 
-export type InputMode = 'text' | 'voice' | 'video';
+export type InputMode = 'text' | 'voice';
 
 export type Persona = 'standard' | 'strict_tech' | 'warm_hr' | 'stress';
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
+export type CompanyStyle =
+  | 'general'
+  | 'foreign'
+  | 'bigtech'
+  | 'stateowned'
+  | 'startup';
 
 export interface InterviewListItem {
   id: number;
   mode: InterviewMode;
   persona: Persona;
+  difficulty: Difficulty;
+  company_style: CompanyStyle;
   status: InterviewStatus;
   created_at: string;
   score: number | null;
@@ -46,6 +57,8 @@ export interface Interview {
   mode: InterviewMode;
   input_mode: InputMode;
   persona: Persona;
+  difficulty: Difficulty;
+  company_style: CompanyStyle;
   precheck_gaps: string[] | null;
   status: InterviewStatus;
   score: number | null;
@@ -64,6 +77,8 @@ export interface CreateInterviewInput {
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;
+  difficulty?: Difficulty;
+  company_style?: CompanyStyle;
 }
 
 export async function createInterview(
@@ -143,6 +158,8 @@ export interface CreateFromBankInput {
   mode: InterviewMode;
   input_mode?: InputMode;
   persona?: Persona;
+  difficulty?: Difficulty;
+  company_style?: CompanyStyle;
 }
 
 export async function createInterviewFromBank(
