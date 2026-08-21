@@ -22,6 +22,8 @@ import {
   PERSONA_LABELS,
 } from '../lib/labels';
 import { extractResumeText } from '../lib/resumeParse';
+import { signUpload } from '../api/uploads';
+import { uploadToOSS } from '../lib/ossUpload';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 
@@ -41,8 +43,15 @@ const INPUT_MODES: { value: InputMode; label: string }[] = [
 export default function CreateInterviewPage() {
   const navigate = useNavigate();
   const [jobJd, setJobJd] = useState('');
+  const [jdFileName, setJdFileName] = useState('');
+  const [jdFileUrl, setJdFileUrl] = useState('');
+  const [jdUploading, setJdUploading] = useState(false);
+  const [jdProgress, setJdProgress] = useState(0);
   const [resumeText, setResumeText] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
+  const [resumeFileUrl, setResumeFileUrl] = useState('');
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeProgress, setResumeProgress] = useState(0);
   const [resumeParsing, setResumeParsing] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
   const [inputMode, setInputMode] = useState<InputMode>('text');
@@ -77,29 +86,92 @@ export default function CreateInterviewPage() {
     if (!file) {
       setResumeText('');
       setResumeFileName('');
+      setResumeFileUrl('');
       return;
     }
 
     setError('');
     setResumeParsing(true);
+    setResumeUploading(true);
+    setResumeProgress(0);
+    setResumeFileUrl('');
     try {
       const text = await extractResumeText(file);
       setResumeText(text);
       setResumeFileName(file.name);
       setPrecheckStale(true);
+      // 上传原文件到 OSS 存档；失败不阻断（文本仍可用）
+      try {
+        const sign = await signUpload('resume', file);
+        await uploadToOSS(sign.put_url, file, (pct) => setResumeProgress(pct));
+        setResumeFileUrl(sign.object_url);
+      } catch (uploadErr) {
+        setError(
+          uploadErr instanceof Error
+            ? `简历文件上传失败：${uploadErr.message}（文本已解析可用）`
+            : '简历文件上传失败（文本已解析可用）',
+        );
+      }
     } catch (err) {
       setResumeText('');
       setResumeFileName('');
+      setResumeFileUrl('');
       setError(err instanceof Error ? err.message : '简历解析失败');
       e.target.value = '';
     } finally {
       setResumeParsing(false);
+      setResumeUploading(false);
+    }
+  }
+
+  async function handleJdFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setJdFileName('');
+      setJdFileUrl('');
+      return;
+    }
+    setError('');
+    setJdUploading(true);
+    setJdProgress(0);
+    setJdFileUrl('');
+    try {
+      const text = await extractResumeText(file);
+      setJobJd(text);
+      setJdFileName(file.name);
+      setPrecheckStale(true);
+      try {
+        const sign = await signUpload('jd', file);
+        await uploadToOSS(sign.put_url, file, (pct) => setJdProgress(pct));
+        setJdFileUrl(sign.object_url);
+      } catch (uploadErr) {
+        setError(
+          uploadErr instanceof Error
+            ? `JD 文件上传失败：${uploadErr.message}（文本已填入可用）`
+            : 'JD 文件上传失败（文本已填入可用）',
+        );
+      }
+    } catch (err) {
+      setJdFileName('');
+      setJdFileUrl('');
+      setError(err instanceof Error ? err.message : 'JD 文件解析失败');
+      e.target.value = '';
+    } finally {
+      setJdUploading(false);
     }
   }
 
   function clearResume() {
     setResumeText('');
     setResumeFileName('');
+    setResumeFileUrl('');
+    setPrecheckStale(true);
+  }
+
+  function clearJd() {
+    setJobJd('');
+    setJdFileName('');
+    setJdFileUrl('');
     setPrecheckStale(true);
   }
 
@@ -167,6 +239,8 @@ export default function CreateInterviewPage() {
         difficulty,
         company_style: companyStyle,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
+        ...(resumeFileUrl ? { resume_file_url: resumeFileUrl } : {}),
+        ...(jdFileUrl ? { jd_file_url: jdFileUrl } : {}),
         ...(precheck && !precheckStale ? { precheck_gaps: precheck.gaps } : {}),
       });
       await startInterview(created.id);
@@ -229,6 +303,37 @@ export default function CreateInterviewPage() {
               }}
               placeholder="请粘贴岗位 JD…"
             />
+            <div className="interview-file-row">
+              <input
+                id="jd-file"
+                type="file"
+                accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleJdFile}
+                disabled={jdUploading || loading}
+              />
+              {jdFileName && (
+                <div className="interview-file-meta">
+                  <span className="interview-file-name">
+                    已读取：{jdFileName}
+                    {jobJd ? `（约 ${jobJd.length} 字）` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="interview-file-clear"
+                    onClick={clearJd}
+                    disabled={jdUploading || loading}
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+              {jdUploading && (
+                <span className="interview-file-progress">
+                  上传中… {jdProgress}%
+                </span>
+              )}
+            </div>
+            <p className="interview-field-hint">可粘贴 JD，或上传 .txt、.md、.pdf、.docx 文件。</p>
           </div>
 
           <div className="interview-field">
@@ -263,6 +368,9 @@ export default function CreateInterviewPage() {
             </p>
             {resumeParsing && (
               <p className="interview-loading">正在解析简历…</p>
+            )}
+            {resumeUploading && !resumeParsing && (
+              <p className="interview-loading">正在上传原文件… {resumeProgress}%</p>
             )}
           </div>
 

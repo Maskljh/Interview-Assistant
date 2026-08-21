@@ -140,6 +140,11 @@
   border-color: var(--color-hairline-strong);
 }
 
+.interview-file-progress {
+  font: var(--text-caption);
+  color: var(--color-link-deep);
+}
+
 /* ─── Error / Success / Loading ─── */
 .interview-error {
   margin: 0 0 var(--space-md);

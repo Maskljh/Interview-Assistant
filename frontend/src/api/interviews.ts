@@ -54,6 +54,8 @@ export interface Interview {
   id: number;
   job_jd: string;
   resume_text: string | null;
+  resume_file_url: string | null;
+  jd_file_url: string | null;
   mode: InterviewMode;
   input_mode: InputMode;
   persona: Persona;
@@ -73,6 +75,8 @@ export interface Interview {
 export interface CreateInterviewInput {
   job_jd: string;
   resume_text?: string;
+  resume_file_url?: string;
+  jd_file_url?: string;
   precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
