@@ -196,7 +196,10 @@ func (h *Handler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
 }
 
-const maxImportImageBytes = 5 << 20
+const (
+	maxImportImageBytes         = 5 << 20                     // 单个图片文件大小上限
+	maxImportMultipartBodyBytes = maxImportImageBytes + 1<<20 // 整个 multipart body 上限：图片 + 头部等开销
+)
 
 type parseRequest struct {
 	Text string `json:"text"`
@@ -223,8 +226,16 @@ func (h *Handler) ImportParse(c *gin.Context) {
 	// 图片（multipart）或文本（JSON）二选一
 	var res ParseResult
 	if strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
+		// 在解析整个 multipart body 前套上总大小上限，避免未认证的客户端
+		// 流式发送超大 body 打到付费 OCR 调用之前形成 DoS。
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImportMultipartBodyBytes)
 		file, err := c.FormFile("file")
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) || strings.Contains(err.Error(), "request body too large") {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "image is too large"})
+				return
+			}
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
 			return
 		}
@@ -241,6 +252,12 @@ func (h *Handler) ImportParse(c *gin.Context) {
 		image, err := io.ReadAll(f)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "could not read image"})
+			return
+		}
+		switch http.DetectContentType(image) {
+		case "image/jpeg", "image/png", "image/webp":
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported image type"})
 			return
 		}
 		res, err = h.svc.ParseFromImage(c.Request.Context(), image)

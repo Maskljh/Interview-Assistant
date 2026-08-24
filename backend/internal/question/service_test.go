@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -18,6 +20,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
+	"github.com/interview-assistant/backend/internal/ocr"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
 	"github.com/interview-assistant/backend/internal/user"
@@ -85,6 +88,52 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	interview.RegisterRoutes(r, secret, svc)
 	question.RegisterRoutes(r, sqlDB, secret, llmClient, nil)
 	return r
+}
+
+// testRouterWithOCR builds the same router as testRouter but registers the
+// question routes with an OCR client so the multipart image import branch is
+// exercised end-to-end.
+func testRouterWithOCR(t *testing.T, sqlDB *sql.DB, llmClient llm.Client, ocrClient ocr.Client) *gin.Engine {
+	t.Helper()
+	store := testStore(t)
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
+	}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	user.RegisterRoutes(r, sqlDB, secret)
+	svc := interview.NewService(sqlDB, llmClient, store)
+	interview.RegisterRoutes(r, secret, svc)
+	question.RegisterRoutes(r, sqlDB, secret, llmClient, ocrClient)
+	return r
+}
+
+// fakeOCR returns a fixed OCR text so the multipart image branch can be tested
+// without a real Aliyun client.
+type fakeOCR struct{}
+
+func (fakeOCR) Recognize(ctx context.Context, image []byte) (string, error) {
+	return "OCR fake text", nil
+}
+
+// newMultipartImageBody builds a multipart/form-data body containing a file
+// part named "file" with the given filename and content.
+func newMultipartImageBody(t *testing.T, filename string, content []byte) ([]byte, string) {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart: %v", err)
+	}
+	return body.Bytes(), w.FormDataContentType()
 }
 
 type fakeLLM struct {
@@ -822,6 +871,50 @@ func TestImportConfirmedStoresImportSource(t *testing.T) {
 	}
 }
 
+// TestImportConfirmedTruncatesLongJobTag verifies that a jobTag longer than 64
+// runes is truncated (rune-aware) before INSERT so it cannot fail the whole
+// batch: job_tag is VARCHAR(64) and an over-long value would roll back the
+// transaction under strict SQL mode.
+func TestImportConfirmedTruncatesLongJobTag(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	const email = "test-import-confirm-tag@example.com"
+	_ = registerUser(t, r, email)
+	userID := userIDByEmail(t, sqlDB, email)
+
+	svc := question.NewService(sqlDB, nil)
+	// 70 runes: includes multi-byte CJK chars so byte-length != rune-length.
+	jobTag := strings.Repeat("超长岗位标签", 10) // 10 * 6 = 60 runes
+	jobTag += "一二三四五六七八九十"                 // +10 runes = 70 total, 210 bytes
+	if len([]rune(jobTag)) <= 64 {
+		t.Fatalf("test setup: jobTag must exceed 64 runes, got %d", len([]rune(jobTag)))
+	}
+	res, err := svc.ImportConfirmed(context.Background(), userID, []question.ParsedQuestion{
+		{Question: "长标签题", Answer: "答"},
+	}, jobTag)
+	if err != nil {
+		t.Fatalf("import confirmed with long jobTag: %v", err)
+	}
+	if res.Imported != 1 {
+		t.Fatalf("imported = %d, want 1", res.Imported)
+	}
+
+	var stored sql.NullString
+	if err := sqlDB.QueryRow(`SELECT job_tag FROM question_bank WHERE user_id = ? AND question = ?`, userID, "长标签题").Scan(&stored); err != nil {
+		t.Fatalf("read stored job_tag: %v", err)
+	}
+	if !stored.Valid {
+		t.Fatal("job_tag should be stored (non-NULL)")
+	}
+	if got := len([]rune(stored.String)); got != 64 {
+		t.Fatalf("stored job_tag rune len = %d, want 64", got)
+	}
+	if want := string([]rune(jobTag)[:64]); stored.String != want {
+		t.Fatalf("stored job_tag = %q, want truncated %q", stored.String, want)
+	}
+}
+
 func TestImportConfirmedDeduplicates(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
@@ -985,5 +1078,140 @@ func TestImportConfirmHandler(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("imported question not in list")
+	}
+}
+
+// A valid 1x1 PNG (detected by http.DetectContentType as image/png).
+const validPNG = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n\x2d\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+
+func TestImportParseImageMultipart(t *testing.T) {
+	sqlDB := testDB(t)
+	svcOut := parseLLM{out: llm.ParseImportOut{}}
+	svcOut.out.Items = append(svcOut.out.Items, struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer,omitempty"`
+	}{Question: "OCR题目", Answer: "OCR答案"})
+	// With an OCR client configured, the fake OCR returns "OCR fake text",
+	// which the fake LLM turns into a structured item.
+	r := testRouterWithOCR(t, sqlDB, &svcOut, fakeOCR{})
+
+	token := registerUser(t, r, "test-import-parse-img@example.com")
+	body, contentType := newMultipartImageBody(t, "shot.png", []byte(validPNG))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("parse image status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Question string `json:"question"`
+			Answer   string `json:"answer"`
+		} `json:"items"`
+		OcrText string `json:"ocr_text"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode parse image: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].Question != "OCR题目" {
+		t.Fatalf("items = %+v, want one OCR题目", resp.Items)
+	}
+	if resp.OcrText != "OCR fake text" {
+		t.Fatalf("ocr_text = %q, want %q", resp.OcrText, "OCR fake text")
+	}
+}
+
+func TestImportParseImageTooLarge400(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
+
+	token := registerUser(t, r, "test-import-parse-img-big@example.com")
+	// Exceeds maxImportImageBytes (5MB): content is a JPEG header so it would
+	// pass MIME validation if it ever got there; the size check must reject it.
+	content := append([]byte("\xff\xd8\xff\xe0"), bytes.Repeat([]byte{0x00}, 5<<20+1)...)
+	body, contentType := newMultipartImageBody(t, "big.jpg", content)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("oversized image status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "image is too large") {
+		t.Fatalf("body = %s, want image is too large", w.Body.String())
+	}
+}
+
+// TestImportParseImageOversizedMultipartBody400 verifies the overall multipart
+// body limit: a body larger than maxImportMultipartBodyBytes is rejected before
+// the file is parsed (MaxBytesReader path → 400 "image is too large").
+func TestImportParseImageOversizedMultipartBody400(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
+
+	token := registerUser(t, r, "test-import-parse-img-body@example.com")
+	// maxImportMultipartBodyBytes = 5MB + 1MB. A file of 6MB+1 plus multipart
+	// overhead pushes the whole body over the reader limit.
+	content := append([]byte("\xff\xd8\xff\xe0"), bytes.Repeat([]byte{0x00}, (5<<20)+(1<<20)+1)...)
+	body, contentType := newMultipartImageBody(t, "huge.jpg", content)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("oversized body status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "image is too large") {
+		t.Fatalf("body = %s, want image is too large", w.Body.String())
+	}
+}
+
+func TestImportParseImageUnsupportedType400(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
+
+	token := registerUser(t, r, "test-import-parse-img-type@example.com")
+	// Plain text bytes are not a supported image type.
+	body, contentType := newMultipartImageBody(t, "notes.txt", []byte("not an image"))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("non-image status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unsupported image type") {
+		t.Fatalf("body = %s, want unsupported image type", w.Body.String())
+	}
+}
+
+func TestImportParseImageOCRUnavailable502(t *testing.T) {
+	sqlDB := testDB(t)
+	// No OCR client configured → ParseFromImage returns ErrOCRUnavailable.
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, r, "test-import-parse-img-502@example.com")
+	body, contentType := newMultipartImageBody(t, "shot.png", []byte(validPNG))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("no-ocr status = %d, want 502, body = %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error != "image recognition unavailable, please use text input" {
+		t.Fatalf("error = %q, want image recognition unavailable", resp.Error)
 	}
 }

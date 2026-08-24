@@ -204,6 +204,19 @@ func nullStr(s string) any {
 	return s
 }
 
+// truncateRunes returns s truncated to at most n runes (rune-aware, so a
+// multi-byte UTF-8 character is never split in half).
+func truncateRunes(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n])
+}
+
 // InsertImportedBatch inserts user-confirmed imported questions with
 // source='import', source_session_id NULL, and an optional reference. It
 // reuses the exact-question-text dedupe rule and returns imported/skipped.
@@ -211,6 +224,9 @@ func (r *Repo) InsertImportedBatch(userID int64, questions []ParsedQuestion, job
 	if len(questions) == 0 {
 		return ImportResult{}, nil
 	}
+	// job_tag 是 VARCHAR(64)：超长标签会让整批 INSERT 失败，必须在写库前
+	// 按 rune 截断到 64，避免单个标签拖垮整批导入。
+	jobTag = truncateRunes(jobTag, 64)
 	tx, err := r.db.Begin()
 	if err != nil {
 		return ImportResult{}, err
