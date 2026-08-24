@@ -148,6 +148,26 @@ func TestRecognizeOversizedReturns400(t *testing.T) {
 	}
 }
 
+// TestRecognizeOversizedMultipartBodyReturns400 verifies the whole multipart
+// body is bounded before the file is parsed: a body larger than
+// maxMultipartBodyBytes (5MB image + 1MB overhead) is rejected with 400
+// "image is too large" via the MaxBytesReader boundary, so an oversized request
+// cannot be buffered into memory (or onto disk) in full.
+func TestRecognizeOversizedMultipartBodyReturns400(t *testing.T) {
+	r := testRouter(t, &fakeClient{})
+	// 6MB+1 of image content plus multipart framing pushes the request body
+	// over the 6MB boundary set on the reader.
+	content := append([]byte("\xff\xd8\xff\xe0"), bytes.Repeat([]byte{0x00}, (5<<20)+(1<<20)+1)...)
+	rec := doRecognize(t, r, content)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "image is too large") {
+		t.Fatalf("body = %s, want image is too large", rec.Body.String())
+	}
+}
+
 func TestRecognizeNonImageReturns400(t *testing.T) {
 	r := testRouter(t, &fakeClient{})
 	rec := doRecognize(t, r, []byte("plain text, not an image"))
