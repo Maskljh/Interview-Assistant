@@ -53,6 +53,48 @@
   color: var(--color-body);
 }
 
+.import-candidates-header {
+  margin-bottom: var(--space-xs);
+}
+
+.import-candidates-title {
+  margin: 0 0 var(--space-xs);
+  font: var(--text-display-sm);
+  color: var(--color-ink);
+}
+
+.import-candidate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas-soft);
+}
+
+.import-candidate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.import-candidate-index {
+  font: var(--text-body-sm-strong);
+  color: var(--color-ink);
+}
+
+.import-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.import-field label {
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
 .import-file-name {
   margin: var(--space-xs) 0 0;
   font: var(--text-body-sm);

@@ -182,45 +182,67 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
 
         {step === 'candidates' && (
           <div className="import-modal-body">
-            <p className="import-hint">
-              已解析 {items.length} 题，可编辑后确认导入。
-              {raw && !items.length && ' 自动解析失败，请手动整理以下原文。'}
-            </p>
-            {raw && !items.length && (
-              <textarea rows={6} value={raw} readOnly className="import-raw" />
-            )}
+            <div className="import-candidates-header">
+              <h3 className="import-candidates-title">
+                已解析 {items.length} 道题目
+              </h3>
+              <p className="import-hint">
+                请核对以下解析结果，可直接编辑修改，确认无误后点击「确认导入」。
+              </p>
+            </div>
             {ocrText && (
               <details className="import-ocr-detail">
                 <summary>查看 OCR 识别原文</summary>
                 <p className="import-ocr-text">{ocrText}</p>
               </details>
             )}
+            {raw && !items.length && (
+              <>
+                <p className="interview-error">自动解析未识别出题目，请手动整理以下原文。</p>
+                <textarea rows={6} value={raw} readOnly className="import-raw" />
+              </>
+            )}
             {items.map((it, i) => (
               <div key={i} className="import-candidate">
-                <input
-                  className="import-candidate-question"
-                  value={it.question}
-                  onChange={(e) => updateItem(i, { question: e.target.value })}
-                  placeholder="题干"
-                />
-                <textarea
-                  rows={2}
-                  value={it.answer ?? ''}
-                  onChange={(e) => updateItem(i, { answer: e.target.value })}
-                  placeholder="参考答案（可选）"
-                />
-                <input
-                  value={it.reference ?? ''}
-                  onChange={(e) => updateItem(i, { reference: e.target.value })}
-                  placeholder="出处（可选）"
-                />
-                <button
-                  type="button"
-                  className="interview-inline-link"
-                  onClick={() => removeItem(i)}
-                >
-                  删除
-                </button>
+                <div className="import-candidate-head">
+                  <span className="import-candidate-index">第 {i + 1} 题</span>
+                  <button
+                    type="button"
+                    className="interview-inline-link"
+                    onClick={() => removeItem(i)}
+                  >
+                    删除
+                  </button>
+                </div>
+                <div className="import-field">
+                  <label htmlFor={`q-${i}`}>题干</label>
+                  <input
+                    id={`q-${i}`}
+                    className="import-candidate-question"
+                    value={it.question}
+                    onChange={(e) => updateItem(i, { question: e.target.value })}
+                    placeholder="点击可修改题干…"
+                  />
+                </div>
+                <div className="import-field">
+                  <label htmlFor={`a-${i}`}>参考答案（可选）</label>
+                  <textarea
+                    id={`a-${i}`}
+                    rows={2}
+                    value={it.answer ?? ''}
+                    onChange={(e) => updateItem(i, { answer: e.target.value })}
+                    placeholder="点击可填写参考答案…"
+                  />
+                </div>
+                <div className="import-field">
+                  <label htmlFor={`r-${i}`}>出处（可选）</label>
+                  <input
+                    id={`r-${i}`}
+                    value={it.reference ?? ''}
+                    onChange={(e) => updateItem(i, { reference: e.target.value })}
+                    placeholder="点击可填写出处…"
+                  />
+                </div>
               </div>
             ))}
             {error && <p className="interview-error">{error}</p>}
@@ -235,18 +257,20 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
               </button>
               <button
                 type="button"
-                className="interview-submit"
-                disabled={parsing || items.filter((x) => x.question.trim()).length === 0}
-                onClick={() => void handleConfirm()}
-              >
-                {parsing ? '导入中…' : '确认导入'}
-              </button>
-              <button
-                type="button"
                 className="interview-inline-link"
                 onClick={() => setStep('input')}
               >
                 返回
+              </button>
+              <button
+                type="button"
+                className="interview-submit"
+                disabled={parsing || items.filter((x) => x.question.trim()).length === 0}
+                onClick={() => void handleConfirm()}
+              >
+                {parsing
+                  ? '导入中…'
+                  : `确认导入 ${items.filter((x) => x.question.trim()).length} 题`}
               </button>
             </div>
           </div>

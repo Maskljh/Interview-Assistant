@@ -51,6 +51,11 @@ describe('QuestionImportModal', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
     });
+    // 候选步骤：显示题号与可编辑标签，按钮带数量
+    expect(screen.getByText('第 1 题')).toBeTruthy();
+    expect(screen.getByText('题干')).toBeTruthy();
+    expect(screen.getByText('参考答案（可选）')).toBeTruthy();
+    expect(screen.getByText('确认导入 1 题')).toBeTruthy();
   });
 
   it('confirms import and reports counts', async () => {
@@ -62,7 +67,7 @@ describe('QuestionImportModal', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
     });
-    fireEvent.click(screen.getByText('确认导入'));
+    fireEvent.click(screen.getByText('确认导入 1 题'));
     await waitFor(() => {
       expect(screen.getByText(/新增 2 题，跳过 1 题重复/)).toBeTruthy();
     });
