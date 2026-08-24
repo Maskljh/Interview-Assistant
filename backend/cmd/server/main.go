@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/analysis"
 	"github.com/interview-assistant/backend/internal/analytics"
+	"github.com/interview-assistant/backend/internal/behavior"
 	"github.com/interview-assistant/backend/internal/config"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/expression"
@@ -91,6 +92,7 @@ func main() {
 	upload.RegisterRoutes(r, cfg.JWTSecret, uploadSvc)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	behavior.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)
 	log.Fatal(r.Run(cfg.HTTPAddr))
 }
