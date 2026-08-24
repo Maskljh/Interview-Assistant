@@ -583,7 +583,7 @@ func TestCreateFromBankBeginLiveWorks(t *testing.T) {
 	}
 }
 
-func TestCreateDefaultsInputModeText(t *testing.T) {
+func TestCreateDefaultsInputModeVoice(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 	token := registerUser(t, r, "test-interview-inputmode-default@example.com")
@@ -604,16 +604,53 @@ func TestCreateDefaultsInputModeText(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if resp["input_mode"] != "text" {
-		t.Fatalf("input_mode = %v, want text", resp["input_mode"])
+	if resp["input_mode"] != "voice" {
+		t.Fatalf("input_mode = %v, want voice", resp["input_mode"])
 	}
 	sessionID := int64(resp["id"].(float64))
 	var dbInputMode string
 	if err := sqlDB.QueryRow(`SELECT input_mode FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbInputMode); err != nil {
 		t.Fatalf("query input_mode: %v", err)
 	}
-	if dbInputMode != "text" {
-		t.Fatalf("DB input_mode = %q, want text", dbInputMode)
+	if dbInputMode != "voice" {
+		t.Fatalf("DB input_mode = %q, want voice", dbInputMode)
+	}
+}
+
+// TestCreateForcesVoiceWhenClientSendsText verifies that a client-supplied
+// 'text' input_mode is overridden to 'voice' (voice-only product).
+func TestCreateForcesVoiceWhenClientSendsText(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+	token := registerUser(t, r, "test-interview-inputmode-forced@example.com")
+
+	body, _ := json.Marshal(map[string]string{
+		"job_jd":     "Backend engineer JD",
+		"mode":       "mixed",
+		"input_mode": "text",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if resp["input_mode"] != "voice" {
+		t.Fatalf("input_mode = %v, want voice", resp["input_mode"])
+	}
+	sessionID := int64(resp["id"].(float64))
+	var dbInputMode string
+	if err := sqlDB.QueryRow(`SELECT input_mode FROM interview_sessions WHERE id = ?`, sessionID).Scan(&dbInputMode); err != nil {
+		t.Fatalf("query input_mode: %v", err)
+	}
+	if dbInputMode != "voice" {
+		t.Fatalf("DB input_mode = %q, want voice", dbInputMode)
 	}
 }
 
@@ -804,7 +841,7 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 	svc := interview.NewService(sqlDB, capLLM, store)
 	svc.SetProfileProvider(fixedProfileProvider{p: profile.Profile{WeakDimensions: []string{"logic"}, BasedOnSessions: 3}})
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -833,7 +870,7 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -858,7 +895,7 @@ func TestCreatePersistsPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "strict_tech", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "strict_tech", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -880,7 +917,7 @@ func TestCreateDefaultsStandardPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -898,7 +935,7 @@ func TestCreateRejectsInvalidPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "evil", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "evil", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if !errors.Is(err, interview.ErrInvalidPersona) {
 		t.Fatalf("err = %v, want ErrInvalidPersona", err)
 	}
@@ -914,7 +951,7 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "warm_hr", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "warm_hr", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -998,7 +1035,7 @@ func TestCreatePersistsPrecheckGaps(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-persist@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -1021,7 +1058,7 @@ func TestStartInjectsPrecheckGaps(t *testing.T) {
 
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

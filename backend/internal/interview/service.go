@@ -80,11 +80,12 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 		return nil, err
 	}
 	if inputMode == "" {
-		inputMode = InputModeText
-	}
-	if err := ValidateInputMode(inputMode); err != nil {
+		inputMode = InputModeVoice
+	} else if err := ValidateInputMode(inputMode); err != nil {
 		return nil, err
 	}
+	// Voice-only interviews: any client-supplied mode (e.g. 'text') is coerced to voice.
+	inputMode = InputModeVoice
 	if persona == "" {
 		persona = llm.StandardPersona
 	}
@@ -114,11 +115,12 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 		return nil, nil, err
 	}
 	if inputMode == "" {
-		inputMode = InputModeText
-	}
-	if err := ValidateInputMode(inputMode); err != nil {
+		inputMode = InputModeVoice
+	} else if err := ValidateInputMode(inputMode); err != nil {
 		return nil, nil, err
 	}
+	// Voice-only interviews: force voice (see Create).
+	inputMode = InputModeVoice
 	if persona == "" {
 		persona = llm.StandardPersona
 	}

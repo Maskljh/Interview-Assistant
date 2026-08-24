@@ -1,7 +1,7 @@
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
-import { endInterview, getInterview, type InputMode, type Persona } from '../api/interviews';
+import { endInterview, getInterview, type Persona } from '../api/interviews';
 import { synthesizeSpeech, transcribeAudio } from '../api/speech';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -35,10 +35,8 @@ export default function InterviewRoomPage() {
   const [thinking, setThinking] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
   const [statusLine, setStatusLine] = useState('');
-  const [answer, setAnswer] = useState('');
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState('');
-  const [inputMode, setInputMode] = useState<InputMode | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [companyStyle, setCompanyStyle] = useState<string | null>(null);
@@ -48,7 +46,6 @@ export default function InterviewRoomPage() {
   const [ttsMuted, setTtsMuted] = useState(false);
   const [reading, setReading] = useState(false);
   const [retryingASR, setRetryingASR] = useState(false);
-  const [textModeOverride, setTextModeOverride] = useState(false);
   const [personaState, setPersonaState] = useState<'idle' | 'speaking' | 'listening'>('idle');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     localStorage.getItem('virtual_persona_avatar'),
@@ -56,7 +53,6 @@ export default function InterviewRoomPage() {
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
   const doneRef = useRef(false);
-  const inputModeRef = useRef<InputMode>('text');
   const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
   const voicePlayerRef = useRef<ReturnType<typeof createVoicePlayer> | null>(null);
   const speechVersionRef = useRef(0);
@@ -71,9 +67,8 @@ export default function InterviewRoomPage() {
   const voiceCancelRef = useRef(false);
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
-  // 摄像头分析仅在「创建时勾选开启 + 当前处于语音作答」时启用；
-  // 中途切换为文字作答（textModeOverride）时自动停止分析。
-  const behaviorVoiceEnabled = cameraEnabled && inputMode === 'voice' && !textModeOverride;
+  // 摄像头分析仅在「创建时勾选开启」时启用；面试全程为语音作答（input mode 恒为 voice）。
+  const behaviorVoiceEnabled = cameraEnabled;
   const behavior = useBehaviorAnalysis({
     enabled: behaviorVoiceEnabled,
     sessionId: interviewId,
@@ -101,7 +96,6 @@ export default function InterviewRoomPage() {
   const submitAnswer = useCallback(
     (content: string, voiceDurationMs?: number) => {
       appendTurn('candidate', content);
-      setAnswer('');
       const sent = socketRef.current?.sendAnswer(content, voiceDurationMs) ?? false;
       if (!sent) {
         pendingAnswersRef.current.push({ content, voiceDurationMs });
@@ -131,7 +125,7 @@ export default function InterviewRoomPage() {
       setReading(false);
       setStatusLine(
         err instanceof ApiError && err.status === 502
-          ? '语音服务暂不可用，请使用文字作答'
+          ? '语音服务暂不可用，请稍后重试'
           : '播放失败，请阅读文字',
       );
     }
@@ -178,10 +172,8 @@ export default function InterviewRoomPage() {
               appendTurn('interviewer', msg.content);
             }
             currentQuestionRef.current = msg.content;
-            if (inputModeRef.current === 'voice') {
-              // 语音模式：静态形象 + TTS 播报
-              void playQuestion(msg.content);
-            }
+            // 语音模式（唯一模式）：静态形象 + TTS 播报
+            void playQuestion(msg.content);
           }
           break;
         case 'status':
@@ -282,11 +274,8 @@ export default function InterviewRoomPage() {
       try {
         const data = await getInterview(interviewId);
         if (cancelled) return;
-        // 兼容历史 video 会话：去除数字人后按语音模式处理
-        const rawMode = String(data.input_mode);
-        const resolvedMode: InputMode = rawMode === 'text' ? 'text' : 'voice';
-        inputModeRef.current = resolvedMode;
-        setInputMode(resolvedMode);
+        // Voice-only product: every session plays in voice regardless of its
+        // stored input_mode (historical 'text' sessions included).
         setPersona(data.persona);
         setDifficulty(data.difficulty);
         setCompanyStyle(data.company_style);
@@ -345,11 +334,6 @@ export default function InterviewRoomPage() {
       setPendingCount(0);
     };
   }, [connect, interviewId]);
-  const effectiveInputMode: InputMode =
-    inputMode === 'voice' && !textModeOverride ? 'voice' : 'text';
-  useEffect(() => {
-    inputModeRef.current = effectiveInputMode;
-  }, [effectiveInputMode]);
   useEffect(() => {
     if (reading) setPersonaState('speaking');
     else if (thinking) setPersonaState('listening');
@@ -427,7 +411,7 @@ export default function InterviewRoomPage() {
       voiceActiveRef.current = false;
       voiceCancelRef.current = false;
       setVoicePhase('idle');
-      setStatusLine('无法访问麦克风，请使用文字作答');
+      setStatusLine('无法访问麦克风，请检查浏览器权限');
     }
   }
   async function handleStopRecording() {
@@ -464,7 +448,7 @@ export default function InterviewRoomPage() {
       setVoicePhase('idle');
       setStatusLine(
         err instanceof ApiError && err.status === 502
-          ? '语音服务暂不可用，请使用文字作答'
+          ? '语音服务暂不可用，请稍后重试'
           : '识别失败，可重试识别或重新录音',
       );
     } finally {
@@ -493,30 +477,12 @@ export default function InterviewRoomPage() {
       setVoicePhase('idle');
       setStatusLine(
         err instanceof ApiError && err.status === 502
-          ? '语音服务暂不可用，请使用文字作答'
+          ? '语音服务暂不可用，请稍后重试'
           : '重试识别失败，可重新录音',
       );
     } finally {
       setRetryingASR(false);
     }
-  }
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = answer.trim();
-    if (!trimmed || thinking || disconnected || ending) {
-      return;
-    }
-    if (
-      inputModeRef.current === 'voice' &&
-      (voicePhase === 'transcribing' || voicePhase === 'sending')
-    ) {
-      setStatusLine('正在识别语音，请稍候');
-      return;
-    }
-    if (inputModeRef.current === 'voice') {
-      setVoicePhase('sending');
-    }
-    submitAnswer(trimmed);
   }
   async function handleForceEnd() {
     if (ending || doneRef.current) return;
@@ -549,7 +515,6 @@ export default function InterviewRoomPage() {
       setEnding(false);
     }
   }
-  const voiceBusy = voicePhase === 'transcribing' || voicePhase === 'sending';
   return (
     <div className="interview-page">
       <AppNav tab="interviews" confirmLeave />
@@ -575,15 +540,13 @@ export default function InterviewRoomPage() {
                 </span>
               )}
             </div>
-            {effectiveInputMode === 'voice' && (
-              <div className="video-persona-stage">
-                <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
-                <label className="virtual-persona-avatar-btn">
-                  换头像
-                  <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
-                </label>
-              </div>
-            )}
+            <div className="video-persona-stage">
+              <VirtualPersona state={personaState} avatarUrl={avatarUrl} />
+              <label className="virtual-persona-avatar-btn">
+                换头像
+                <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
+              </label>
+            </div>
             {turns.length > 0 && error && <p className="interview-error">{error}</p>}
             {pendingCount > 0 && (
               <p className="interview-room-status interview-room-pending">
@@ -675,160 +638,104 @@ export default function InterviewRoomPage() {
                 </button>
               </div>
             )}
-            <form className="interview-room-form" onSubmit={handleSubmit}>
-              {inputMode === 'voice' && (
-                <div className="voice-room-controls">
-                  {effectiveInputMode !== 'text' ? (
-                    <>
-                      <button
-                        type="button"
-                        className={`voice-record-button${
-                          voicePhase === 'recording'
-                            ? ' voice-record-button--recording'
-                            : ''
-                        }`}
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                          void handleStartRecording();
-                        }}
-                        onPointerUp={() => void handleStopRecording()}
-                        onPointerCancel={() => void handleStopRecording()}
-                        onKeyDown={(e) => {
-                          if (
-                            (e.key === ' ' || e.key === 'Enter') &&
-                            !e.repeat
-                          ) {
-                            e.preventDefault();
-                            void handleStartRecording();
-                          }
-                        }}
-                        onKeyUp={(e) => {
-                          if (e.key === ' ' || e.key === 'Enter') {
-                            void handleStopRecording();
-                          }
-                        }}
-                        disabled={
-                          thinking ||
-                          disconnected ||
-                          ending ||
-                          voicePhase === 'transcribing' ||
-                          voicePhase === 'sending'
-                        }
-                        aria-pressed={voicePhase === 'recording'}
-                      >
-                        {voicePhase === 'recording' ? '松开发送' : '按住说话'}
-                      </button>
-                      {voicePhase === 'transcribing' && (
-                        <span className="voice-room-phase">正在识别…</span>
-                      )}
-                      {voicePhase === 'sending' && (
-                        <span className="voice-room-phase">正在发送…</span>
-                      )}
-                      {failedAudioRef.current && voicePhase === 'idle' && (
-                        <div className="voice-room-retry">
-                          <button
-                            type="button"
-                            className="interview-inline-link"
-                            onClick={() => void handleRetryASR()}
-                            disabled={retryingASR}
-                          >
-                            {retryingASR ? '重试中…' : '重试识别'}
-                          </button>
-                          <button
-                            type="button"
-                            className="interview-inline-link"
-                            onClick={() => {
-                              failedAudioRef.current = null;
-                              setStatusLine('');
-                            }}
-                          >
-                            放弃重录
-                          </button>
-                        </div>
-                      )}
-                      <div className="voice-room-tts-controls">
-                        <button
-                          type="button"
-                          className={`voice-room-tts-btn${
-                            ttsMuted ? ' is-active' : ''
-                          }`}
-                          onClick={toggleMute}
-                        >
-                          {ttsMuted ? '取消静音' : '静音'}
-                        </button>
-                        <button
-                          type="button"
-                          className="voice-room-tts-btn"
-                          onClick={handleReplay}
-                          disabled={!currentQuestionRef.current || ttsMuted}
-                        >
-                          重播
-                        </button>
-                        <button
-                          type="button"
-                          className="voice-room-tts-btn"
-                          onClick={handleSkipPlayback}
-                          disabled={!reading}
-                        >
-                          跳过
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="interview-inline-link"
-                        onClick={() => {
-                          setTextModeOverride(true);
-                          setStatusLine('已切换为文字作答，本场生效');
-                        }}
-                      >
-                        切换为文字作答
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="interview-inline-link"
-                      onClick={() => {
-                        setTextModeOverride(false);
-                        setStatusLine('已切回语音作答');
-                      }}
-                    >
-                      切回语音作答
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="interview-field">
-                <label htmlFor="answer">
-                  {effectiveInputMode !== 'text' ? '文字作答（备选）' : '你的回答'}
-                </label>
-                <textarea
-                  id="answer"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  placeholder={
-                    effectiveInputMode !== 'text'
-                      ? '输入文字作为备选…'
-                      : '在此输入回答…'
-                  }
-                  disabled={thinking || disconnected || ending}
-                />
-              </div>
-              <div className="interview-room-actions">
+            <div className="interview-room-form">
+              <div className="voice-room-controls">
                 <button
-                  className="interview-submit"
-                  type="submit"
+                  type="button"
+                  className={`voice-record-button${
+                    voicePhase === 'recording'
+                      ? ' voice-record-button--recording'
+                      : ''
+                  }`}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    void handleStartRecording();
+                  }}
+                  onPointerUp={() => void handleStopRecording()}
+                  onPointerCancel={() => void handleStopRecording()}
+                  onKeyDown={(e) => {
+                    if (
+                      (e.key === ' ' || e.key === 'Enter') &&
+                      !e.repeat
+                    ) {
+                      e.preventDefault();
+                      void handleStartRecording();
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      void handleStopRecording();
+                    }
+                  }}
                   disabled={
                     thinking ||
                     disconnected ||
                     ending ||
-                    !answer.trim() ||
-                    (inputModeRef.current === 'voice' && voiceBusy)
+                    voicePhase === 'transcribing' ||
+                    voicePhase === 'sending'
                   }
+                  aria-pressed={voicePhase === 'recording'}
                 >
-                  发送回答
+                  {voicePhase === 'recording' ? '松开发送' : '按住说话'}
                 </button>
+                {voicePhase === 'transcribing' && (
+                  <span className="voice-room-phase">正在识别…</span>
+                )}
+                {voicePhase === 'sending' && (
+                  <span className="voice-room-phase">正在发送…</span>
+                )}
+                {failedAudioRef.current && voicePhase === 'idle' && (
+                  <div className="voice-room-retry">
+                    <button
+                      type="button"
+                      className="interview-inline-link"
+                      onClick={() => void handleRetryASR()}
+                      disabled={retryingASR}
+                    >
+                      {retryingASR ? '重试中…' : '重试识别'}
+                    </button>
+                    <button
+                      type="button"
+                      className="interview-inline-link"
+                      onClick={() => {
+                        failedAudioRef.current = null;
+                        setStatusLine('');
+                      }}
+                    >
+                      放弃重录
+                    </button>
+                  </div>
+                )}
+                <div className="voice-room-tts-controls">
+                  <button
+                    type="button"
+                    className={`voice-room-tts-btn${
+                      ttsMuted ? ' is-active' : ''
+                    }`}
+                    onClick={toggleMute}
+                  >
+                    {ttsMuted ? '取消静音' : '静音'}
+                  </button>
+                  <button
+                    type="button"
+                    className="voice-room-tts-btn"
+                    onClick={handleReplay}
+                    disabled={!currentQuestionRef.current || ttsMuted}
+                  >
+                    重播
+                  </button>
+                  <button
+                    type="button"
+                    className="voice-room-tts-btn"
+                    onClick={handleSkipPlayback}
+                    disabled={!reading}
+                  >
+                    跳过
+                  </button>
+                </div>
+              </div>
+              <div className="interview-room-actions">
                 <button
                   type="button"
                   className="interview-room-end"
@@ -838,7 +745,7 @@ export default function InterviewRoomPage() {
                   {ending ? '结束中…' : '结束面试'}
                 </button>
               </div>
-            </form>
+            </div>
           </>
         )}
       </main>

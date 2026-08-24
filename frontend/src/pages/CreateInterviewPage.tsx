@@ -7,7 +7,6 @@ import {
   startInterview,
   type CompanyStyle,
   type Difficulty,
-  type InputMode,
   type InterviewMode,
   type Persona,
 } from '../api/interviews';
@@ -36,11 +35,6 @@ const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
 const COMPANY_STYLES: CompanyStyle[] = ['general', 'foreign', 'bigtech', 'stateowned', 'startup'];
 
-const INPUT_MODES: { value: InputMode; label: string }[] = [
-  { value: 'text', label: '文本' },
-  { value: 'voice', label: '语音' },
-];
-
 export default function CreateInterviewPage() {
   const navigate = useNavigate();
   const [jobJd, setJobJd] = useState('');
@@ -57,7 +51,6 @@ export default function CreateInterviewPage() {
   const [resumeProgress, setResumeProgress] = useState(0);
   const [resumeParsing, setResumeParsing] = useState(false);
   const [mode, setMode] = useState<InterviewMode>('mixed');
-  const [inputMode, setInputMode] = useState<InputMode>('text');
   const [persona, setPersona] = useState<Persona>('standard');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [companyStyle, setCompanyStyle] = useState<CompanyStyle>('general');
@@ -247,7 +240,7 @@ export default function CreateInterviewPage() {
       const created = await createInterviewFromBank({
         question_ids: items.map((q) => q.id),
         mode,
-        input_mode: inputMode,
+        input_mode: 'voice',
         persona,
         difficulty,
         company_style: companyStyle,
@@ -275,7 +268,7 @@ export default function CreateInterviewPage() {
       const created = await createInterview({
         job_jd: trimmedJd,
         mode,
-        input_mode: inputMode,
+        input_mode: 'voice',
         persona,
         difficulty,
         company_style: companyStyle,
@@ -453,21 +446,6 @@ export default function CreateInterviewPage() {
           </div>
 
           <div className="interview-field">
-            <label htmlFor="input-mode">作答方式</label>
-            <select
-              id="input-mode"
-              value={inputMode}
-              onChange={(e) => setInputMode(e.target.value as InputMode)}
-            >
-              {INPUT_MODES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="interview-field">
             <label htmlFor="precheck">匹配度检测（可选）</label>
             <button
               type="button"
@@ -568,7 +546,7 @@ export default function CreateInterviewPage() {
             </label>
             <p className="interview-field-hint">
               面试中采集表情/行为信号（情绪、紧张度、点头），仅在本地分析，不上传画面。
-              仅当作答方式为「语音」时生效；切换为文字作答时自动停止。
+              面试全程为语音作答，勾选后摄像头分析始终生效。
             </p>
           </div>
 
