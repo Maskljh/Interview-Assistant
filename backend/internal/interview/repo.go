@@ -216,7 +216,7 @@ func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	return text, nil
 }
 
-func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool, texts []string) (*Session, []Question, error) {
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, texts []string, cameraEnabled bool) (*Session, []Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, nil, err

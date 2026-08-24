@@ -151,7 +151,7 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	}
 
 	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, cameraEnabled, texts)
+	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {
