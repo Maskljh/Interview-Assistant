@@ -368,8 +368,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-var errDuplicate = &mysql.MySQLError{Number: 1062}
-
 type repo struct {
 	db *sql.DB
 }
