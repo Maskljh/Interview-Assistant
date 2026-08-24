@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `Session.CameraEnabled bool`; `Create(userID, jobJD, resume, mode, inputMode, persona, difficulty, style, precheckGaps, cameraEnabled bool)`; `CreateFromBank(..., cameraEnabled bool)`; `sessionResponse.CameraEnabled bool` with `json:"camera_enabled"`.
 
-- [ ] **Step 1: Write migration 010**
+- [x] **Step 1: Write migration 010**
 
 `backend/migrations/011_behavior.sql`:
 
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS interview_behavior (
 );
 ```
 
-- [ ] **Step 2: Apply the migration and verify it is idempotent**
+- [x] **Step 2: Apply the migration and verify it is idempotent**
 
 Run (adjust to your MySQL host):
 
@@ -69,7 +69,7 @@ mysql -h 127.0.0.1 -u root -proot interview -e "SHOW COLUMNS FROM interview_sess
 
 Expected: `camera_enabled` column exists (default 0), `interview_behavior` table exists. Re-running the same file must not error (guarded by `ADD COLUMN` on fresh DB only — note: if the column already exists the ALTER fails, which is expected on a DB that already applied it; do NOT run twice against the same DB).
 
-- [ ] **Step 3: Add `CameraEnabled` to Session struct**
+- [x] **Step 3: Add `CameraEnabled` to Session struct**
 
 In `backend/internal/interview/models.go`, add to `Session`:
 
@@ -79,7 +79,7 @@ In `backend/internal/interview/models.go`, add to `Session`:
 	PrecheckGaps []string
 ```
 
-- [ ] **Step 4: Update repo INSERT and SELECT queries**
+- [x] **Step 4: Update repo INSERT and SELECT queries**
 
 In `backend/internal/interview/repo.go`:
 - `Create` INSERT: add `camera_enabled` column and the `cameraEnabled` value (`0`/`1` via `boolInt(cameraEnabled)`).
@@ -98,7 +98,7 @@ func boolInt(b bool) int {
 }
 ```
 
-- [ ] **Step 5: Update handler request/response structs**
+- [x] **Step 5: Update handler request/response structs**
 
 In `backend/internal/interview/handler.go`:
 - `createRequest`: add `CameraEnabled bool \`json:"camera_enabled"\``
@@ -106,20 +106,20 @@ In `backend/internal/interview/handler.go`:
 - `sessionResponse`: add `CameraEnabled bool \`json:"camera_enabled"\``
 - `toSessionResponse`: set `CameraEnabled: session.CameraEnabled`
 
-- [ ] **Step 6: Update service signatures**
+- [x] **Step 6: Update service signatures**
 
 In `backend/internal/interview/service.go`, add a `cameraEnabled bool` parameter to `Create(...)` and `CreateFromBank(...)` and pass it to the repo calls. Update the two `handler.go` call sites (`h.svc.Create(...)`, `h.svc.CreateFromBank(...)`) to pass `req.CameraEnabled`.
 
-- [ ] **Step 7: Update existing service tests that call Create/CreateFromBank**
+- [x] **Step 7: Update existing service tests that call Create/CreateFromBank**
 
 Search `backend/internal/interview/service_test.go` for `svc.Create(` and `svc.CreateFromBank(` and append `, false` (or a boolean literal) to each call so compilation passes.
 
-- [ ] **Step 8: Verify build + existing tests**
+- [x] **Step 8: Verify build + existing tests**
 
 Run: `cd backend && go build ./... && go test ./internal/interview/... -count=1 -p 1`
 Expected: build succeeds, interview package tests pass (some may require live MySQL — if MYSQL_DSN is unavailable, at minimum `go build ./...` must pass).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/migrations/011_behavior.sql backend/internal/interview/models.go backend/internal/interview/repo.go backend/internal/interview/handler.go backend/internal/interview/service.go backend/internal/interview/service_test.go
@@ -138,7 +138,7 @@ git commit -m "feat(interview): add camera_enabled session flag + behavior table
 - Consumes: `interview.NewRepo(db)` (returns `*interview.Repo`), `interview.Repo.GetByID(id)` returning `(*interview.Session, error)` with `Session.UserID`.
 - Produces: `type Payload struct{...}` (JSON tags below); `type Result struct{...}`; `func NewService(repo *interview.Repo) *Service`; `func (s *Service) Save(ctx, userID, sessionID int64, p Payload) error`; `func (s *Service) Get(ctx, userID, sessionID int64) (Result, error)`; `var ErrNotFound = errors.New("session not found")`; `var ErrInvalidPayload = errors.New("invalid behavior payload")`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `backend/internal/behavior/service_test.go` (follow `expression/service_test.go` conventions — `testDB`, `registerUser`, `insertSession` with `camera_enabled` default; use email prefix `test-behavior-%@example.com`):
 
@@ -316,12 +316,12 @@ func TestGetNoRecord(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && go test ./internal/behavior/... -count=1 -p 1`
 Expected: FAIL — `no required module provides package .../behavior` or "undefined: behavior".
 
-- [ ] **Step 3: Implement `models.go`, `repo.go`, `service.go`**
+- [x] **Step 3: Implement `models.go`, `repo.go`, `service.go`**
 
 `backend/internal/behavior/models.go`:
 
@@ -517,12 +517,12 @@ func validate(p Payload) error {
 
 Update the test file's `behavior.NewService` call to `behavior.NewService(sqlDB)`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd backend && go test ./internal/behavior/... -count=1 -p 1`
 Expected: all behavior tests PASS (requires live MySQL per the package convention; if MySQL is unavailable this is a known environment limitation — the DB tests follow the existing repo convention).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/internal/behavior/
@@ -541,7 +541,7 @@ git commit -m "feat(behavior): behavior signal persistence service with idempote
 - Consumes: `behavior.NewService(db *sql.DB) *Service`; `(*Service).Save/Get` from Task 2; `auth.Middleware(secret)` from `internal/auth`.
 - Produces: `func RegisterRoutes(r *gin.Engine, db *sql.DB, secret string)` registering `GET /api/interviews/:id/behavior` and `POST /api/interviews/:id/behavior` under JWT auth.
 
-- [ ] **Step 1: Write `handler.go`**
+- [x] **Step 1: Write `handler.go`**
 
 `backend/internal/behavior/handler.go`:
 
@@ -630,7 +630,7 @@ func (h *Handler) Save(c *gin.Context) {
 }
 ```
 
-- [ ] **Step 2: Register routes in main.go**
+- [x] **Step 2: Register routes in main.go**
 
 In `backend/cmd/server/main.go`, add import `"github.com/interview-assistant/backend/internal/behavior"` and register near the expression routes (after `expression.RegisterRoutes(...)`):
 
@@ -638,12 +638,12 @@ In `backend/cmd/server/main.go`, add import `"github.com/interview-assistant/bac
 	behavior.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 ```
 
-- [ ] **Step 3: Verify build**
+- [x] **Step 3: Verify build**
 
 Run: `cd backend && go build ./...`
 Expected: build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/internal/behavior/handler.go backend/cmd/server/main.go
@@ -662,7 +662,7 @@ git commit -m "feat(behavior): behavior HTTP routes for save and get"
 - Consumes: `fetchJSON` from `src/api/client.ts` (auto-attaches JWT).
 - Produces: `type Emotion`, `interface StressSegment`, `interface BehaviorPayload`, `type BehaviorResult`, `saveBehavior(id, payload)`, `fetchBehavior(id)`. Also re-export `Emotion` for other modules.
 
-- [ ] **Step 1: Install TensorFlow.js deps**
+- [x] **Step 1: Install TensorFlow.js deps**
 
 Run (in `frontend/`):
 
@@ -672,7 +672,7 @@ npm install @tensorflow/tfjs @tensorflow-models/face-landmarks-detection
 
 Expected: `package.json` gains both deps (tfjs brings `@tensorflow/tfjs-core`, `@tensorflow/tfjs-backend-webgl`, etc.).
 
-- [ ] **Step 2: Write `api/behavior.ts`**
+- [x] **Step 2: Write `api/behavior.ts`**
 
 `frontend/src/api/behavior.ts`:
 
@@ -720,12 +720,12 @@ export async function fetchBehavior(id: number): Promise<BehaviorResult> {
 }
 ```
 
-- [ ] **Step 3: Verify TypeScript compiles**
+- [x] **Step 3: Verify TypeScript compiles**
 
 Run: `cd frontend && npx tsc -b`
 Expected: compiles (new file has no references yet).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/package.json frontend/package-lock.json frontend/src/api/behavior.ts
@@ -743,7 +743,7 @@ git commit -m "feat(behavior): frontend API module + tfjs dependencies"
 **Interfaces:**
 - Produces (used by Tasks 6–8): `interface Point {x,y,z}`, `const LANDMARKS` (FaceMesh index constants), `distance(a,b)`, `mouthAspectRatio(pts)`, `eyeAspectRatio(pts)`, `browRaiseRatio(pts)`, `pitchFromLandmarks(pts)` (returns `number`), `type Emotion`, `classifyEmotion(mar, ear, browRaise)`, `class NodDetector` (`update({t,pitch})` → count), `interface StressFactors`, `computeStressLevel(factors)`, `clamp01(n)`, helper `point(x,y,z)` for tests (export `makePoint`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `frontend/src/behavior/signalExtractors.test.ts`:
 
@@ -887,12 +887,12 @@ it('distance is euclidean', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/behavior/signalExtractors.test.ts`
 Expected: FAIL — module `./signalExtractors` not found.
 
-- [ ] **Step 3: Implement `signalExtractors.ts`**
+- [x] **Step 3: Implement `signalExtractors.ts`**
 
 `frontend/src/behavior/signalExtractors.ts`:
 
@@ -1031,12 +1031,12 @@ export function computeStressLevel(f: StressFactors): number {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd frontend && npx vitest run src/behavior/signalExtractors.test.ts`
 Expected: PASS (all cases).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/behavior/signalExtractors.ts frontend/src/behavior/signalExtractors.test.ts
@@ -1055,7 +1055,7 @@ git commit -m "feat(behavior): pure signal extractors for emotion/nod/stress"
 - Consumes: from Task 5 — `Emotion`, `NodDetector`, `computeStressLevel`, `clamp01`, `StressFactors`.
 - Produces: `interface FrameSignal { t, emotion, ear, pitch, browRaise }`; `interface AggregateOptions { segmentIntervalMs? }` (default 15000); `class BehaviorAggregator` with `push(frame: FrameSignal): void`, `build(): BehaviorPayload` (side-effect-free; returns a fresh snapshot each call, so it may be called repeatedly during live updates and once at stop), `get durationMs(): number`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `frontend/src/behavior/aggregator.test.ts`:
 
@@ -1120,12 +1120,12 @@ describe('BehaviorAggregator', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/behavior/aggregator.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `aggregator.ts`**
+- [x] **Step 3: Implement `aggregator.ts`**
 
 `frontend/src/behavior/aggregator.ts`:
 
@@ -1236,12 +1236,12 @@ function stressOf(frames: FrameSignal[]): number {
 
 > Note: `stressOf` needs `ear` to vary for blink detection, but tests use constant `ear: 0.3` (0 blinks) — that's fine because the tests only assert segment count/timestamps and distribution, not exact stress values. `build()` is side-effect-free, so the hook's repeated live-stress calls are safe.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd frontend && npx vitest run src/behavior/aggregator.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/behavior/aggregator.ts frontend/src/behavior/aggregator.test.ts
@@ -1260,7 +1260,7 @@ git commit -m "feat(behavior): frame aggregator producing behavior payload"
 - Consumes: `Point` from `signalExtractors.ts`.
 - Produces: `interface CameraFeed { video, stream, stop() }`; `startCameraFeed(constraints?): Promise<CameraFeed>`; `interface LandmarkDetector { load(): Promise<void>; detect(video): Promise<Point[] | null>; dispose(): void }`; `loadFaceLandmarkDetector(): Promise<LandmarkDetector>`.
 
-- [ ] **Step 1: Write `cameraFeed.ts`**
+- [x] **Step 1: Write `cameraFeed.ts`**
 
 `frontend/src/behavior/cameraFeed.ts`:
 
@@ -1296,7 +1296,7 @@ export async function startCameraFeed(
 }
 ```
 
-- [ ] **Step 2: Write `FaceLandmarkDetector.ts`**
+- [x] **Step 2: Write `FaceLandmarkDetector.ts`**
 
 `frontend/src/behavior/FaceLandmarkDetector.ts`:
 
@@ -1361,12 +1361,12 @@ export async function loadFaceLandmarkDetector(): Promise<LandmarkDetector> {
 
 > Note: `estimateFaces` keypoints from `@tensorflow-models/face-landmarks-detection` are pixel-space; normalization by video dimensions keeps downstream extractors scale-independent. If a future model version returns normalized coordinates, this normalize step is still harmless (values stay 0–1).
 
-- [ ] **Step 3: Verify TypeScript compiles**
+- [x] **Step 3: Verify TypeScript compiles**
 
 Run: `cd frontend && npx tsc -b`
 Expected: compiles.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/behavior/cameraFeed.ts frontend/src/behavior/FaceLandmarkDetector.ts
@@ -1385,7 +1385,7 @@ git commit -m "feat(behavior): camera feed and face landmark detector"
 - Consumes: `startCameraFeed`, `CameraFeed`; `LandmarkDetector`, `loadFaceLandmarkDetector`; `signalExtractors` helpers (`mouthAspectRatio`, `eyeAspectRatio`, `browRaiseRatio`, `pitchFromLandmarks`, `classifyEmotion`); `BehaviorAggregator`; `saveBehavior`, `BehaviorPayload` from `api/behavior`.
 - Produces: `type BehaviorStatus = 'idle' | 'loading-model' | 'running' | 'failed'`; `interface UseBehaviorOptions { enabled: boolean; sessionId: number; cameraFeed?: () => Promise<CameraFeed>; detectorLoader?: () => Promise<LandmarkDetector>; raf?: (cb) => number; cancelRaf?: (id) => void; now?: () => number }`; `interface BehaviorAnalysis { status, liveStress: number | null, start(), stop(): Promise<void> }`. `stop()` stops the loop + camera, builds the aggregate, and if it has ≥ 2 frames, calls `saveBehavior(sessionId, payload)` (errors swallowed). Start returns silently if `enabled` is false or already running.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `frontend/src/behavior/useBehaviorAnalysis.test.ts`:
 
@@ -1531,12 +1531,12 @@ describe('useBehaviorAnalysis', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/behavior/useBehaviorAnalysis.test.ts`
 Expected: FAIL — module `./useBehaviorAnalysis` not found.
 
-- [ ] **Step 3: Implement `useBehaviorAnalysis.ts`**
+- [x] **Step 3: Implement `useBehaviorAnalysis.ts`**
 
 `frontend/src/behavior/useBehaviorAnalysis.ts`:
 
@@ -1679,17 +1679,17 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd frontend && npx vitest run src/behavior/useBehaviorAnalysis.test.ts`
 Expected: PASS (mocked feed/detector; save called once on stop; errors swallowed).
 
-- [ ] **Step 5: Verify full frontend test suite + type check**
+- [x] **Step 5: Verify full frontend test suite + type check**
 
 Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: all tests pass and `tsc -b` succeeds.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/behavior/useBehaviorAnalysis.ts frontend/src/behavior/useBehaviorAnalysis.test.ts
@@ -1708,14 +1708,14 @@ git commit -m "feat(behavior): useBehaviorAnalysis hook wiring camera to aggrega
 - Consumes: backend `camera_enabled` in session JSON (Task 1).
 - Produces: `CreateInterviewInput.camera_enabled?: boolean`; `CreateFromBankInput.camera_enabled?: boolean`; `Interview.camera_enabled: boolean`.
 
-- [ ] **Step 1: Update API types**
+- [x] **Step 1: Update API types**
 
 In `frontend/src/api/interviews.ts`:
 - `CreateInterviewInput`: add `camera_enabled?: boolean;`
 - `CreateFromBankInput`: add `camera_enabled?: boolean;`
 - `Interview`: add `camera_enabled: boolean;`
 
-- [ ] **Step 2: Add the toggle state**
+- [x] **Step 2: Add the toggle state**
 
 In `frontend/src/pages/CreateInterviewPage.tsx`:
 - Add state: `const [cameraEnabled, setCameraEnabled] = useState(false);`
@@ -1749,7 +1749,7 @@ and in `handleFocusedPractice`:
       });
 ```
 
-- [ ] **Step 3: Add the checkbox UI**
+- [x] **Step 3: Add the checkbox UI**
 
 In the form JSX (after the 「企业风格」 field, before the submit button):
 
@@ -1770,12 +1770,12 @@ In the form JSX (after the 「企业风格」 field, before the submit button):
           </div>
 ```
 
-- [ ] **Step 4: Verify type check + existing tests**
+- [x] **Step 4: Verify type check + existing tests**
 
 Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: type check passes, tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/interviews.ts frontend/src/pages/CreateInterviewPage.tsx
@@ -1793,7 +1793,7 @@ git commit -m "feat(behavior): camera toggle on create interview page"
 **Interfaces:**
 - Consumes: `useBehaviorAnalysis` (Task 8); `Interview.camera_enabled` (Task 9); existing `handleForceEnd` and WS `done` navigation.
 
-- [ ] **Step 1: Hook the analysis into the room**
+- [x] **Step 1: Hook the analysis into the room**
 
 In `frontend/src/pages/InterviewRoomPage.tsx`:
 - Import `useBehaviorAnalysis` and `useEffect` (already imported).
@@ -1828,7 +1828,7 @@ In `frontend/src/pages/InterviewRoomPage.tsx`:
 
 Then use `behaviorStartRef.current()` / `behaviorStopRef.current()` everywhere (including in the effect and handlers). This avoids the effect's stale-closure problem.
 
-- [ ] **Step 2: Add the light indicator**
+- [x] **Step 2: Add the light indicator**
 
 In the room JSX, near the status line (after `{statusLine && ...}`), add:
 
@@ -1854,7 +1854,7 @@ In the room JSX, near the status line (after `{statusLine && ...}`), add:
             )}
 ```
 
-- [ ] **Step 3: Stop + upload on force-end and on WS done**
+- [x] **Step 3: Stop + upload on force-end and on WS done**
 
 In `handleForceEnd`, before `navigate(...)`, add `await behaviorStopRef.current();` (inside the existing try, before the navigate). Since `behavior.stop()` itself awaits `saveBehavior` (with a 20s fetch timeout cap), this can delay navigation; acceptable per spec ("正在生成报告，请稍候…" is already shown). Wrap with a safety so navigation is not blocked longer than ~3s:
 
@@ -1890,7 +1890,7 @@ In the WS `done` handler (`handleMessage`, `case 'done':`), replace the immediat
 
 (`handleMessage` is already `useCallback` — add `async`.)
 
-- [ ] **Step 4: Add minimal CSS**
+- [x] **Step 4: Add minimal CSS**
 
 In `frontend/src/pages/InterviewPages.css` (append):
 
@@ -1909,12 +1909,12 @@ In `frontend/src/pages/InterviewPages.css` (append):
 .behavior-light--off { background: #aaa; }
 ```
 
-- [ ] **Step 5: Verify type check + tests**
+- [x] **Step 5: Verify type check + tests**
 
 Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: type check + tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/pages/InterviewRoomPage.tsx frontend/src/pages/InterviewPages.css
@@ -1932,7 +1932,7 @@ git commit -m "feat(behavior): room integration with light indicator and end upl
 **Interfaces:**
 - Consumes: `fetchBehavior`, `BehaviorResult`, `Emotion` from `api/behavior.ts` (Task 4); existing `profile-card` styling and `interview-section-title`.
 
-- [ ] **Step 1: Fetch behavior on load**
+- [x] **Step 1: Fetch behavior on load**
 
 In `frontend/src/pages/ReportPage.tsx`:
 - Import `fetchBehavior, type BehaviorResult, type Emotion } from '../api/behavior';`
@@ -1949,7 +1949,7 @@ In `frontend/src/pages/ReportPage.tsx`:
       });
 ```
 
-- [ ] **Step 2: Render the auxiliary card**
+- [x] **Step 2: Render the auxiliary card**
 
 Add `EMOTION_LABELS` near `DIMENSION_LABELS`:
 
@@ -2020,7 +2020,7 @@ In the JSX, after the `{expression && (...)}` block (before the `report-model-ve
             )}
 ```
 
-- [ ] **Step 3: Add CSS for the note**
+- [x] **Step 3: Add CSS for the note**
 
 In `frontend/src/pages/InterviewPages.css` (append):
 
@@ -2032,16 +2032,16 @@ In `frontend/src/pages/InterviewPages.css` (append):
 }
 ```
 
-- [ ] **Step 4: Verify type check + tests**
+- [x] **Step 4: Verify type check + tests**
 
 Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: type check + tests pass.
 
-- [ ] **Step 5: Manual E2E (needs running stack)**
+- [x] **Step 5: Manual E2E (needs running stack)**
 
 Start backend (`go run ./cmd/server`) + frontend (`npm run dev`), create an interview with the camera toggle checked, grant camera permission, let the interview run, end it, open the report. Expected: 「行为信号（辅助参考）」card shows emotion distribution, nod count, stress level; no video is uploaded (verify network tab has no image/video POST).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/pages/ReportPage.tsx frontend/src/pages/InterviewPages.css
@@ -2054,17 +2054,17 @@ git commit -m "feat(behavior): behavior signal card on report page"
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Backend tests**
+- [x] **Step 1: Backend tests**
 
 Run: `cd backend && go test ./... -count=1 -p 1`
 Expected: all packages pass (MySQL-backed integration tests need a live DB; if unavailable, report which packages were skipped as environment-limited and confirm `go build ./...` + `go vet ./...` pass).
 
-- [ ] **Step 2: Frontend tests + type check + lint**
+- [x] **Step 2: Frontend tests + type check + lint**
 
 Run: `cd frontend && npx tsc -b && npm run test && npm run lint` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: all green.
 
-- [ ] **Step 3: Acceptance checklist (manual)**
+- [x] **Step 3: Acceptance checklist (manual)**
 
 Walk B1–B9 from the spec:
 - B1: toggle present + default off + persisted → `camera_enabled` in `GET /api/interviews/:id`.
@@ -2077,7 +2077,7 @@ Walk B1–B9 from the spec:
 - B8: other user's session → 404 on both routes.
 - B9: regression suite green.
 
-- [ ] **Step 4: Final commit if any fixes were made**
+- [x] **Step 4: Final commit if any fixes were made**
 
 ```bash
 git add -A

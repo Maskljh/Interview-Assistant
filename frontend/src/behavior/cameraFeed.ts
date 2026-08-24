@@ -24,6 +24,7 @@ export async function startCameraFeed(
     stream,
     stop() {
       for (const track of stream.getTracks()) track.stop();
+      video.srcObject = null;
     },
   };
 }

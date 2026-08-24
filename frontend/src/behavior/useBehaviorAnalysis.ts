@@ -82,6 +82,7 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
   const start = useCallback(async () => {
     if (!opts.enabled || runningRef.current) return;
     runningRef.current = true;
+    lastLiveRef.current = 0;
     setStatus('loading-model');
     aggRef.current = new BehaviorAggregator();
     const now = getNow();
@@ -125,7 +126,8 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
               setLiveStress(aggRef.current.build().stress_level);
             }
           })
-          .catch(() => {
+          .catch((err) => {
+            console.warn('[behavior] detect failed', err);
             cleanup();
             setStatus('failed');
           });

@@ -36,7 +36,7 @@ func (s *Service) Save(ctx context.Context, userID, sessionID int64, p Payload) 
 	if session.UserID != userID {
 		return ErrNotFound
 	}
-	return (&repo{db: s.db}).insert(sessionID, userID, p)
+	return (&repo{db: s.db}).insert(ctx, sessionID, userID, p)
 }
 
 func (s *Service) Get(ctx context.Context, userID, sessionID int64) (Result, error) {
@@ -50,7 +50,7 @@ func (s *Service) Get(ctx context.Context, userID, sessionID int64) (Result, err
 	if session.UserID != userID {
 		return Result{}, ErrNotFound
 	}
-	res, err := (&repo{db: s.db}).get(sessionID)
+	res, err := (&repo{db: s.db}).get(ctx, sessionID)
 	if err != nil {
 		return Result{}, err
 	}

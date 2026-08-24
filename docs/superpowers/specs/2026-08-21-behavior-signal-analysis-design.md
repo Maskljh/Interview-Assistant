@@ -45,7 +45,7 @@
 
 ## 4. Data model
 
-迁移 `010_behavior.sql`：
+迁移 `011_behavior.sql`：
 
 ```sql
 CREATE TABLE IF NOT EXISTS interview_behavior (
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS interview_behavior (
 ## 8. 开关持久化决策
 
 - `camera_enabled` 作为 session 属性存 `interview_sessions`（新增列 `camera_enabled TINYINT(1) NOT NULL DEFAULT 0`），随创建请求写入
-- 迁移 `010_behavior.sql` 同时创建 `interview_behavior` 表并给 `interview_sessions` 加 `camera_enabled` 列
+- 迁移 `011_behavior.sql` 同时创建 `interview_behavior` 表并给 `interview_sessions` 加 `camera_enabled` 列
 - 后端 `Session` 模型、repo 的 INSERT/SELECT/scan 同步加该字段
 - 读取：面试间加载 session 时取 `camera_enabled` 决定是否启动分析；报告页通过 `behavior.available` 决定是否显示区块（不依赖 `camera_enabled` 回读，直接查 behavior 记录）
 
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS interview_behavior (
 
 ## 13. Implementation notes
 
-- Backend: `internal/behavior`（service.go + handler.go + repo.go + 测试）；`interview` 的 Session 模型/repo INSERT/SELECT/scan 加 `camera_enabled`；迁移 `010_behavior.sql`
+- Backend: `internal/behavior`（service.go + handler.go + repo.go + 测试）；`interview` 的 Session 模型/repo INSERT/SELECT/scan 加 `camera_enabled`；迁移 `011_behavior.sql`
 - `main.go`：`behavior.RegisterRoutes(r, sqlDB, cfg.JWTSecret)`
 - Frontend: `api/interviews.ts` 加 `camera_enabled`；`api/behavior.ts`；`behavior/` 新目录（useBehaviorAnalysis / FaceLandmarkDetector / signalExtractors / aggregator / cameraFeed）；`CreateInterviewPage` 复选框；`InterviewRoomPage` 启动分析 + 结束上报 + 轻量指示；`ReportPage` 行为信号卡
 - `package.json`：加 `@tensorflow/tfjs`、`@tensorflow-models/face-landmarks-detection`

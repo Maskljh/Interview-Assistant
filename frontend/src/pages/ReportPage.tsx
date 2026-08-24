@@ -274,16 +274,18 @@ export default function ReportPage() {
                         <>
                           <p>
                             情绪分布：
-                            {(
-                              Object.entries(
-                                behavior.emotion_distribution,
-                              ) as [Emotion, number][]
-                            )
-                              .map(
-                                ([k, v]) =>
-                                  `${EMOTION_LABELS[k] ?? k} ${pct(v)}%`,
-                              )
-                              .join(' / ')}
+                            {Object.keys(behavior.emotion_distribution).length === 0
+                              ? '暂无情绪数据'
+                              : (
+                                  (Object.entries(
+                                    behavior.emotion_distribution,
+                                  ) as [Emotion, number][])
+                                    .map(
+                                      ([k, v]) =>
+                                        `${EMOTION_LABELS[k] ?? k} ${pct(v)}%`,
+                                    )
+                                    .join(' / ')
+                                )}
                           </p>
                           <p>点头：{behavior.nod_count} 次</p>
                           <p>
@@ -297,7 +299,8 @@ export default function ReportPage() {
                           {behavior.stress_segments.length > 0 && (
                             <p>
                               紧张度走势：分段
-                              {behavior.stress_segments.length} 段（{behavior.duration_ms / 1000}s
+                              {behavior.stress_segments.length} 段（
+                              {Math.round(behavior.duration_ms / 1000)}s
                               有效分析）
                             </p>
                           )}

@@ -1,6 +1,7 @@
 package behavior
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,7 @@ type repo struct {
 	db *sql.DB
 }
 
-func (r *repo) insert(sessionID, userID int64, p Payload) error {
+func (r *repo) insert(ctx context.Context, sessionID, userID int64, p Payload) error {
 	distJSON, err := json.Marshal(p.EmotionDistribution)
 	if err != nil {
 		return err
@@ -25,7 +26,8 @@ func (r *repo) insert(sessionID, userID int64, p Payload) error {
 		}
 		segJSON = string(b)
 	}
-	_, err = r.db.Exec(
+	_, err = r.db.ExecContext(
+		ctx,
 		`INSERT INTO interview_behavior
 		   (session_id, user_id, emotion_distribution, nod_count, stress_level, stress_segments, face_detected_frames, duration_ms)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -37,8 +39,9 @@ func (r *repo) insert(sessionID, userID int64, p Payload) error {
 	return err
 }
 
-func (r *repo) get(sessionID int64) (*Result, error) {
-	row := r.db.QueryRow(
+func (r *repo) get(ctx context.Context, sessionID int64) (*Result, error) {
+	row := r.db.QueryRowContext(
+		ctx,
 		`SELECT emotion_distribution, nod_count, stress_level, stress_segments, face_detected_frames, duration_ms
 		 FROM interview_behavior WHERE session_id = ?`, sessionID,
 	)

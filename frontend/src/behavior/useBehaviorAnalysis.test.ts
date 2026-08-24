@@ -107,6 +107,44 @@ describe('useBehaviorAnalysis', () => {
     expect(payload.face_detected_frames).toBeGreaterThanOrEqual(2);
   });
 
+  it('goes failed when camera access is denied', async () => {
+    vi.mocked(startCameraFeed).mockRejectedValueOnce(new Error('NotAllowedError'));
+    const { result } = renderHook(() =>
+      useBehaviorAnalysis({ enabled: true, sessionId: 1 }),
+    );
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('goes failed when model loading fails', async () => {
+    const detector = {
+      load: vi.fn().mockRejectedValue(new Error('model load failed')),
+      detect: vi.fn(),
+      dispose: vi.fn(),
+    };
+    vi.mocked(loadFaceLandmarkDetector).mockResolvedValue(detector as never);
+    const { result } = renderHook(() =>
+      useBehaviorAnalysis({ enabled: true, sessionId: 1 }),
+    );
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('stays idle when disabled (degradation no-op)', async () => {
+    const { result } = renderHook(() =>
+      useBehaviorAnalysis({ enabled: false, sessionId: 1 }),
+    );
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(startCameraFeed).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('idle');
+  });
+
   it('swallows save errors without throwing', async () => {
     vi.mocked(saveBehavior).mockRejectedValueOnce(new Error('network'));
     const { result } = renderHook(() =>
