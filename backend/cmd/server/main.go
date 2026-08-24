@@ -101,6 +101,7 @@ func main() {
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, ocrClient)
+	ocr.RegisterRoutes(r, cfg.JWTSecret, ocrClient)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	precheck.RegisterRoutes(r, llmClient, cfg.JWTSecret)
