@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Backend DB test convention: integration tests use real MySQL via `MYSQL_DSN` (default `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4`); cleanup deletes users by email prefix. Follow the `expression/service_test.go` pattern exactly.
-- Migration numbering: latest is `009_difficulty_style.sql` → new migration is `010_behavior.sql`. Migrations are applied manually (no auto-migrate), e.g. `mysql -h 127.0.0.1 -u root -proot interview < backend/migrations/010_behavior.sql`.
+- Migration numbering: latest existing migration is `010_oss_urls.sql` (note: `010` is already taken by the OSS upload feature), so the new migration is `011_behavior.sql`. Migrations are applied manually (no auto-migrate), e.g. `mysql -h 127.0.0.1 -u root -proot interview < backend/migrations/011_behavior.sql`.
 - All new user-facing copy must be Chinese (Simplified). Emotion labels: `smile / neutral / focus / surprise / frown` → 微笑 / 中性 / 专注 / 惊讶 / 皱眉.
 - The video/frame NEVER leaves the browser. Only the aggregated payload (emotion frame counts, nod count, stress level, segment series, frame count, duration) is sent to the backend.
 - Silent degradation: missing `getUserMedia`, model-load failure, or permission denial must never block or interrupt the interview; the report simply hides the behavior card.
@@ -28,7 +28,7 @@
 ### Task 1: Migration 010 + `camera_enabled` plumbing
 
 **Files:**
-- Create: `backend/migrations/010_behavior.sql`
+- Create: `backend/migrations/011_behavior.sql`
 - Modify: `backend/internal/interview/models.go` (Session struct), `backend/internal/interview/repo.go` (INSERT ×2 + SELECT ×2 + scanSession), `backend/internal/interview/handler.go` (createRequest, fromBankRequest, sessionResponse, toSessionResponse), `backend/internal/interview/service.go` (Create, CreateFromBank signatures)
 
 **Interfaces:**
@@ -36,7 +36,7 @@
 
 - [ ] **Step 1: Write migration 010**
 
-`backend/migrations/010_behavior.sql`:
+`backend/migrations/011_behavior.sql`:
 
 ```sql
 ALTER TABLE interview_sessions
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS interview_behavior (
 Run (adjust to your MySQL host):
 
 ```bash
-mysql -h 127.0.0.1 -u root -proot interview < backend/migrations/010_behavior.sql
+mysql -h 127.0.0.1 -u root -proot interview < backend/migrations/011_behavior.sql
 mysql -h 127.0.0.1 -u root -proot interview -e "SHOW COLUMNS FROM interview_sessions LIKE 'camera_enabled'; SHOW TABLES LIKE 'interview_behavior';"
 ```
 
@@ -122,7 +122,7 @@ Expected: build succeeds, interview package tests pass (some may require live My
 - [ ] **Step 9: Commit**
 
 ```bash
-git add backend/migrations/010_behavior.sql backend/internal/interview/models.go backend/internal/interview/repo.go backend/internal/interview/handler.go backend/internal/interview/service.go backend/internal/interview/service_test.go
+git add backend/migrations/011_behavior.sql backend/internal/interview/models.go backend/internal/interview/repo.go backend/internal/interview/handler.go backend/internal/interview/service.go backend/internal/interview/service_test.go
 git commit -m "feat(interview): add camera_enabled session flag + behavior table migration"
 ```
 
