@@ -12,6 +12,7 @@ import {
   type Persona,
 } from '../api/interviews';
 import { fetchFocusedQuestions } from '../api/questions';
+import { recognizeImage } from '../api/ocr';
 import { fetchProfile, type Profile } from '../api/profile';
 import { fetchPreCheck, type PreCheckOut } from '../api/precheck';
 import {
@@ -47,6 +48,8 @@ export default function CreateInterviewPage() {
   const [jdFileUrl, setJdFileUrl] = useState('');
   const [jdUploading, setJdUploading] = useState(false);
   const [jdProgress, setJdProgress] = useState(0);
+  const [jdOcrName, setJdOcrName] = useState('');
+  const [jdOcrRecognizing, setJdOcrRecognizing] = useState(false);
   const [resumeText, setResumeText] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
   const [resumeFileUrl, setResumeFileUrl] = useState('');
@@ -158,6 +161,34 @@ export default function CreateInterviewPage() {
       e.target.value = '';
     } finally {
       setJdUploading(false);
+    }
+  }
+
+  async function handleJdImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setJdOcrRecognizing(true);
+    setJdOcrName(file.name);
+    try {
+      const { text } = await recognizeImage(file);
+      if (!text.trim()) {
+        setError('未识别到文字，请尝试更清晰的图片');
+        return;
+      }
+      setJobJd(text);
+      setPrecheckStale(true);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.rawMessage : '';
+      const ux = err instanceof ApiError ? err.message : '图片识别失败';
+      if (msg.includes('unavailable') || ux.includes('改用文本粘贴')) {
+        setError('图片识别失败，请改用文本粘贴');
+      } else {
+        setError(ux);
+      }
+    } finally {
+      setJdOcrRecognizing(false);
+      e.target.value = '';
     }
   }
 
@@ -330,6 +361,27 @@ export default function CreateInterviewPage() {
               {jdUploading && (
                 <span className="interview-file-progress">
                   上传中… {jdProgress}%
+                </span>
+              )}
+            </div>
+            <div className="interview-file-row">
+              <label className="interview-file-label" htmlFor="jd-image">
+                或上传 JD 图片
+              </label>
+              <input
+                id="jd-image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleJdImage}
+                disabled={jdOcrRecognizing || loading}
+              />
+              {jdOcrRecognizing && (
+                <span className="interview-file-progress">OCR 识别中…</span>
+              )}
+              {jdOcrName && !jdOcrRecognizing && (
+                <span className="interview-file-name">
+                  已识别：{jdOcrName}
+                  {jobJd ? `（约 ${jobJd.length} 字）` : ''}
                 </span>
               )}
             </div>

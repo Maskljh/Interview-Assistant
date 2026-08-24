@@ -105,6 +105,13 @@
   color: var(--color-body);
 }
 
+.interview-file-label {
+  font: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-body);
+  cursor: pointer;
+}
+
 .interview-file-meta {
   display: flex;
   align-items: center;
