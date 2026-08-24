@@ -568,6 +568,7 @@ export default function CreateInterviewPage() {
             </label>
             <p className="interview-field-hint">
               面试中采集表情/行为信号（情绪、紧张度、点头），仅在本地分析，不上传画面。
+              仅当作答方式为「语音」时生效；切换为文字作答时自动停止。
             </p>
           </div>
 

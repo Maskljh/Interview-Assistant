@@ -71,8 +71,11 @@ export default function InterviewRoomPage() {
   const voiceCancelRef = useRef(false);
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
+  // 摄像头分析仅在「创建时勾选开启 + 当前处于语音作答」时启用；
+  // 中途切换为文字作答（textModeOverride）时自动停止分析。
+  const behaviorVoiceEnabled = cameraEnabled && inputMode === 'voice' && !textModeOverride;
   const behavior = useBehaviorAnalysis({
-    enabled: cameraEnabled,
+    enabled: behaviorVoiceEnabled,
     sessionId: interviewId,
   });
   const behaviorStartRef = useRef<() => Promise<void>>(async () => {});
@@ -80,10 +83,12 @@ export default function InterviewRoomPage() {
   behaviorStartRef.current = behavior.start;
   behaviorStopRef.current = behavior.stop;
   useEffect(() => {
-    if (cameraEnabled) {
+    if (behaviorVoiceEnabled) {
       void behaviorStartRef.current();
+    } else {
+      void behaviorStopRef.current();
     }
-  }, [cameraEnabled]);
+  }, [behaviorVoiceEnabled]);
   const [pendingCount, setPendingCount] = useState(0);
   const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
