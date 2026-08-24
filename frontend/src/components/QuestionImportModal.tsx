@@ -53,7 +53,10 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
       setStep('candidates'); // 有解析结果进候选编辑；无结果（raw 模式）也进候选区手动整理
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '解析失败';
-      if (msg.includes('改用文本粘贴') || msg.includes('unavailable')) {
+      // OCR 不可用时后端返回 502，错误文案被 toUserMessage 映射成通用提示，
+      // 必须用原始 message（rawMessage）识别该场景并展示强制的提示文案。
+      const raw = err instanceof ApiError ? err.rawMessage : '';
+      if (msg.includes('改用文本粘贴') || raw.includes('unavailable')) {
         setError('图片识别失败，请改用文本粘贴');
       } else {
         setError(msg);

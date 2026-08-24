@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import QuestionImportModal from './QuestionImportModal';
 import type { ImportItem } from '../api/questions';
+import { parseImportImage } from '../api/questions';
+import { ApiError } from '../api/client';
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
@@ -64,5 +66,26 @@ describe('QuestionImportModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/新增 2 题，跳过 1 题重复/)).toBeTruthy();
     });
+  });
+
+  it('shows mandated copy when OCR is unavailable (502)', async () => {
+    const err = new ApiError(
+      502,
+      '服务器开小差了，请稍后重试',
+      'image recognition unavailable, please use text input',
+    );
+    vi.mocked(parseImportImage).mockRejectedValueOnce(err);
+    const { container } = renderModal();
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!fileInput) throw new Error('file input not found');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['x'], 'shot.png', { type: 'image/png' })] },
+    });
+    fireEvent.click(screen.getByText('解析'));
+    await waitFor(() => {
+      expect(screen.getByText('图片识别失败，请改用文本粘贴')).toBeTruthy();
+    });
+    // 通用 502 文案不得出现
+    expect(screen.queryByText('服务器开小差了，请稍后重试')).toBeNull();
   });
 });
