@@ -11,6 +11,7 @@ import {
 import { createVoicePlayer } from '../lib/voicePlayer';
 import { COMPANY_STYLE_LABELS, DIFFICULTY_LABELS, PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
+import { useBehaviorAnalysis } from '../behavior/useBehaviorAnalysis';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import VirtualPersona from '../components/VirtualPersona';
@@ -41,6 +42,7 @@ export default function InterviewRoomPage() {
   const [persona, setPersona] = useState<Persona | null>(null);
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [companyStyle, setCompanyStyle] = useState<string | null>(null);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [loadingInterview, setLoadingInterview] = useState(true);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
   const [ttsMuted, setTtsMuted] = useState(false);
@@ -69,6 +71,14 @@ export default function InterviewRoomPage() {
   const voiceCancelRef = useRef(false);
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
+  const behavior = useBehaviorAnalysis({
+    enabled: cameraEnabled,
+    sessionId: interviewId,
+  });
+  const behaviorStartRef = useRef<() => Promise<void>>(async () => {});
+  const behaviorStopRef = useRef<() => Promise<void>>(async () => {});
+  behaviorStartRef.current = behavior.start;
+  behaviorStopRef.current = behavior.stop;
   const [pendingCount, setPendingCount] = useState(0);
   const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
@@ -139,7 +149,7 @@ export default function InterviewRoomPage() {
     setStatusLine('');
   }, []);
   const handleMessage = useCallback(
-    (msg: ServerMsg) => {
+    async (msg: ServerMsg) => {
       if (msg.progress) {
         setProgress(msg.progress);
       }
@@ -181,6 +191,10 @@ export default function InterviewRoomPage() {
           setThinking(false);
           setVoicePhase('idle');
           voicePlayerRef.current?.stop();
+          await Promise.race([
+            behaviorStopRef.current(),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
           navigate(`/interviews/${interviewId}/report`, { replace: true });
           break;
       }
@@ -266,6 +280,7 @@ export default function InterviewRoomPage() {
         setPersona(data.persona);
         setDifficulty(data.difficulty);
         setCompanyStyle(data.company_style);
+        setCameraEnabled(data.camera_enabled);
         doneRef.current = false;
         let lastInterviewerContent: string | null = null;
         if (data.turns.length > 0) {
@@ -285,6 +300,9 @@ export default function InterviewRoomPage() {
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
         connect();
+        if (data.camera_enabled) {
+          void behaviorStartRef.current();
+        }
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -509,6 +527,10 @@ export default function InterviewRoomPage() {
     setVoicePhase('idle');
     try {
       await endInterview(interviewId);
+      await Promise.race([
+        behaviorStopRef.current(),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
       if (!doneRef.current) {
         doneRef.current = true;
         navigate(`/interviews/${interviewId}/report`, { replace: true });
@@ -561,6 +583,25 @@ export default function InterviewRoomPage() {
               </p>
             )}
             {statusLine && <p className="interview-room-status">{statusLine}</p>}
+            {behavior.status === 'loading-model' && (
+              <p className="interview-room-status">正在加载摄像头分析…</p>
+            )}
+            {behavior.status === 'running' && (
+              <p className="interview-room-status">
+                <span
+                  className={`behavior-light behavior-light--${
+                    behavior.liveStress == null
+                      ? 'ok'
+                      : behavior.liveStress < 40
+                        ? 'ok'
+                        : behavior.liveStress < 70
+                          ? 'mid'
+                          : 'high'
+                  }`}
+                />
+                摄像头分析中…
+              </p>
+            )}
             <div className="interview-transcript interview-room-transcript">
               {turns.length === 0 ? (
                 error && !loadingInterview ? (

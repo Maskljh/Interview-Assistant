@@ -1214,3 +1214,17 @@
 .interview-inline-link--danger:hover {
   color: var(--color-error);
 }
+
+/* ─── Behavior analysis light indicator ─── */
+.behavior-light {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.behavior-light--ok { background: #2ecc71; }
+.behavior-light--mid { background: #f5a623; }
+.behavior-light--high { background: #ee0000; }
+.behavior-light--off { background: #aaa; }
