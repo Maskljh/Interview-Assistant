@@ -80,6 +80,8 @@ export interface CreateInterviewInput {
   jd_file_url?: string;
   precheck_gaps?: string[];
   mode: InterviewMode;
+  // Voice-only: server coerces any input_mode to 'voice'; kept optional for
+  // back-compat (historical sessions may still report 'text' on reads).
   input_mode?: InputMode;
   persona?: Persona;
   difficulty?: Difficulty;

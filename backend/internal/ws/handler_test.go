@@ -85,7 +85,7 @@ func seedInProgressSession(t *testing.T, svc *interview.Service, sqlDB *sql.DB, 
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	session, err := svc.Create(context.Background(), uid, "Backend JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "standard", "medium", "general", nil, false)
+	session, err := svc.Create(context.Background(), uid, "Backend JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "standard", "medium", "general", nil, false)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
