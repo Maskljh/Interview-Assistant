@@ -102,27 +102,33 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
       const loop = () => {
         if (!runningRef.current) return;
         const t = now();
-        void detector.detect(camera.video).then((pts) => {
-          if (!runningRef.current || !pts || !aggRef.current) {
-            return;
-          }
-          const mar = mouthAspectRatio(pts);
-          const ear = eyeAspectRatio(pts);
-          const browRaise = browRaiseRatio(pts);
-          const pitch = pitchFromLandmarks(pts);
-          const frame: FrameSignal = {
-            t,
-            emotion: classifyEmotion(mar, ear, browRaise),
-            ear,
-            pitch,
-            browRaise,
-          };
-          aggRef.current.push(frame);
-          if (t - lastLiveRef.current >= 1000) {
-            lastLiveRef.current = t;
-            setLiveStress(aggRef.current.build().stress_level);
-          }
-        });
+        void detector
+          .detect(camera.video)
+          .then((pts) => {
+            if (!runningRef.current || !pts || !aggRef.current) {
+              return;
+            }
+            const mar = mouthAspectRatio(pts);
+            const ear = eyeAspectRatio(pts);
+            const browRaise = browRaiseRatio(pts);
+            const pitch = pitchFromLandmarks(pts);
+            const frame: FrameSignal = {
+              t,
+              emotion: classifyEmotion(mar, ear, browRaise),
+              ear,
+              pitch,
+              browRaise,
+            };
+            aggRef.current.push(frame);
+            if (t - lastLiveRef.current >= 1000) {
+              lastLiveRef.current = t;
+              setLiveStress(aggRef.current.build().stress_level);
+            }
+          })
+          .catch(() => {
+            cleanup();
+            setStatus('failed');
+          });
         rafIdRef.current = getRaf()(loop);
       };
       loop();

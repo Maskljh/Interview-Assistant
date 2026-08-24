@@ -55,4 +55,19 @@ describe('BehaviorAggregator', () => {
     expect(out.nod_count).toBe(0);
     expect(out.stress_segments).toEqual([]);
   });
+
+  it('build is side-effect-free and does not advance segment state', () => {
+    const agg = new BehaviorAggregator({ segmentIntervalMs: 1000 });
+    agg.push(frame(0, 'neutral'));
+    agg.push(frame(500, 'neutral'));
+    const first = agg.build();
+    const second = agg.build();
+    // repeated builds return identical snapshots
+    expect(second).toEqual(first);
+    // pushing past the boundary still records the segment at the original start
+    agg.push(frame(1100, 'neutral'));
+    const third = agg.build();
+    expect(third.stress_segments.length).toBe(1);
+    expect(third.stress_segments[0].t_ms).toBe(0);
+  });
 });
