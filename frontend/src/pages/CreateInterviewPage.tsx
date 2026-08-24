@@ -167,6 +167,10 @@ export default function CreateInterviewPage() {
   async function handleJdImage(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('图片不能超过 5MB');
+      return;
+    }
     setError('');
     setJdOcrRecognizing(true);
     setJdOcrName(file.name);

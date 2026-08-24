@@ -55,4 +55,17 @@ describe('CreateInterviewPage JD image OCR', () => {
     });
     expect(recognizeImage).toHaveBeenCalledWith(file);
   });
+
+  it('rejects images larger than 5MB without calling OCR', async () => {
+    renderPage();
+    const fileInput = screen.getByLabelText('或上传 JD 图片') as HTMLInputElement;
+    const bigFile = new File(['x'.repeat(5 * 1024 * 1024 + 1)], 'big.png', {
+      type: 'image/png',
+    });
+    fireEvent.change(fileInput, { target: { files: [bigFile] } });
+    await waitFor(() => {
+      expect(screen.getByText('图片不能超过 5MB')).toBeTruthy();
+    });
+    expect(recognizeImage).not.toHaveBeenCalled();
+  });
 });
