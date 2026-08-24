@@ -79,6 +79,11 @@ export default function InterviewRoomPage() {
   const behaviorStopRef = useRef<() => Promise<void>>(async () => {});
   behaviorStartRef.current = behavior.start;
   behaviorStopRef.current = behavior.stop;
+  useEffect(() => {
+    if (cameraEnabled) {
+      void behaviorStartRef.current();
+    }
+  }, [cameraEnabled]);
   const [pendingCount, setPendingCount] = useState(0);
   const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
@@ -300,9 +305,6 @@ export default function InterviewRoomPage() {
         }
         lastInterviewerMsgRef.current = lastInterviewerContent;
         connect();
-        if (data.camera_enabled) {
-          void behaviorStartRef.current();
-        }
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -333,6 +335,7 @@ export default function InterviewRoomPage() {
       voicePlayerRef.current?.stop();
       socketRef.current?.close();
       socketRef.current = null;
+      void behaviorStopRef.current();
       pendingAnswersRef.current = [];
       setPendingCount(0);
     };
