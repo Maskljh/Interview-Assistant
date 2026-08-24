@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import QuestionImportModal from './QuestionImportModal';
 import type { ImportItem } from '../api/questions';
-import { parseImportImage } from '../api/questions';
+import { parseImportImage, parseImportText } from '../api/questions';
 import { ApiError } from '../api/client';
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
@@ -71,6 +71,27 @@ describe('QuestionImportModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/新增 2 题，跳过 1 题重复/)).toBeTruthy();
     });
+  });
+
+  it('auto-splits raw lines into editable candidates when LLM parse returns none', async () => {
+    vi.mocked(parseImportText).mockResolvedValueOnce({
+      items: [],
+      raw: '1. React useEffect 依赖\n2. 虚拟 DOM 原理\n3. flex 与 grid 区别',
+      ocr_text: '',
+    });
+    renderModal();
+    fireEvent.change(screen.getByPlaceholderText(/粘贴面经文本/), {
+      target: { value: '面经原文' },
+    });
+    fireEvent.click(screen.getByText('解析'));
+    await waitFor(() => {
+      expect(screen.getByText('第 1 题')).toBeTruthy();
+    });
+    // 序号前缀被去除，自动生成 3 条可编辑候选
+    expect(screen.getByDisplayValue('React useEffect 依赖')).toBeTruthy();
+    expect(screen.getByDisplayValue('虚拟 DOM 原理')).toBeTruthy();
+    expect(screen.getByDisplayValue('flex 与 grid 区别')).toBeTruthy();
+    expect(screen.getByText('确认导入 3 题')).toBeTruthy();
   });
 
   it('shows mandated copy when OCR is unavailable (502)', async () => {

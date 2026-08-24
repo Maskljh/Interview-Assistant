@@ -32,7 +32,6 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!open) return null;
-
   async function handleParse() {
     setParsing(true);
     setError('');
@@ -50,7 +49,16 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
       setItems(res.items);
       setRaw(res.raw);
       setOcrText(res.ocr_text);
-      setStep('candidates'); // 有解析结果进候选编辑；无结果（raw 模式）也进候选区手动整理
+      // 有解析结果进候选编辑。LLM 解析失败时（items 空但 raw 非空），
+      // 自动按行拆分原文生成候选，用户可直接编辑——避免看到"0 道题 + 只读原文"。
+      if (res.items.length === 0 && res.raw.trim()) {
+        const lines = splitLinesIntoItems(res.raw);
+        if (lines.length > 0) {
+          setItems(lines);
+          setRaw('');
+        }
+      }
+      setStep('candidates');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '解析失败';
       // OCR 不可用时后端返回 502，错误文案被 toUserMessage 映射成通用提示，
@@ -76,6 +84,26 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
 
   function addItem() {
     setItems((prev) => [...prev, { question: '' }]);
+  }
+
+  // 把原文按行拆成候选题目：去空行、去序号前缀（"1. " / "1、" / "- "）。
+  function splitLinesIntoItems(text: string): ImportItem[] {
+    return text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => line.replace(/^\s*(?:\d+[\.、．:：]?\s*|[-*]\s*)/, ''))
+      .filter((line) => line.length > 0)
+      .map((question) => ({ question }));
+  }
+
+  // 手动把 raw 原文按行拆成候选题目（用户在 raw 模式整理后点此按钮）。
+  function splitRawIntoItems() {
+    const next = splitLinesIntoItems(raw);
+    if (next.length > 0) {
+      setItems((prev) => [...prev, ...next]);
+      setRaw('');
+    }
   }
 
   async function handleConfirm() {
@@ -199,7 +227,26 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
             {raw && !items.length && (
               <>
                 <p className="interview-error">自动解析未识别出题目，请手动整理以下原文。</p>
-                <textarea rows={6} value={raw} readOnly className="import-raw" />
+                <div className="import-raw-block">
+                  <label htmlFor="import-raw-edit" className="import-field-label">
+                    原文（可直接编辑，一行一题）
+                  </label>
+                  <textarea
+                    id="import-raw-edit"
+                    rows={6}
+                    value={raw}
+                    onChange={(e) => setRaw(e.target.value)}
+                    className="import-raw"
+                    placeholder="可编辑原文，整理成一行一道题…"
+                  />
+                  <button
+                    type="button"
+                    className="interview-inline-link"
+                    onClick={splitRawIntoItems}
+                  >
+                    按行拆分为题目
+                  </button>
+                </div>
               </>
             )}
             {items.map((it, i) => (

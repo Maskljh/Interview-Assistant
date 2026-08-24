@@ -105,12 +105,23 @@
   width: 100%;
   box-sizing: border-box;
   font: var(--text-body-sm);
-  color: var(--color-body);
-  background: var(--color-canvas-soft);
+  color: var(--color-ink);
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: var(--rounded-md);
   padding: var(--space-sm);
   resize: vertical;
+}
+
+.import-raw-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.import-field-label {
+  font: var(--text-caption);
+  color: var(--color-mute);
 }
 
 .import-ocr-detail {
