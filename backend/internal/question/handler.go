@@ -226,8 +226,8 @@ func (h *Handler) ImportParse(c *gin.Context) {
 	// 图片（multipart）或文本（JSON）二选一
 	var res ParseResult
 	if strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
-		// 在解析整个 multipart body 前套上总大小上限，避免未认证的客户端
-		// 流式发送超大 body 打到付费 OCR 调用之前形成 DoS。
+		// 在解析整个 multipart body 前套上总大小上限，避免已认证客户端
+		// 流式发送超大 body 在付费 OCR 调用之前形成 DoS。
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImportMultipartBodyBytes)
 		file, err := c.FormFile("file")
 		if err != nil {
