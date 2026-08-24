@@ -14,11 +14,11 @@ func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db: db}
 }
 
-func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
+func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, error) {
 	res, err := r.db.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, nullGapsJSON(precheckGaps), string(StatusDraft),
+		`INSERT INTO interview_sessions (user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusDraft),
 	)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL,
 
 func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE user_id = ?
@@ -57,7 +57,7 @@ func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 
 func (r *Repo) GetByID(id int64) (*Session, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE id = ?`,
@@ -136,10 +136,11 @@ func scanSession(row rowScanner) (*Session, error) {
 	var score sql.NullInt64
 	var feedback []byte
 	var mode, inputMode, persona, difficulty, style, status string
+	var cameraEnabled int
 	var gaps []byte
 
 	err := row.Scan(
-		&s.ID, &s.UserID, &s.JobJD, &jdFileURL, &resume, &resumeFileURL, &mode, &inputMode, &persona, &difficulty, &style, &gaps, &status, &score, &feedback,
+		&s.ID, &s.UserID, &s.JobJD, &jdFileURL, &resume, &resumeFileURL, &mode, &inputMode, &persona, &difficulty, &style, &cameraEnabled, &gaps, &status, &score, &feedback,
 		&s.StartedAt, &s.EndedAt, &s.CreatedAt,
 	)
 	if err != nil {
@@ -172,6 +173,7 @@ func scanSession(row rowScanner) (*Session, error) {
 	s.Persona = persona
 	s.Difficulty = difficulty
 	s.CompanyStyle = style
+	s.CameraEnabled = cameraEnabled != 0
 	s.Status = Status(status)
 	return &s, nil
 }
@@ -195,6 +197,13 @@ func nullGapsJSON(gaps []string) any {
 	return string(b)
 }
 
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	var text string
 	err := r.db.QueryRow(
@@ -207,7 +216,7 @@ func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	return text, nil
 }
 
-func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, texts []string) (*Session, []Question, error) {
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool, texts []string) (*Session, []Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, nil, err
@@ -215,9 +224,9 @@ func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, i
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, precheck_gaps, status)
-		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, string(mode), string(inputMode), persona, difficulty, style, nullGapsJSON(precheckGaps), string(StatusReady),
+		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
+		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusReady),
 	)
 	if err != nil {
 		return nil, nil, err

@@ -48,6 +48,7 @@ type Session struct {
 	Persona       string
 	Difficulty    string
 	CompanyStyle  string
+	CameraEnabled bool
 	PrecheckGaps  []string
 	Status        Status
 	Score         *int

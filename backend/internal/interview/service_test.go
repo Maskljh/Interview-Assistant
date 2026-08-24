@@ -804,7 +804,7 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 	svc := interview.NewService(sqlDB, capLLM, store)
 	svc.SetProfileProvider(fixedProfileProvider{p: profile.Profile{WeakDimensions: []string{"logic"}, BasedOnSessions: 3}})
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -833,7 +833,7 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
 
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -858,7 +858,7 @@ func TestCreatePersistsPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "strict_tech", llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "strict_tech", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -880,7 +880,7 @@ func TestCreateDefaultsStandardPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "", llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -898,7 +898,7 @@ func TestCreateRejectsInvalidPersona(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "evil", llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "evil", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if !errors.Is(err, interview.ErrInvalidPersona) {
 		t.Fatalf("err = %v, want ErrInvalidPersona", err)
 	}
@@ -914,7 +914,7 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "warm_hr", llm.StandardDifficulty, llm.StandardCompanyStyle, nil)
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, "warm_hr", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -998,7 +998,7 @@ func TestCreatePersistsPrecheckGaps(t *testing.T) {
 	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-persist@example.com")
 
 	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"})
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -1021,7 +1021,7 @@ func TestStartInjectsPrecheckGaps(t *testing.T) {
 
 	capLLM := &capturingLLM{}
 	svc := interview.NewService(sqlDB, capLLM, store)
-	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"})
+	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeText, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
