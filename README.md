@@ -1,47 +1,71 @@
-# Interview Assistant
+# Interview Assistant — 模拟面试助手
 
-AI-powered mock interview practice: create sessions from a job description, answer questions over WebSocket, and receive scored feedback.
+AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、通过 WebSocket 逐题作答（文字 / 语音）、结束生成多维评分报告。支持题库、简历-JD 匹配预检、画像与成长分析，以及**可选的摄像头表情/行为信号分析**（本地运行，画面不上传）。
 
-## Prerequisites
+## 目录
+
+- [Prerequisites（环境要求）](#prerequisites环境要求)
+- [Architecture（本地架构）](#architecture本地架构)
+- [1. 启动 MySQL 与 Redis](#1-启动-mysql-与-redis)
+- [2. 应用数据库迁移](#2-应用数据库迁移)
+- [3. 环境变量](#3-环境变量)
+- [4. 运行 API 服务](#4-运行-api-服务)
+- [5. 运行前端](#5-运行前端)
+- [功能总览](#功能总览)
+- [Demo 流程](#demo-流程)
+- [摄像头表情/行为信号分析（V14）](#摄像头表情行为信号分析v14)
+- [Backend tests](#backend-tests)
+- [已知限制](#已知限制)
+- [项目结构](#项目结构)
+
+## Prerequisites（环境要求）
 
 - **Go** 1.22+
-- **Node.js** 18+ and npm
-- **Docker** (recommended for MySQL and Redis), or an existing MySQL 8 instance on port 3306
+- **Node.js** 18+ 和 npm
+- **MySQL 8**（本机 3306 或 Docker），**Redis 7**（本机 6379 或 Docker）
+- 可选：DeepSeek API Key（出题/评分）、阿里云语音 Key（语音作答）、阿里云 OCR Key（图片导入）
 
-## Architecture (local)
+> **端口约定：本仓库默认使用 MySQL `3306`、Redis `6379`。** 请确保本机 MySQL 监听 `127.0.0.1:3306`（或通过 Docker 映射到 3306）。
 
-| Service | Default address | Purpose |
-|---------|-----------------|---------|
-| API (Go/Gin) | `http://127.0.0.1:8080` | REST + WebSocket |
-| Frontend (Vite) | `http://localhost:5173` | React UI |
-| MySQL 8 | `127.0.0.1:3306` | Users, sessions, turns |
-| Redis 7 | `127.0.0.1:6379` | Live interview state |
+## Architecture（本地架构）
 
-## 1. Start MySQL and Redis
+| 服务 | 默认地址 | 用途 |
+|------|----------|------|
+| API（Go/Gin） | `http://127.0.0.1:8080` | REST + WebSocket（前端生产默认走 9090，见下） |
+| 前端（Vite） | `http://localhost:5174` | React SPA（开发端口 5174） |
+| MySQL 8 | `127.0.0.1:3306` | 用户、会话、题目、轮次、行为信号 |
+| Redis 7 | `127.0.0.1:6379` | 面试直播态、暂存 |
 
-### Option A — Docker Compose (this repo)
+> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端生产运行常监听 `:9090`（见 `.env` 的 `HTTP_ADDR`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname（手机经局域网访问时自动用局域网 IP）。
+
+## 1. 启动 MySQL 与 Redis
+
+### 方案 A — Docker Compose（本仓库）
 
 ```bash
 docker compose up -d
 ```
 
-This starts MySQL (`root` / `root`, database `interview`) and Redis on the default ports.
+启动 MySQL（`root` / `root`，数据库 `interview`）与 Redis，均映射到默认端口（MySQL 3306、Redis 6379）。
 
-### Option B — Existing MySQL host
+### 方案 B — 已有本机 MySQL
 
-If you already run MySQL on `127.0.0.1:3306`, create the database and point `MYSQL_DSN` at it:
+如果你已在 `127.0.0.1:3306` 运行 MySQL，创建数据库并把 `MYSQL_DSN` 指向它（密码按你的实际环境，如本机为 `123456`）：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS interview CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Redis must still be reachable at `REDIS_ADDR` (start via compose Redis only, or your own instance).
+Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自己的实例）。
 
-## 2. Apply database migrations
+## 2. 应用数据库迁移
 
-Apply **all** migration files in `backend/migrations/` in numeric order (`001_init.sql` … `011_question_import.sql`). On a fresh database, run every file once; on an existing database, apply only the ones after your current schema version (new ones like `011_question_import.sql` add the `question_bank.reference` column used by question import).
+按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `012_behavior.sql`）：
 
-From the repo root:
+- **全新数据库**：每个文件执行一次。
+- **已有数据库**：只应用当前 schema 之后新增的文件（例如 `012_behavior.sql` 新增 `interview_sessions.camera_enabled` 列与 `interview_behavior` 表，用于摄像头行为分析）。
+
+从仓库根目录（Docker MySQL）：
 
 ```bash
 for f in backend/migrations/*.sql; do
@@ -49,7 +73,7 @@ for f in backend/migrations/*.sql; do
 done
 ```
 
-If using an external MySQL host, run the same SQL files with your client (in numeric order):
+外部 MySQL：
 
 ```bash
 for f in backend/migrations/*.sql; do
@@ -57,165 +81,198 @@ for f in backend/migrations/*.sql; do
 done
 ```
 
-## 3. Environment variables
+> 本机 MySQL 密码示例：`root` / `123456`（见下节）。迁移是幂等的（`IF NOT EXISTS` / `ADD COLUMN` 在已应用时按文档说明处理），但建议按顺序只执行一次。
 
-The server reads **process environment only** (`os.Getenv`); it does not load a `.env` file. Copy `.env.example` as a reference.
+## 3. 环境变量
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `JWT_SECRET` | **yes** | — | Secret for signing JWT access tokens |
-| `HTTP_ADDR` | no | `:8080` | API listen address |
-| `MYSQL_DSN` | no | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL connection string |
-| `REDIS_ADDR` | no | `127.0.0.1:6379` | Redis address |
-| `DEEPSEEK_API_KEY` | no* | — | DeepSeek API key for question generation and reports |
-| `DEEPSEEK_BASE_URL` | no | `https://api.deepseek.com` | DeepSeek API base URL |
-| `DEEPSEEK_MODEL` | no | `deepseek-chat` | Model name for LLM calls |
-| `ALIYUN_ACCESS_KEY_ID` | no** | — | Aliyun access key for speech ASR/TTS |
-| `ALIYUN_ACCESS_KEY_SECRET` | no** | — | Aliyun access key secret for speech ASR/TTS |
-| `ALIYUN_NLS_APP_KEY` | no** | — | Aliyun Intelligent Speech (NLS) app key |
-| `ALIYUN_OCR_ACCESS_KEY_ID` | no† | — | Aliyun access key for image import OCR (falls back to `ALIYUN_ACCESS_KEY_ID`) |
-| `ALIYUN_OCR_ACCESS_KEY_SECRET` | no† | — | Aliyun access key secret for image import OCR (falls back to `ALIYUN_ACCESS_KEY_SECRET`) |
-| `ALIYUN_OCR_ENDPOINT` | no | `https://ocr-api.cn-hangzhou.aliyuncs.com/` | Aliyun OCR endpoint |
+服务端**只读进程环境变量**（`os.Getenv`），不自动加载 `.env` 文件；`.env.example` 仅作参考模板。运行前请按需设置（PowerShell 用 `$env:VAR=...`，bash 用 `export VAR=...`）。
 
-\* Without `DEEPSEEK_API_KEY`, **start interview** returns `502` and reports stay unavailable. Auth, CRUD, and ownership checks still work.
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `JWT_SECRET` | **是** | — | JWT 访问令牌签名密钥 |
+| `HTTP_ADDR` | 否 | `:8080` | API 监听地址（生产常用 `:9090`） |
+| `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；本机密码 `123456` 时改为 `root:123456@...`） |
+| `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址 |
+| `DEEPSEEK_API_KEY` | 否* | — | DeepSeek Key，用于出题与报告 |
+| `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com` | DeepSeek API 地址 |
+| `DEEPSEEK_MODEL` | 否 | `deepseek-chat` | 模型名 |
+| `ALIYUN_ACCESS_KEY_ID` | 否** | — | 阿里云语音 ASR/TTS AccessKey ID |
+| `ALIYUN_ACCESS_KEY_SECRET` | 否** | — | 阿里云语音 AccessKey Secret |
+| `ALIYUN_NLS_APP_KEY` | 否** | — | 阿里云智能语音（NLS）AppKey |
+| `ALIYUN_OCR_ACCESS_KEY_ID` | 否† | — | 阿里云 OCR（图片导入）；缺省回退到 `ALIYUN_ACCESS_KEY_ID` |
+| `ALIYUN_OCR_ACCESS_KEY_SECRET` | 否† | — | 阿里云 OCR Secret；缺省回退到 `ALIYUN_ACCESS_KEY_SECRET` |
+| `ALIYUN_OCR_ENDPOINT` | 否 | `https://ocr-api.cn-hangzhou.aliyuncs.com/` | 阿里云 OCR 端点 |
 
-\*\* Without the three Aliyun variables, text-mode interviews work normally; the speech routes `/api/speech/asr` and `/api/speech/tts` return `502` with `{"error":"speech service unavailable"}`. Voice rooms still show the question text and keep typing as a fallback.
+\* 无 `DEEPSEEK_API_KEY`：开始面试返回 `502`、报告不可用；注册/登录/增删改查/归属校验仍正常。
 
-\† Without `ALIYUN_OCR_ACCESS_KEY_ID`/`ALIYUN_OCR_ACCESS_KEY_SECRET`, image import (screenshot upload) returns `502` with a "please use text input" hint; text-paste import still works. Both fall back to the shared `ALIYUN_ACCESS_KEY_ID`/`ALIYUN_ACCESS_KEY_SECRET`.
+\*\* 缺三个阿里云语音变量：文本面试正常；`/api/speech/asr`、`/api/speech/tts` 返回 `502`，语音房间仍显示题目文字并可打字作答。
 
-**PowerShell (Windows):**
+\† 缺 OCR Key：图片导入返回 `502`（提示改用文字粘贴）；文字导入正常。两者均回退到共享的 `ALIYUN_ACCESS_KEY_ID/SECRET`。
+
+**PowerShell（Windows）：**
 
 ```powershell
 $env:JWT_SECRET = "dev-change-me"
-$env:MYSQL_DSN = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+# 数据库在 3306；本机 MySQL 密码 123456：
+$env:MYSQL_DSN = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 $env:REDIS_ADDR = "127.0.0.1:6379"
-# Optional — required for full interview flow:
+# 完整面试流需要：
 # $env:DEEPSEEK_API_KEY = "sk-..."
-# Optional — required for voice interviews:
+# 语音作答需要：
 # $env:ALIYUN_ACCESS_KEY_ID = "LTAI..."
 # $env:ALIYUN_ACCESS_KEY_SECRET = "..."
 # $env:ALIYUN_NLS_APP_KEY = "..."
-# Optional — required for image (screenshot) import OCR:
-# $env:ALIYUN_OCR_ACCESS_KEY_ID = "LTAI..."   # falls back to ALIYUN_ACCESS_KEY_ID
+# 图片导入 OCR 需要：
+# $env:ALIYUN_OCR_ACCESS_KEY_ID = "LTAI..."   # 缺省回退 ALIYUN_ACCESS_KEY_ID
 # $env:ALIYUN_OCR_ACCESS_KEY_SECRET = "..."
 ```
 
-**bash / zsh:**
+**bash / zsh：**
 
 ```bash
 export JWT_SECRET=dev-change-me
-export MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
+export MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
 export REDIS_ADDR=127.0.0.1:6379
 # export DEEPSEEK_API_KEY=sk-...
-# Voice interviews (optional):
+# 语音作答：
 # export ALIYUN_ACCESS_KEY_ID=LTAI...
 # export ALIYUN_ACCESS_KEY_SECRET=...
 # export ALIYUN_NLS_APP_KEY=...
-# Image (screenshot) import OCR (optional):
-# export ALIYUN_OCR_ACCESS_KEY_ID=LTAI...   # falls back to ALIYUN_ACCESS_KEY_ID
+# 图片导入 OCR：
+# export ALIYUN_OCR_ACCESS_KEY_ID=LTAI...   # 缺省回退 ALIYUN_ACCESS_KEY_ID
 # export ALIYUN_OCR_ACCESS_KEY_SECRET=...
 ```
 
-## 4. Run the API server
+## 4. 运行 API 服务
 
 ```bash
 cd backend
 go run ./cmd/server
 ```
 
-Verify:
+验证：
 
 ```bash
 curl http://127.0.0.1:8080/healthz
 # {"ok":true}
 ```
 
-On Windows PowerShell, use `curl.exe` if `curl` aliases to `Invoke-WebRequest`.
-
-### Backend tests
-
-Most backend integration tests require a reachable MySQL (they use the `interview` DB and clean up only their own test users). Point them at your instance via `MYSQL_DSN` (defaults to `root:root@tcp(127.0.0.1:3306)/interview`):
-
-```bash
-MYSQL_DSN='root:YOUR_PASSWORD@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./...
-```
-
-Run with `-p 1` when the DB is shared by other processes/parallel jobs — the default parallel package execution across one MySQL instance can occasionally hit transient `Error 1213` deadlocks:
-
-```bash
-MYSQL_DSN='root:YOUR_PASSWORD@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./... -p 1
-```
+Windows PowerShell 下 `curl` 若被 `Invoke-WebRequest` 别名占用，请用 `curl.exe`。
 
 ### CORS
 
-REST responses allow origins `http://localhost:5173` and `http://127.0.0.1:5173` with `Authorization` and `Content-Type` headers. WebSocket uses the same JWT via `?token=` query param (no CORS preflight).
+REST 响应允许来源 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://localhost:5174`、`http://127.0.0.1:5174`（带 `Authorization`/`Content-Type` 头）。WebSocket 通过 `?token=` 携带 JWT（无 CORS 预检）。手机经局域网 IP（端口 5174）访问时后端同样放行。
 
-## 5. Run the frontend
+## 5. 运行前端
 
 ```bash
 cd frontend
-cp .env.example .env   # or set VITE_API_BASE manually
+cp .env.example .env   # 或设置 VITE_API_BASE
 npm install
-npm run dev
+npm run dev            # 默认 http://localhost:5174
 ```
 
-Frontend env (`.env` or shell):
+前端环境变量：
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_BASE` | `http://127.0.0.1:8080` | Backend REST base URL (WS origin derived from this) |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `VITE_API_BASE` | 跟随当前页面 hostname（生产默认 `:9090`） | 后端 REST 基址（WS 源由此推导） |
 
-Open [http://localhost:5173](http://localhost:5173).
+## 功能总览
 
-## Demo account flow
+- **创建面试**：粘贴 JD、可选简历、选类型（行为/技术/综合）、作答方式（文本/语音）、面试官人格（标准/严厉技术面/温和 HR/压力面）、难度、企业风格（通用/外企/大厂/国企/创业）。
+- **简历-JD 匹配预检**：检测简历与 JD 的匹配度并列出差距，可针对性出题。
+- **出题与追问**：LLM 依据 JD/简历/薄弱点/预检差距生成 5–8 题；逐题作答后由 LLM 决定追问、下一题或结束（受人格限定的追问上限）。
+- **作答方式**：
+  - 文本：输入框提交。
+  - 语音：TTS 朗读题目，按住说话录音 → ASR 转写自动发送；可切换回文字。
+- **评分报告**：四维评分（表达能力/逻辑结构/内容质量/岗位匹配）+ 总分 + 优点/问题/改进建议 + 表达分析（语速/口头禅/句长）。
+- **题库**：自建题目、导入（含图片 OCR）、按维度/标签分类、专项练习。
+- **画像与成长分析**：基于历史面试的薄弱维度画像、成长趋势。
+- **摄像头表情/行为信号分析（可选，V14）**：见下节。
 
-1. **Register** at `/register` (password ≥ 8 characters), or **login** at `/login`.
-2. **Create interview** — paste a job description, pick mode (`behavioral`, `technical`, or `mixed`), optional resume text.
-3. **Start** from the interview detail page (requires `DEEPSEEK_API_KEY` on the server).
-4. **Interview room** — WebSocket delivers questions; type answers and submit. Reconnect preserves pending state from Redis.
-5. **Voice interviews (optional)** — when creating an interview or starting a question-bank practice, choose **text** or **voice** as the input mode. Voice rooms read questions aloud via TTS, and you can hold the record button to speak an answer that is transcribed and auto-sent; typing remains available as a fallback. This requires the three Aliyun speech environment variables.
-6. **End** — finish normally via WS or force end from the UI.
-7. **Report** — view scores (expression, logic, content, job match), strengths, weaknesses, suggestions. Retry if generation failed.
+## Demo 流程
 
-### Quick API smoke test
+1. **注册/登录**：`/register`（密码 ≥ 8 位）或 `/login`。
+2. **创建面试**：粘贴 JD，选类型/作答方式/人格/难度/企业风格，可选上传简历、跑预检；**可选勾选「开启摄像头分析」**。
+3. **开始**：从面试详情页开始（需服务端 `DEEPSEEK_API_KEY`）。
+4. **面试间**：WebSocket 逐题送达；文字输入或按住说话（语音）作答；断线自动重连并补发暂存回答。
+5. **（可选）摄像头分析**：勾选后，面试全程本地采集摄像头画面做表情/行为分析（见下节），实时显示紧张度指示灯。
+6. **结束**：正常结束（WS `done`）或强制结束（HTTP）。
+7. **报告**：查看四维评分、优缺点、建议；如勾选了摄像头分析，另有「行为信号（辅助参考）」卡片。
+
+## 摄像头表情/行为信号分析（V14）
+
+创建面试时勾选「开启摄像头分析（可选）」（默认关闭）后，面试期间在**浏览器本地**对摄像头画面做实时分析，作为报告中的**辅助反馈**——**不参与四维评分**，不引入数字人形象。
+
+### 工作原理（隐私优先）
+
+1. **采集**：`getUserMedia` 获取摄像头画面（仅在用户勾选并授权后）。
+2. **人脸关键点**：`@tensorflow/tfjs` + `@tensorflow-models/face-landmarks-detection`（MediaPipe FaceMesh）在浏览器本地检测每帧 478 个面部关键点。
+3. **信号提取（启发式几何规则）**：
+   - 情绪标签：嘴部开合比（MAR）/ 眼睑开合比（EAR）/ 眉毛高度 → 微笑 / 中性 / 专注 / 惊讶 / 皱眉。
+   - 点头：头部俯仰角（pitch）的「下压-回弹」周期事件计数。
+   - 紧张度：眨眼频率 + 头部晃动幅度 + 表情切换频率加权 → 0–100。
+4. **聚合与上报**：面试结束时把**聚合统计**（情绪分布、点头次数、紧张度均值/分段、有效帧数、时长）POST 到 `/api/interviews/:id/behavior`，存入 `interview_behavior` 表。
+5. **报告展示**：报告页显示「行为信号（辅助参考）」卡片——情绪分布、点头次数、紧张度（含走势分段）、低置信度提示。
+
+### 隐私与降级
+
+- **画面绝不出浏览器**：FaceMesh 在本地推理，只有聚合统计 JSON 上报；不上传任何帧/视频。
+- **默认关闭**：创建页复选框默认不勾选。
+- **静默降级**：浏览器不支持 / 模型加载失败 / 用户拒绝权限 / 摄像头被遮 → 不启分析，面试正常进行，报告不显示该卡片。
+- **提示**：启发式规则为近似估计，报告明确标注「本指标基于表情动作统计，仅供参考，不计入评分」。
+
+## Backend tests
+
+多数后端集成测试需要可达的 MySQL（使用 `interview` 库并只清理自己的测试用户）。通过 `MYSQL_DSN` 指向实例（默认 `root:root@tcp(127.0.0.1:3306)/interview`；本机密码为 `123456` 时请相应修改）：
 
 ```bash
-# Register
-curl -s -X POST http://127.0.0.1:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"password123"}'
-
-# Login (save token from response)
-curl -s -X POST http://127.0.0.1:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"password123"}'
-
-# Create interview (replace TOKEN)
-curl -s -X POST http://127.0.0.1:8080/api/interviews \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"job_jd":"Backend engineer with Go and SQL","mode":"technical"}'
+MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./... -p 1
 ```
 
-## Acceptance checklist
+数据库与其他进程/并行任务共享时建议加 `-p 1`，避免偶发的 MySQL `Error 1213` 死锁。`V14` 新增的 `internal/behavior` 测试（幂等保存、归属校验、校验边界、无记录返回 `available:false`）同样需要真实 MySQL。
 
-See [docs/superpowers/plans/acceptance-checklist.md](docs/superpowers/plans/acceptance-checklist.md) for MVP acceptance results (A1–A6).
+前端测试（沙箱内需本地 preload，非沙箱环境直接）：
 
-## Known limitations
+```bash
+cd frontend
+npm run test   # vitest
+npm run lint   # oxlint
+npx tsc -b     # 类型检查
+```
 
-This MVP intentionally omits several production hardening features:
+## 已知限制
 
-- **No `failed` status on abandon** — closing the browser or disconnecting mid-session does not mark the interview `failed`; use **End interview** (HTTP force-end works even when the WebSocket is down).
-- **No per-user concurrency cap** — a user may have multiple `in_progress` sessions; only one live room per session is enforced via Redis.
-- **Sync evaluation may delay the last `done`** — the WebSocket `done` message is sent after synchronous post-interview scoring; slow LLM calls can add noticeable latency before navigation to the report.
-- **Rare concurrent `BeginLive` race** — two simultaneous WebSocket connects for the same session could briefly duplicate the first question; reconnect is idempotent in normal use.
-- **A3/A6 need `DEEPSEEK_API_KEY`** — full end-to-end acceptance (start interview + scored report) requires a valid DeepSeek API key on the server.
+- **关闭浏览器/断线不标记 `failed`**：中途断开不把面试标为失败；用「结束面试」（HTTP 强制结束即使 WebSocket 断开也有效）。
+- **无每用户并发上限**：一个用户可有多个 `in_progress` 会话；每会话仅通过 Redis 强制一个直播房间。
+- **同步评分延迟 `done`**：WebSocket `done` 在同步后置评分后发送，慢的 LLM 调用会增加跳转报告的延迟。
+- **并发 `BeginLive` 竞态**：同一会话两个同时 WebSocket 连接可能短暂重复第一题；正常重连幂等。
+- **A3/A6 需要 `DEEPSEEK_API_KEY`**：完整端到端验收（开始面试 + 评分报告）需要有效 DeepSeek Key。
+- **表情分析为启发式**：非科学级情绪识别；光照差/侧脸/遮挡时关键点检测可能失败（报「未检测到清晰人脸」）。升级路径是本地小型 ONNX 情绪模型（仍不上传画面）。
 
-## Project layout
+## 项目结构
 
 ```
-backend/          Go API, migrations, internal packages
-frontend/         Vite + React SPA
-docker-compose.yml
-.env.example
+backend/                  Go API（Gin）、迁移、内部包
+  cmd/server/             服务入口
+  internal/
+    behavior/             V14 表情/行为信号存取（幂等保存、归属校验）
+    interview/            会话/轮次/题目
+    llm/                  DeepSeek 出题/评分/追问提示词
+    speech/               阿里云语音 ASR/TTS
+    ocr/                  阿里云 OCR（图片导入）
+    question/             题库
+    analytics/            成长分析
+    profile/              画像
+    expression/           表达分析（语速/口头禅/句长）
+    upload/               OSS 预签名上传
+    ws/                   WebSocket 直播
+  migrations/             001..012 数据库迁移（012 = 行为信号表 + camera_enabled）
+frontend/                 Vite + React SPA
+  src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
+                          FaceLandmarkDetector / useBehaviorAnalysis
+  src/pages/              创建、面试间、报告、题库、成长等页面
+docker-compose.yml        MySQL(3306) + Redis(6379)
+.env.example              环境变量模板
 ```
