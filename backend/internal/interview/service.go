@@ -71,7 +71,7 @@ func (s *Service) SetProfileProvider(p SessionProfileProvider) {
 	s.profileProvider = p
 }
 
-func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, error) {
+func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, error) {
 	jobJD = strings.TrimSpace(jobJD)
 	if jobJD == "" {
 		return nil, ErrInvalidInput
@@ -103,10 +103,10 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 	if err := validateCompanyStyle(style); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(userID, jobJD, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps)
+	return s.repo.Create(userID, jobJD, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, cameraEnabled)
 }
 
-func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string) (*Session, []Question, error) {
+func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, []Question, error) {
 	if len(questionIDs) == 0 {
 		return nil, nil, ErrInvalidInput
 	}
@@ -151,7 +151,7 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	}
 
 	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts)
+	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {

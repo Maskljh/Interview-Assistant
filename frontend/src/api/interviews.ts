@@ -61,6 +61,7 @@ export interface Interview {
   persona: Persona;
   difficulty: Difficulty;
   company_style: CompanyStyle;
+  camera_enabled: boolean;
   precheck_gaps: string[] | null;
   status: InterviewStatus;
   score: number | null;
@@ -83,6 +84,7 @@ export interface CreateInterviewInput {
   persona?: Persona;
   difficulty?: Difficulty;
   company_style?: CompanyStyle;
+  camera_enabled?: boolean;
 }
 
 export async function createInterview(
@@ -164,6 +166,7 @@ export interface CreateFromBankInput {
   persona?: Persona;
   difficulty?: Difficulty;
   company_style?: CompanyStyle;
+  camera_enabled?: boolean;
 }
 
 export async function createInterviewFromBank(

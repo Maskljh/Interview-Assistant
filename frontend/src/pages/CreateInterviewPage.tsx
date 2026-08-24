@@ -61,6 +61,7 @@ export default function CreateInterviewPage() {
   const [persona, setPersona] = useState<Persona>('standard');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [companyStyle, setCompanyStyle] = useState<CompanyStyle>('general');
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -250,6 +251,7 @@ export default function CreateInterviewPage() {
         persona,
         difficulty,
         company_style: companyStyle,
+        camera_enabled: cameraEnabled,
       });
       navigate(`/interviews/${created.id}/room`, { replace: true });
     } catch (err) {
@@ -277,6 +279,7 @@ export default function CreateInterviewPage() {
         persona,
         difficulty,
         company_style: companyStyle,
+        camera_enabled: cameraEnabled,
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
         ...(resumeFileUrl ? { resume_file_url: resumeFileUrl } : {}),
         ...(jdFileUrl ? { jd_file_url: jdFileUrl } : {}),
@@ -551,6 +554,21 @@ export default function CreateInterviewPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="interview-field">
+            <label className="interview-check-row" htmlFor="camera-enabled">
+              <input
+                id="camera-enabled"
+                type="checkbox"
+                checked={cameraEnabled}
+                onChange={(e) => setCameraEnabled(e.target.checked)}
+              />
+              开启摄像头分析（可选）
+            </label>
+            <p className="interview-field-hint">
+              面试中采集表情/行为信号（情绪、紧张度、点头），仅在本地分析，不上传画面。
+            </p>
           </div>
 
           <button

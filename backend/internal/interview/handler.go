@@ -24,6 +24,7 @@ type createRequest struct {
 	Persona       string    `json:"persona"`
 	Difficulty    string    `json:"difficulty"`
 	CompanyStyle  string    `json:"company_style"`
+	CameraEnabled bool      `json:"camera_enabled"`
 	PrecheckGaps  []string  `json:"precheck_gaps"`
 }
 
@@ -34,6 +35,7 @@ type fromBankRequest struct {
 	Persona      string    `json:"persona"`
 	Difficulty   string    `json:"difficulty"`
 	CompanyStyle string    `json:"company_style"`
+	CameraEnabled bool     `json:"camera_enabled"`
 	PrecheckGaps []string  `json:"precheck_gaps"`
 }
 
@@ -59,6 +61,7 @@ type sessionResponse struct {
 	Persona       string             `json:"persona"`
 	Difficulty    string             `json:"difficulty"`
 	CompanyStyle  string             `json:"company_style"`
+	CameraEnabled bool               `json:"camera_enabled"`
 	PrecheckGaps  []string           `json:"precheck_gaps,omitempty"`
 	Status        Status             `json:"status"`
 	Score         *int            `json:"score"`
@@ -115,7 +118,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -138,7 +141,7 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps)
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -277,6 +280,7 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 		Persona:       session.Persona,
 		Difficulty:    session.Difficulty,
 		CompanyStyle:  session.CompanyStyle,
+		CameraEnabled: session.CameraEnabled,
 		PrecheckGaps:  session.PrecheckGaps,
 		Status:        session.Status,
 		Score:         session.Score,

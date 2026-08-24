@@ -7,6 +7,11 @@ import {
   type InterviewFeedback,
 } from '../api/interviews';
 import { fetchExpression, type ExpressionResult } from '../api/expression';
+import {
+  fetchBehavior,
+  type BehaviorResult,
+  type Emotion,
+} from '../api/behavior';
 import './InterviewPages.css';
 import { isFromTrends } from '../lib/detailSource';
 import AppNav from '../components/AppNav';
@@ -18,6 +23,14 @@ const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: str
     { key: 'content', label: '内容质量' },
     { key: 'job_match', label: '岗位匹配' },
   ];
+
+const EMOTION_LABELS: Record<Emotion, string> = {
+  smile: '微笑',
+  neutral: '中性',
+  focus: '专注',
+  surprise: '惊讶',
+  frown: '皱眉',
+};
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +44,7 @@ export default function ReportPage() {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState('');
   const [expression, setExpression] = useState<ExpressionResult | null>(null);
+  const [behavior, setBehavior] = useState<BehaviorResult | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const pollCountRef = useRef(0);
   const [pollFailed, setPollFailed] = useState(false);
@@ -107,6 +121,14 @@ export default function ReportPage() {
       })
       .catch(() => {
         /* silent: hide expression section on error */
+      });
+
+    fetchBehavior(interviewId)
+      .then((res) => {
+        if (!cancelled) setBehavior(res);
+      })
+      .catch(() => {
+        /* silent: hide behavior section on error */
       });
 
     return () => {
@@ -232,6 +254,62 @@ export default function ReportPage() {
                 ) : (
                   <p>暂无答案数据</p>
                 )}
+              </div>
+            )}
+
+            {behavior && behavior.available && (
+              <div className="profile-card">
+                <h3 className="interview-section-title">行为信号（辅助参考）</h3>
+                <p className="behavior-note">
+                  本指标基于表情动作统计，仅供参考，不计入评分。
+                </p>
+                {behavior.face_detected_frames > 0 && behavior.duration_ms > 0
+                  ? (() => {
+                      const total = Object.values(
+                        behavior.emotion_distribution,
+                      ).reduce((a, b) => a + b, 0);
+                      const pct = (v: number) =>
+                        total > 0 ? Math.round((v / total) * 100) : 0;
+                      return (
+                        <>
+                          <p>
+                            情绪分布：
+                            {Object.keys(behavior.emotion_distribution).length === 0
+                              ? '暂无情绪数据'
+                              : (
+                                  (Object.entries(
+                                    behavior.emotion_distribution,
+                                  ) as [Emotion, number][])
+                                    .map(
+                                      ([k, v]) =>
+                                        `${EMOTION_LABELS[k] ?? k} ${pct(v)}%`,
+                                    )
+                                    .join(' / ')
+                                )}
+                          </p>
+                          <p>点头：{behavior.nod_count} 次</p>
+                          <p>
+                            紧张度：{behavior.stress_level} / 100
+                            {behavior.stress_level < 40
+                              ? '（较放松）'
+                              : behavior.stress_level < 70
+                                ? '（中等）'
+                                : '（偏高）'}
+                          </p>
+                          {behavior.stress_segments.length > 0 && (
+                            <p>
+                              紧张度走势：分段
+                              {behavior.stress_segments.length} 段（
+                              {Math.round(behavior.duration_ms / 1000)}s
+                              有效分析）
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()
+                  : (
+                    <p>未检测到清晰人脸，数据可能不准确</p>
+                  )}
               </div>
             )}
 
