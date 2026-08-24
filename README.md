@@ -37,18 +37,24 @@ CREATE DATABASE IF NOT EXISTS interview CHARACTER SET utf8mb4 COLLATE utf8mb4_un
 
 Redis must still be reachable at `REDIS_ADDR` (start via compose Redis only, or your own instance).
 
-## 2. Apply database migration
+## 2. Apply database migrations
+
+Apply **all** migration files in `backend/migrations/` in numeric order (`001_init.sql` … `011_question_import.sql`). On a fresh database, run every file once; on an existing database, apply only the ones after your current schema version (new ones like `011_question_import.sql` add the `question_bank.reference` column used by question import).
 
 From the repo root:
 
 ```bash
-docker compose exec -T mysql mysql -uroot -proot interview < backend/migrations/001_init.sql
+for f in backend/migrations/*.sql; do
+  docker compose exec -T mysql mysql -uroot -proot interview < "$f"
+done
 ```
 
-If using an external MySQL host, run the same SQL file with your client:
+If using an external MySQL host, run the same SQL files with your client (in numeric order):
 
 ```bash
-mysql -h 127.0.0.1 -u root -p interview < backend/migrations/001_init.sql
+for f in backend/migrations/*.sql; do
+  mysql -h 127.0.0.1 -u root -p interview < "$f"
+done
 ```
 
 ## 3. Environment variables
