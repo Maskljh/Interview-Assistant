@@ -18,7 +18,10 @@
 - `camera_enabled` defaults to OFF (checkbox unchecked at creation).
 - Backend Go naming/lint conventions: `RegisterRoutes(r *gin.Engine, db *sql.DB, secret string)`, `Service{repo *interview.Repo}`, ownership isolation returns `ErrNotFound`.
 - Frontend test conventions: vitest + `@testing-library/react`; `vi.mock('@capacitor/core', ...)` for any module importing `@capacitor/core`.
-- Run `go test ./... -count=1 -p 1` (backend) and `npm run build` + `npm run test` (frontend) before claiming success.
+- Run verification before claiming success:
+  - Backend: `$env:GOCACHE="<worktree>\backend\.gotmp\gocache"; $env:GOPATH="<worktree>\backend\.gopath"; go build ./... && go vet ./...` MUST pass. `go test ./internal/<pkg>/...` may run if MySQL at `MYSQL_DSN` is reachable — in the current sandbox MySQL (3306 password unknown / 3307 down), Redis (6379) and the Docker named-pipe API are unavailable, so **DB-backed integration tests cannot run here**; the existing DB tests are environment-limited and their absence is NOT a regression. Compile correctness (`go build`/`go vet`) is the binding backend gate in this environment.
+  - Frontend: `npm run test` runs vitest but REQUIRES the local sandbox preload `$env:NODE_OPTIONS="--require <worktree>/frontend/.vitest-pipefix.cjs"` (DSH sandbox blocks Node child-process pipe stdio with EPERM; this preload forces stdio to 'ignore'). `npx tsc -b` MUST pass (type check). `npm run build` (vite/rolldown) FAILS in this sandbox (`spawn EPERM` in `windowsSafeRealPathSync`) — the same failure occurs in the main repo, so it is a known environment limitation, NOT a regression; use `tsc -b` as the binding build gate.
+- The `.vitest-pipefix.cjs` preload file is a local-only sandbox workaround (untracked, must NOT be committed). Copy it from the main repo working tree (`frontend/.vitest-pipefix.cjs`) into the worktree's `frontend/` if absent.
 
 ---
 
@@ -1683,10 +1686,10 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
 Run: `cd frontend && npx vitest run src/behavior/useBehaviorAnalysis.test.ts`
 Expected: PASS (mocked feed/detector; save called once on stop; errors swallowed).
 
-- [ ] **Step 5: Verify full frontend test suite + build**
+- [ ] **Step 5: Verify full frontend test suite + type check**
 
-Run: `cd frontend && npm run test && npm run build`
-Expected: all tests pass, `tsc -b && vite build` succeeds.
+Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
+Expected: all tests pass and `tsc -b` succeeds.
 
 - [ ] **Step 6: Commit**
 
@@ -1769,10 +1772,10 @@ In the form JSX (after the 「企业风格」 field, before the submit button):
           </div>
 ```
 
-- [ ] **Step 4: Verify build + existing tests**
+- [ ] **Step 4: Verify type check + existing tests**
 
-Run: `cd frontend && npm run build && npm run test`
-Expected: build passes, tests pass.
+Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
+Expected: type check passes, tests pass.
 
 - [ ] **Step 5: Commit**
 
@@ -1908,10 +1911,10 @@ In `frontend/src/pages/InterviewPages.css` (append):
 .behavior-light--off { background: #aaa; }
 ```
 
-- [ ] **Step 5: Verify build + tests**
+- [ ] **Step 5: Verify type check + tests**
 
-Run: `cd frontend && npm run build && npm run test`
-Expected: build + tests pass.
+Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
+Expected: type check + tests pass.
 
 - [ ] **Step 6: Commit**
 
@@ -2031,10 +2034,10 @@ In `frontend/src/pages/InterviewPages.css` (append):
 }
 ```
 
-- [ ] **Step 4: Verify build + tests**
+- [ ] **Step 4: Verify type check + tests**
 
-Run: `cd frontend && npm run build && npm run test`
-Expected: build + tests pass.
+Run: `cd frontend && npx tsc -b && npm run test` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
+Expected: type check + tests pass.
 
 - [ ] **Step 5: Manual E2E (needs running stack)**
 
@@ -2058,9 +2061,9 @@ git commit -m "feat(behavior): behavior signal card on report page"
 Run: `cd backend && go test ./... -count=1 -p 1`
 Expected: all packages pass (MySQL-backed integration tests need a live DB; if unavailable, report which packages were skipped as environment-limited and confirm `go build ./...` + `go vet ./...` pass).
 
-- [ ] **Step 2: Frontend tests + build + lint**
+- [ ] **Step 2: Frontend tests + type check + lint**
 
-Run: `cd frontend && npm run test && npm run build && npm run lint`
+Run: `cd frontend && npx tsc -b && npm run test && npm run lint` (with the `NODE_OPTIONS` pipefix preload from Global Constraints; do NOT run `npm run build` — see Global Constraints)
 Expected: all green.
 
 - [ ] **Step 3: Acceptance checklist (manual)**
