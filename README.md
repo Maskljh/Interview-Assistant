@@ -67,10 +67,15 @@ The server reads **process environment only** (`os.Getenv`); it does not load a 
 | `ALIYUN_ACCESS_KEY_ID` | no** | — | Aliyun access key for speech ASR/TTS |
 | `ALIYUN_ACCESS_KEY_SECRET` | no** | — | Aliyun access key secret for speech ASR/TTS |
 | `ALIYUN_NLS_APP_KEY` | no** | — | Aliyun Intelligent Speech (NLS) app key |
+| `ALIYUN_OCR_ACCESS_KEY_ID` | no† | — | Aliyun access key for image import OCR (falls back to `ALIYUN_ACCESS_KEY_ID`) |
+| `ALIYUN_OCR_ACCESS_KEY_SECRET` | no† | — | Aliyun access key secret for image import OCR (falls back to `ALIYUN_ACCESS_KEY_SECRET`) |
+| `ALIYUN_OCR_ENDPOINT` | no | `https://ocr-api.cn-hangzhou.aliyuncs.com/` | Aliyun OCR endpoint |
 
 \* Without `DEEPSEEK_API_KEY`, **start interview** returns `502` and reports stay unavailable. Auth, CRUD, and ownership checks still work.
 
 \*\* Without the three Aliyun variables, text-mode interviews work normally; the speech routes `/api/speech/asr` and `/api/speech/tts` return `502` with `{"error":"speech service unavailable"}`. Voice rooms still show the question text and keep typing as a fallback.
+
+\† Without `ALIYUN_OCR_ACCESS_KEY_ID`/`ALIYUN_OCR_ACCESS_KEY_SECRET`, image import (screenshot upload) returns `502` with a "please use text input" hint; text-paste import still works. Both fall back to the shared `ALIYUN_ACCESS_KEY_ID`/`ALIYUN_ACCESS_KEY_SECRET`.
 
 **PowerShell (Windows):**
 
@@ -84,6 +89,9 @@ $env:REDIS_ADDR = "127.0.0.1:6379"
 # $env:ALIYUN_ACCESS_KEY_ID = "LTAI..."
 # $env:ALIYUN_ACCESS_KEY_SECRET = "..."
 # $env:ALIYUN_NLS_APP_KEY = "..."
+# Optional — required for image (screenshot) import OCR:
+# $env:ALIYUN_OCR_ACCESS_KEY_ID = "LTAI..."   # falls back to ALIYUN_ACCESS_KEY_ID
+# $env:ALIYUN_OCR_ACCESS_KEY_SECRET = "..."
 ```
 
 **bash / zsh:**
@@ -97,6 +105,9 @@ export REDIS_ADDR=127.0.0.1:6379
 # export ALIYUN_ACCESS_KEY_ID=LTAI...
 # export ALIYUN_ACCESS_KEY_SECRET=...
 # export ALIYUN_NLS_APP_KEY=...
+# Image (screenshot) import OCR (optional):
+# export ALIYUN_OCR_ACCESS_KEY_ID=LTAI...   # falls back to ALIYUN_ACCESS_KEY_ID
+# export ALIYUN_OCR_ACCESS_KEY_SECRET=...
 ```
 
 ## 4. Run the API server
@@ -114,6 +125,20 @@ curl http://127.0.0.1:8080/healthz
 ```
 
 On Windows PowerShell, use `curl.exe` if `curl` aliases to `Invoke-WebRequest`.
+
+### Backend tests
+
+Most backend integration tests require a reachable MySQL (they use the `interview` DB and clean up only their own test users). Point them at your instance via `MYSQL_DSN` (defaults to `root:root@tcp(127.0.0.1:3306)/interview`):
+
+```bash
+MYSQL_DSN='root:YOUR_PASSWORD@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./...
+```
+
+Run with `-p 1` when the DB is shared by other processes/parallel jobs — the default parallel package execution across one MySQL instance can occasionally hit transient `Error 1213` deadlocks:
+
+```bash
+MYSQL_DSN='root:YOUR_PASSWORD@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./... -p 1
+```
 
 ### CORS
 
