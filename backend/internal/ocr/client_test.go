@@ -1,60 +1,63 @@
-package ocr_test
+package ocr
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
-
-	"github.com/interview-assistant/backend/internal/ocr"
 )
 
-func TestRecognize(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 校验签名查询参数存在
-		if r.URL.Query().Get("Action") != "RecognizeGeneral" {
-			t.Fatalf("Action = %q, want RecognizeGeneral", r.URL.Query().Get("Action"))
-		}
-		if r.URL.Query().Get("Version") != "2021-07-07" {
-			t.Fatalf("Version = %q, want 2021-07-07", r.URL.Query().Get("Version"))
-		}
-		if r.URL.Query().Get("Signature") == "" {
-			t.Fatal("expected Signature query param")
-		}
-		var req struct {
-			Body string `json:"body"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if req.Body == "" {
-			t.Fatal("expected base64 image body")
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"code":"200","data":{"wordsResult":[{"words":"面试题一"},{"words":"面试题二"}]}}`))
-	}))
-	defer srv.Close()
-
-	c, err := ocr.NewClient(ocr.Config{
-		AccessKeyID:     "ak",
-		AccessKeySecret: "sk",
-		Endpoint:        srv.URL,
-	})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
+func TestExtractText(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "prism words info joined by newline",
+			data: `{"algo_version":"","content":"","prism_wordsInfo":[{"word":"面试题一"},{"word":"面试题二"}]}`,
+			want: "面试题一\n面试题二",
+		},
+		{
+			name: "falls back to content when no words info",
+			data: `{"content":"整段识别文本","prism_wordsInfo":[]}`,
+			want: "整段识别文本",
+		},
+		{
+			name: "skips blank words",
+			data: `{"prism_wordsInfo":[{"word":"  a  "},{"word":""},{"word":"b"}]}`,
+			want: "a\nb",
+		},
+		{
+			name: "invalid json returns raw string",
+			data: `not-json`,
+			want: "not-json",
+		},
+		{
+			name: "empty data returns empty",
+			data: ``,
+			want: "",
+		},
 	}
-	text, err := c.Recognize(context.Background(), []byte("fake-image-bytes"))
-	if err != nil {
-		t.Fatalf("recognize: %v", err)
-	}
-	if text != "面试题一\n面试题二" {
-		t.Fatalf("text = %q, want 面试题一\\n面试题二", text)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractText(tc.data); got != tc.want {
+				t.Fatalf("extractText = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
 func TestNewClientRequiresCredentials(t *testing.T) {
-	if _, err := ocr.NewClient(ocr.Config{}); err == nil {
+	if _, err := NewClient(Config{}); err == nil {
 		t.Fatal("expected error when credentials missing")
+	}
+}
+
+func TestNewFakeClient(t *testing.T) {
+	c := NewFakeClient()
+	text, err := c.Recognize(t.Context(), []byte("x"))
+	if err != nil {
+		t.Fatalf("fake recognize: %v", err)
+	}
+	if text != "OCR fake text" {
+		t.Fatalf("fake text = %q, want OCR fake text", text)
 	}
 }

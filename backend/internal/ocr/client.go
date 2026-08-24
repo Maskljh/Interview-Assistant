@@ -3,22 +3,16 @@ package ocr
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha1"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"sort"
 	"strings"
-	"time"
+
+	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	ocrsdk "github.com/alibabacloud-go/ocr-api-20210707/client"
+	"github.com/alibabacloud-go/tea/tea"
 )
 
-const defaultEndpoint = "https://ocr-api.cn-hangzhou.aliyuncs.com/"
+const defaultEndpoint = "ocr-api.cn-hangzhou.aliyuncs.com"
 
 type Client interface {
 	Recognize(ctx context.Context, image []byte) (string, error)
@@ -31,21 +25,27 @@ type Config struct {
 }
 
 type aliyunClient struct {
-	cfg        Config
-	httpClient *http.Client
+	inner *ocrsdk.Client
 }
 
 func NewClient(cfg Config) (Client, error) {
 	if cfg.AccessKeyID == "" || cfg.AccessKeySecret == "" {
 		return nil, fmt.Errorf("aliyun ocr credentials required")
 	}
-	if cfg.Endpoint == "" {
-		cfg.Endpoint = defaultEndpoint
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = defaultEndpoint
 	}
-	return &aliyunClient{
-		cfg:        cfg,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-	}, nil
+	sdkCfg := &openapi.Config{
+		AccessKeyId:     tea.String(cfg.AccessKeyID),
+		AccessKeySecret: tea.String(cfg.AccessKeySecret),
+		Endpoint:        tea.String(endpoint),
+	}
+	inner, err := ocrsdk.NewClient(sdkCfg)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun ocr sdk: %w", err)
+	}
+	return &aliyunClient{inner: inner}, nil
 }
 
 func NewFakeClient() Client {
@@ -58,112 +58,72 @@ func (f *fakeClient) Recognize(ctx context.Context, image []byte) (string, error
 	return "OCR fake text", nil
 }
 
+// ocrData mirrors the JSON payload returned in RecognizeGeneralResponseBody.Data.
+type ocrData struct {
+	Content        string `json:"content"`
+	PrismWordsInfo []struct {
+		Word string `json:"word"`
+	} `json:"prism_wordsInfo"`
+}
+
+// extractText parses the RecognizeGeneral Data JSON string into joined text.
+func extractText(dataStr string) string {
+	var sb strings.Builder
+	if dataStr != "" {
+		var data ocrData
+		if err := json.Unmarshal([]byte(dataStr), &data); err == nil {
+			for _, w := range data.PrismWordsInfo {
+				if wd := strings.TrimSpace(w.Word); wd != "" {
+					sb.WriteString(wd)
+					sb.WriteString("\n")
+				}
+			}
+			if sb.Len() == 0 {
+				sb.WriteString(strings.TrimSpace(data.Content))
+			}
+		} else {
+			sb.WriteString(dataStr)
+		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
 func (c *aliyunClient) Recognize(ctx context.Context, image []byte) (string, error) {
-	params := map[string]string{
-		"AccessKeyId":      c.cfg.AccessKeyID,
-		"Action":           "RecognizeGeneral",
-		"Version":          "2021-07-07",
-		"Format":           "JSON",
-		"RegionId":         "cn-hangzhou",
-		"Timestamp":        time.Now().UTC().Format("2006-01-02T15:04:05Z"),
-		"SignatureMethod":  "HMAC-SHA1",
-		"SignatureVersion": "1.0",
-		"SignatureNonce":   randomHex(),
+	type result struct {
+		text string
+		err  error
 	}
-	params["Signature"] = popSignature(params, c.cfg.AccessKeySecret)
-
-	query := url.Values{}
-	for k, v := range params {
-		query.Set(k, v)
-	}
-	payload, err := json.Marshal(map[string]string{"body": base64.StdEncoding.EncodeToString(image)})
-	if err != nil {
-		return "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.Endpoint+"?"+query.Encode(), bytes.NewReader(payload))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("aliyun ocr http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var out struct {
-		Code string `json:"code"`
-		Data struct {
-			WordsResult []struct {
-				Words string `json:"words"`
-			} `json:"wordsResult"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return "", err
-	}
-	if out.Code != "" && out.Code != "200" {
-		return "", fmt.Errorf("aliyun ocr code %s", out.Code)
-	}
-	var lines []string
-	for _, w := range out.Data.WordsResult {
-		if strings.TrimSpace(w.Words) != "" {
-			lines = append(lines, strings.TrimSpace(w.Words))
+	ch := make(chan result, 1)
+	go func() {
+		req := &ocrsdk.RecognizeGeneralRequest{Body: bytes.NewReader(image)}
+		resp, err := c.inner.RecognizeGeneral(req)
+		if err != nil {
+			ch <- result{err: err}
+			return
 		}
-	}
-	if len(lines) == 0 {
-		return "", fmt.Errorf("aliyun ocr returned no text")
-	}
-	return strings.Join(lines, "\n"), nil
-}
-
-func popSignature(params map[string]string, secret string) string {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, percentEncode(k)+"="+percentEncode(params[k]))
-	}
-	canonicalized := strings.Join(parts, "&")
-	stringToSign := "GET&%2F&" + percentEncode(canonicalized)
-
-	mac := hmac.New(sha1.New, []byte(secret+"&"))
-	_, _ = mac.Write([]byte(stringToSign))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
-}
-
-func percentEncode(s string) string {
-	const hexDigits = "0123456789ABCDEF"
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-			c == '-' || c == '_' || c == '.' || c == '~' {
-			b.WriteByte(c)
-			continue
+		if resp == nil || resp.Body == nil {
+			ch <- result{err: fmt.Errorf("aliyun ocr returned empty response")}
+			return
 		}
-		b.WriteByte('%')
-		b.WriteByte(hexDigits[c>>4])
-		b.WriteByte(hexDigits[c&0x0f])
-	}
-	return b.String()
-}
+		if code := tea.StringValue(resp.Body.Code); code != "" && code != "200" {
+			ch <- result{err: fmt.Errorf("aliyun ocr code %s: %s", code, tea.StringValue(resp.Body.Message))}
+			return
+		}
+		text := extractText(tea.StringValue(resp.Body.Data))
+		if text == "" {
+			ch <- result{err: fmt.Errorf("aliyun ocr returned no text")}
+			return
+		}
+		ch <- result{text: text}
+	}()
 
-func randomHex() string {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return "", fmt.Errorf("aliyun ocr: %w", r.err)
+		}
+		return r.text, nil
 	}
-	return hex.EncodeToString(buf[:])
 }
