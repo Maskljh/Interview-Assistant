@@ -169,6 +169,8 @@ export default function CreateInterviewPage() {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setError('图片不能超过 5MB');
+      // Clear the input value so re-selecting the same oversized file re-fires change.
+      e.target.value = '';
       return;
     }
     setError('');
@@ -177,12 +179,14 @@ export default function CreateInterviewPage() {
     try {
       const { text } = await recognizeImage(file);
       if (!text.trim()) {
+        setJdOcrName('');
         setError('未识别到文字，请尝试更清晰的图片');
         return;
       }
       setJobJd(text);
       setPrecheckStale(true);
     } catch (err) {
+      setJdOcrName('');
       const msg = err instanceof ApiError ? err.rawMessage : '';
       const ux = err instanceof ApiError ? err.message : '图片识别失败';
       if (msg.includes('unavailable') || ux.includes('改用文本粘贴')) {
@@ -384,7 +388,7 @@ export default function CreateInterviewPage() {
               )}
               {jdOcrName && !jdOcrRecognizing && (
                 <span className="interview-file-name">
-                  已识别：{jdOcrName}
+                  已读取：{jdOcrName}
                   {jobJd ? `（约 ${jobJd.length} 字）` : ''}
                 </span>
               )}

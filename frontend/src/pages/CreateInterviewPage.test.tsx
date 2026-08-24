@@ -54,6 +54,9 @@ describe('CreateInterviewPage JD image OCR', () => {
       expect((screen.getByLabelText('职位描述') as HTMLTextAreaElement).value).toBe('识别出的 JD 文本');
     });
     expect(recognizeImage).toHaveBeenCalledWith(file);
+    // Success shows the read file name (已读取：) without any error.
+    expect(screen.getByText(/已读取：jd\.png/)).toBeTruthy();
+    expect(screen.queryByText(/图片识别失败|未识别到文字/)).toBeNull();
   });
 
   it('rejects images larger than 5MB without calling OCR', async () => {
@@ -67,5 +70,32 @@ describe('CreateInterviewPage JD image OCR', () => {
       expect(screen.getByText('图片不能超过 5MB')).toBeTruthy();
     });
     expect(recognizeImage).not.toHaveBeenCalled();
+    // The oversized file must not be shown as read.
+    expect(screen.queryByText(/已读取：big\.png/)).toBeNull();
+  });
+
+  it('clears the read file name when OCR returns no text', async () => {
+    vi.mocked(recognizeImage).mockResolvedValueOnce({ text: '   ' });
+    renderPage();
+    const fileInput = screen.getByLabelText('或上传 JD 图片') as HTMLInputElement;
+    const file = new File(['x'], 'jd.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('未识别到文字，请尝试更清晰的图片')).toBeTruthy();
+    });
+    // Failure must not leave a stale 已读取： name next to the error.
+    expect(screen.queryByText(/已读取：jd\.png/)).toBeNull();
+  });
+
+  it('clears the read file name when OCR recognition fails', async () => {
+    vi.mocked(recognizeImage).mockRejectedValueOnce(new Error('boom'));
+    renderPage();
+    const fileInput = screen.getByLabelText('或上传 JD 图片') as HTMLInputElement;
+    const file = new File(['x'], 'jd.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('图片识别失败')).toBeTruthy();
+    });
+    expect(screen.queryByText(/已读取：jd\.png/)).toBeNull();
   });
 });
