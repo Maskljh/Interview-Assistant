@@ -1228,3 +1228,10 @@
 .behavior-light--mid { background: #f5a623; }
 .behavior-light--high { background: #ee0000; }
 .behavior-light--off { background: #aaa; }
+
+/* ─── Behavior signal note (report auxiliary card) ─── */
+.behavior-note {
+  color: #888;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
