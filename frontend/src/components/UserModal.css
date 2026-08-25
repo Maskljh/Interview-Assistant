@@ -1,0 +1,441 @@
+/* ─── 用户管理弹窗 · 按 Figma「06 用户管理弹窗」─── */
+.user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(19, 30, 43, 0.55);
+}
+
+.user-modal {
+  width: 980px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  background: #fffcf7;
+  border-radius: 22px;
+  box-shadow: 0 20px 60px rgba(19, 30, 43, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 头部 */
+.user-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 30px 32px 22px;
+}
+
+.user-modal-title {
+  margin: 0;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 33px;
+  color: #131e2b;
+}
+
+.user-modal-subtitle {
+  margin: 6px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #5f6b79;
+}
+
+.user-modal-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  color: #5f6b79;
+  cursor: pointer;
+}
+
+.user-modal-close:hover {
+  color: #131e2b;
+}
+
+.user-modal-head {
+  border-bottom: 1px solid #d1d9e2;
+}
+
+/* 主体：左用户信息 + 右简历管理 */
+.user-modal-body {
+  display: flex;
+  gap: 24px;
+  padding: 24px 32px 32px;
+  min-height: 0;
+}
+
+/* 左侧用户信息 */
+.user-info-panel {
+  flex-shrink: 0;
+  width: 236px;
+  padding: 24px 20px;
+  background: #e1ebf5;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.user-info-title {
+  margin: 0 0 16px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #2b508e;
+  text-align: left;
+}
+
+.user-avatar-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+/* 头像白底环形：122 白底 + 86 蓝头像（Figma） */
+.user-avatar-ring {
+  width: 122px;
+  height: 122px;
+  border-radius: 61px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-avatar {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  background: #2b508e;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 24px;
+}
+
+.user-name {
+  margin: 0 0 12px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.user-id-label {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+.user-id {
+  margin: 0 0 14px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 21px;
+  color: #2b508e;
+}
+
+.user-logout-btn {
+  width: 82px;
+  height: 23px;
+  border: none;
+  border-radius: 10px;
+  background: #2b508e;
+  color: #ffffff;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-logout-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* 同步提示：白底圆角卡片，内含两行（Figma 资料提示底） */
+.user-sync-card {
+  margin: 14px auto 0;
+  width: 188px;
+  padding: 8px 0;
+  background: #ffffff;
+  border-radius: 10px;
+}
+
+.user-sync-card p {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+.user-sync-card-sub {
+  font-size: 11px !important;
+  line-height: 17px !important;
+}
+
+/* 右侧简历管理 */
+.resume-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.resume-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.resume-panel-title {
+  margin: 0;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.resume-panel-subtitle {
+  margin: 4px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 21px;
+  color: #5f6b79;
+}
+
+.resume-upload-btn {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: #2b508e;
+  color: #ffffff;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resume-upload-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.resume-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resume-list-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #e1ebf5;
+  border-radius: 10px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.resume-list-hint span:first-child {
+  color: #2b508e;
+  font-weight: 600;
+}
+
+.resume-list-hint span:last-child {
+  color: #5f6b79;
+}
+
+.resume-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.resume-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #e1ebf5;
+  border-radius: 12px;
+}
+
+.resume-file-badge {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #2b508e;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resume-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-row-name {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #131e2b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resume-row-meta {
+  margin: 2px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+.resume-row-action {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #2b508e;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resume-row-action:hover {
+  filter: brightness(0.97);
+}
+
+.resume-row-action--danger {
+  color: #b74549;
+}
+
+.resume-rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #d1d9e3;
+  border-radius: 8px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  color: #131e2b;
+  outline: none;
+}
+
+.resume-rename-input:focus {
+  border-color: #2b508e;
+}
+
+.resume-rename-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.resume-empty {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color: #5f6b79;
+}
+
+.resume-error {
+  margin: 0;
+  padding: 10px 16px;
+  background: #fdecea;
+  border-radius: 10px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  color: #b74549;
+}
+
+.resume-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fffcf7;
+  border: 1px solid #e9e2d8;
+  border-radius: 12px;
+}
+
+.resume-footer-plus {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e1ebf5;
+  color: #4779b8;
+  font-size: 22px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resume-footer-title {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.resume-footer-desc {
+  margin: 2px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+@media (max-width: 860px) {
+  .user-modal-body {
+    flex-direction: column;
+  }
+  .user-info-panel {
+    width: 100%;
+  }
+}

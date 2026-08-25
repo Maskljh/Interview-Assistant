@@ -61,10 +61,10 @@ Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自
 
 ## 2. 应用数据库迁移
 
-按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `012_behavior.sql`）：
+按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `014_job_title.sql`）：
 
 - **全新数据库**：每个文件执行一次。
-- **已有数据库**：只应用当前 schema 之后新增的文件（例如 `012_behavior.sql` 新增 `interview_sessions.camera_enabled` 列与 `interview_behavior` 表，用于摄像头行为分析）。
+- **已有数据库**：只应用当前 schema 之后新增的文件（例如 `013_resume_files.sql` 新增 `users.username` 列与 `resume_files` 表；`014_job_title.sql` 新增 `interview_sessions.job_title` 列与 `question_usage` 表）。
 
 从仓库根目录（Docker MySQL）：
 
@@ -86,7 +86,7 @@ done
 
 ## 3. 环境变量
 
-服务端**只读进程环境变量**（`os.Getenv`），不自动加载 `.env` 文件；`.env.example` 仅作参考模板。运行前请按需设置（PowerShell 用 `$env:VAR=...`，bash 用 `export VAR=...`）。
+服务端**优先读进程环境变量**（`os.Getenv`）；启动时会自动加载仓库根目录的 `.env`（`internal/config/config.go` 用 `godotenv` 加载当前目录及上一级目录的 `.env`，进程环境变量优先）。`.env.example` 是变量模板，本地复制为 `.env` 后按需填写。运行前也可手动设置（PowerShell 用 `$env:VAR=...`，bash 用 `export VAR=...`），手动设置会覆盖 `.env` 中的值。
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -103,12 +103,19 @@ done
 | `ALIYUN_OCR_ACCESS_KEY_ID` | 否† | — | 阿里云 OCR（图片导入）；缺省回退到 `ALIYUN_ACCESS_KEY_ID` |
 | `ALIYUN_OCR_ACCESS_KEY_SECRET` | 否† | — | 阿里云 OCR Secret；缺省回退到 `ALIYUN_ACCESS_KEY_SECRET` |
 | `ALIYUN_OCR_ENDPOINT` | 否 | `https://ocr-api.cn-hangzhou.aliyuncs.com/` | 阿里云 OCR 端点 |
+| `OSS_BUCKET` | 否‡ | — | 阿里云 OSS Bucket（简历/JD 文件服务端代理上传） |
+| `OSS_REGION` | 否‡ | — | OSS 地域，如 `oss-cn-hangzhou` |
+| `OSS_ENDPOINT` | 否‡ | — | OSS Endpoint，如 `oss-cn-hangzhou.aliyuncs.com` |
+| `OSS_ACCESS_KEY_ID` | 否‡ | — | OSS AccessKey ID |
+| `OSS_ACCESS_KEY_SECRET` | 否‡ | — | OSS AccessKey Secret |
 
 \* 无 `DEEPSEEK_API_KEY`：开始面试返回 `502`、报告不可用；注册/登录/增删改查/归属校验仍正常。
 
 \*\* **必填**（语音是唯一作答方式）：缺阿里云语音变量时 `/api/speech/asr`、`/api/speech/tts` 返回 `502`，语音房间无法录音/播报，面试无法正常进行。
 
 \† 缺 OCR Key：图片导入返回 `502`（提示改用文字粘贴）；文字导入正常。两者均回退到共享的 `ALIYUN_ACCESS_KEY_ID/SECRET`。
+
+\‡ 缺 OSS 配置：简历/JD 文件上传（`/api/uploads`、`/api/resumes`）返回 `502`，但直接填写 JD 文本不受影响。
 
 **PowerShell（Windows）：**
 
@@ -266,9 +273,9 @@ backend/                  Go API（Gin）、迁移、内部包
     analytics/            成长分析
     profile/              画像
     expression/           表达分析（语速/口头禅/句长）
-    upload/               OSS 预签名上传
+    upload/               OSS 服务端代理上传/读取（HMAC-SHA1 签名）
     ws/                   WebSocket 直播
-  migrations/             001..012 数据库迁移（012 = 行为信号表 + camera_enabled）
+  migrations/             001..014 数据库迁移（014 = 岗位名 + 题库使用记录）
 frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis

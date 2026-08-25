@@ -21,10 +21,7 @@ figma_texts_dump.txt
 render_response.json
 figma_shots/
 
-.git-safe-commit.ps1
 .playwright-cli/
 *.log
 *.png
-pw_*.sh
 server.exe~
-start_backend.ps1

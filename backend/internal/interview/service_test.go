@@ -94,6 +94,10 @@ func (f fakeLLM) ChatJSON(ctx context.Context, system, user string, out any) err
 
 func fakeQuestionsLLM(n int) llm.Client {
 	return fakeLLM{fn: func(system, user string, out any) error {
+		if title, ok := out.(*llm.JobTitleOut); ok {
+			title.Title = "后端工程师"
+			return nil
+		}
 		gen, ok := out.(*llm.GenQuestionsOut)
 		if !ok {
 			return fmt.Errorf("unexpected out type")
@@ -112,6 +116,10 @@ func fakeQuestionsLLM(n int) llm.Client {
 
 func fakeAlwaysFollowUpLLM(n int) llm.Client {
 	return fakeLLM{fn: func(system, user string, out any) error {
+		if title, ok := out.(*llm.JobTitleOut); ok {
+			title.Title = "后端工程师"
+			return nil
+		}
 		if gen, ok := out.(*llm.GenQuestionsOut); ok {
 			gen.Questions = make([]llm.GenQuestion, n)
 			for i := 0; i < n; i++ {
@@ -424,6 +432,118 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 	}
 	if got := lastOutboundType(msgs); got != "question" {
 		t.Fatalf("answer 3 last type = %q, want question (forced next_question after follow-up cap)", got)
+	}
+}
+
+func TestSkipQuestionAdvancesAndEnds(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
+	token := registerUser(t, r, "test-interview-skip@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(6), store)
+	userID := userIDByEmail(t, sqlDB, "test-interview-skip@example.com")
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+
+	// First skip moves from question 1 to question 2, no candidate answer recorded.
+	msgs, err := svc.SkipQuestion(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("SkipQuestion 1: %v", err)
+	}
+	if lastOutboundType(msgs) != "question" {
+		t.Fatalf("skip 1 last type = %q, want question", lastOutboundType(msgs))
+	}
+	if got := msgs[len(msgs)-1].Progress.Current; got != 2 {
+		t.Fatalf("skip 1 progress current = %d, want 2", got)
+	}
+
+	// Second skip moves to question 3.
+	msgs, err = svc.SkipQuestion(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("SkipQuestion 2: %v", err)
+	}
+	if lastOutboundType(msgs) != "question" {
+		t.Fatalf("skip 2 last type = %q, want question", lastOutboundType(msgs))
+	}
+	if got := msgs[len(msgs)-1].Progress.Current; got != 3 {
+		t.Fatalf("skip 2 progress current = %d, want 3", got)
+	}
+
+	// No candidate answers may have been recorded for the skipped questions.
+	session, _, turns, err := svc.Get(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_ = session
+	var candidateTurns int
+	for _, tr := range turns {
+		if tr.Role == "candidate" {
+			candidateTurns++
+		}
+	}
+	if candidateTurns != 0 {
+		t.Fatalf("candidate turns = %d, want 0 (skipped questions are not scored)", candidateTurns)
+	}
+}
+
+func TestSkipQuestionEndsOnLastQuestion(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
+	token := registerUser(t, r, "test-interview-skip-end@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(6), store)
+	userID := userIDByEmail(t, sqlDB, "test-interview-skip-end@example.com")
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+
+	// Skip through the remaining 5 questions; the 6th skip ends the session.
+	for i := 0; i < 5; i++ {
+		if _, err := svc.SkipQuestion(ctx, userID, sessionID); err != nil {
+			t.Fatalf("SkipQuestion %d: %v", i+1, err)
+		}
+	}
+	msgs, err := svc.SkipQuestion(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("SkipQuestion final: %v", err)
+	}
+	if lastOutboundType(msgs) != "done" {
+		t.Fatalf("final skip last type = %q, want done", lastOutboundType(msgs))
+	}
+
+	session, _, _, err := svc.Get(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if session.Status != interview.StatusCompleted {
+		t.Fatalf("session status = %q, want completed", session.Status)
 	}
 }
 
@@ -808,6 +928,10 @@ type capturingLLM struct {
 }
 
 func (c *capturingLLM) ChatJSON(ctx context.Context, system, user string, out any) error {
+	if title, ok := out.(*llm.JobTitleOut); ok {
+		title.Title = "后端工程师"
+		return nil
+	}
 	c.userPrompts = append(c.userPrompts, user)
 	gen, ok := out.(*llm.GenQuestionsOut)
 	if !ok {
@@ -894,7 +1018,7 @@ func TestCreatePersistsPersona(t *testing.T) {
 	_ = registerUser(t, r, "test-interview-persona-persist@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
 
-	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
 	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "strict_tech", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -916,7 +1040,7 @@ func TestCreateDefaultsStandardPersona(t *testing.T) {
 	_ = registerUser(t, r, "test-interview-persona-default@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
 
-	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
 	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -934,7 +1058,7 @@ func TestCreateRejectsInvalidPersona(t *testing.T) {
 	_ = registerUser(t, r, "test-interview-persona-invalid@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
 
-	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
 	_, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, "evil", llm.StandardDifficulty, llm.StandardCompanyStyle, nil, false)
 	if !errors.Is(err, interview.ErrInvalidPersona) {
 		t.Fatalf("err = %v, want ErrInvalidPersona", err)
@@ -1034,7 +1158,7 @@ func TestCreatePersistsPrecheckGaps(t *testing.T) {
 	_ = registerUser(t, r, "test-interview-gaps-persist@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-persist@example.com")
 
-	svc := interview.NewService(sqlDB, &fakeLLM{}, store)
+	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
 	session, err := svc.Create(ctx, userID, "Backend engineer JD", nil, nil, nil, interview.ModeMixed, interview.InputModeVoice, llm.StandardPersona, llm.StandardDifficulty, llm.StandardCompanyStyle, []string{"缺少K8s经验"}, false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)

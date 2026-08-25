@@ -7,6 +7,7 @@ import {
   type ImportParseResult,
 } from '../api/questions';
 import { ApiError } from '../api/client';
+import { extractResumeText } from '../lib/resumeParse';
 import './QuestionImportModal.css';
 
 interface Props {
@@ -20,9 +21,9 @@ type Step = 'input' | 'candidates' | 'done';
 export default function QuestionImportModal({ open, onClose, onImported }: Props) {
   const [step, setStep] = useState<Step>('input');
   const [text, setText] = useState('');
-  const [jobTag, setJobTag] = useState('');
-  const [imageName, setImageName] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [dragging, setDragging] = useState(false);
   const [items, setItems] = useState<ImportItem[]>([]);
   const [raw, setRaw] = useState('');
   const [ocrText, setOcrText] = useState('');
@@ -32,18 +33,41 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!open) return null;
+
+  function handleFileChange(f: File | null) {
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) {
+      setError('文件不能超过 10MB');
+      return;
+    }
+    setFile(f);
+    setFileName(f.name);
+    setError('');
+  }
+
   async function handleParse() {
     setParsing(true);
     setError('');
     setMessage('');
     try {
       let res: ImportParseResult;
-      if (imageFile) {
-        res = await parseImportImage(imageFile);
+      if (file) {
+        if (file.type.startsWith('image/')) {
+          // 图片：走 OCR 识别
+          res = await parseImportImage(file);
+        } else {
+          // 文档：先解析出文本，再交给 LLM 结构化
+          const extracted = await extractResumeText(file);
+          if (!extracted.trim()) {
+            setError('文件内容为空，请换一份文件再试');
+            return;
+          }
+          res = await parseImportText(extracted);
+        }
       } else if (text.trim()) {
         res = await parseImportText(text);
       } else {
-        setError('请粘贴面经文本或上传图片');
+        setError('请粘贴面经文本或上传文件/图片');
         return;
       }
       setItems(res.items);
@@ -63,8 +87,8 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
       const msg = err instanceof ApiError ? err.message : '解析失败';
       // OCR 不可用时后端返回 502，错误文案被 toUserMessage 映射成通用提示，
       // 必须用原始 message（rawMessage）识别该场景并展示强制的提示文案。
-      const raw = err instanceof ApiError ? err.rawMessage : '';
-      if (msg.includes('改用文本粘贴') || raw.includes('unavailable')) {
+      const rawMsg = err instanceof ApiError ? err.rawMessage : '';
+      if (msg.includes('改用文本粘贴') || rawMsg.includes('unavailable')) {
         setError('图片识别失败，请改用文本粘贴');
       } else {
         setError(msg);
@@ -112,7 +136,7 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
     setMessage('');
     const valid = items.filter((it) => it.question.trim() !== '');
     try {
-      const res = await confirmImport(valid, jobTag);
+      const res = await confirmImport(valid);
       setMessage(`新增 ${res.imported} 题，跳过 ${res.skipped} 题重复`);
       setStep('done');
       onImported();
@@ -126,9 +150,9 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
   function reset() {
     setStep('input');
     setText('');
-    setJobTag('');
-    setImageName('');
-    setImageFile(null);
+    setFile(null);
+    setFileName('');
+    setDragging(false);
     setItems([]);
     setRaw('');
     setOcrText('');
@@ -157,39 +181,63 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
               <label htmlFor="import-text">面经文本</label>
               <textarea
                 id="import-text"
-                rows={6}
+                rows={5}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="粘贴面经文本…"
               />
             </div>
             <div className="interview-field">
-              <label htmlFor="import-job-tag">岗位标签（可选）</label>
-              <input
-                id="import-job-tag"
-                type="text"
-                value={jobTag}
-                onChange={(e) => setJobTag(e.target.value)}
-                placeholder="例如：后端开发"
-              />
-            </div>
-            <div className="interview-field">
-              <label>或上传图片（截图）</label>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  if (f && f.size > 5 * 1024 * 1024) {
-                    setError('图片不能超过 5MB');
-                    return;
-                  }
-                  setImageFile(f);
-                  setImageName(f ? f.name : '');
+              <label>或上传文件 / 图片（截图）</label>
+              <div
+                className={`dropzone${dragging ? ' is-dragging' : ''}${parsing ? ' is-busy' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
                 }}
-              />
-              {imageName && <p className="import-file-name">{imageName}</p>}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  handleFileChange(e.dataTransfer.files?.[0] ?? null);
+                }}
+                onClick={() => {
+                  if (!parsing) fileRef.current?.click();
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="上传文件"
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && !parsing) {
+                    fileRef.current?.click();
+                  }
+                }}
+              >
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".txt,.md,.pdf,.docx,image/jpeg,image/png,image/webp,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => {
+                    handleFileChange(e.target.files?.[0] ?? null);
+                    e.target.value = '';
+                  }}
+                  disabled={parsing}
+                  hidden
+                />
+                {fileName ? (
+                  <>
+                    <div className="dropzone-icon" aria-hidden="true">✓</div>
+                    <p className="dropzone-title">{fileName}</p>
+                    <p className="dropzone-hint">点击可重新选择</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="dropzone-icon" aria-hidden="true">↑</div>
+                    <p className="dropzone-title">拖拽文件或图片到这里，或点击选择</p>
+                    <p className="dropzone-hint">支持 .txt、.md、.pdf、.docx 或图片（自动 OCR），不超过 10MB</p>
+                  </>
+                )}
+              </div>
             </div>
             {error && <p className="interview-error">{error}</p>}
             <div className="import-modal-actions">
@@ -201,7 +249,7 @@ export default function QuestionImportModal({ open, onClose, onImported }: Props
               >
                 {parsing ? '解析中…' : '解析'}
               </button>
-              <button type="button" className="interview-inline-link" onClick={close}>
+              <button type="button" className="interview-submit" onClick={close} disabled={parsing}>
                 取消
               </button>
             </div>

@@ -53,6 +53,7 @@ export interface InterviewQuestion {
 export interface Interview {
   id: number;
   job_jd: string;
+  job_title: string | null;
   resume_text: string | null;
   resume_file_url: string | null;
   jd_file_url: string | null;
@@ -123,6 +124,7 @@ export interface InterviewFeedback {
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
+  summary?: string;
   model_version: string;
 }
 

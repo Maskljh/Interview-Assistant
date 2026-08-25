@@ -95,7 +95,10 @@ export async function fetchJSON<T>(
 
   const { skipAuthRedirect, ...fetchOpts } = opts;
   const headers = new Headers(fetchOpts.headers);
-  if (!headers.has('Content-Type') && opts.body) {
+  // FormData 由 fetch 自动生成 multipart Content-Type（含 boundary），
+  // 不能覆盖为 JSON；否则后端解析不到 multipart 文件。
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  if (!headers.has('Content-Type') && opts.body && !isFormData) {
     headers.set('Content-Type', 'application/json');
   }
 

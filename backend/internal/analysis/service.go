@@ -42,6 +42,7 @@ type Feedback struct {
 	Strengths    []string `json:"strengths"`
 	Weaknesses   []string `json:"weaknesses"`
 	Suggestions  []string `json:"suggestions"`
+	Summary      string   `json:"summary,omitempty"`
 	ModelVersion string   `json:"model_version"`
 }
 
@@ -183,6 +184,7 @@ func validateFeedback(out llm.EvaluateOut, modelVersion string) (*Feedback, erro
 		Strengths:    out.Strengths,
 		Weaknesses:   out.Weaknesses,
 		Suggestions:  out.Suggestions,
+		Summary:      strings.TrimSpace(out.Summary),
 		ModelVersion: mv,
 	}, nil
 }
@@ -229,6 +231,7 @@ func noAnswerFeedback(modelVersion string) *Feedback {
 		Strengths:    []string{"面试已结束，但未检测到任何候选人回答。"},
 		Weaknesses:   []string{"未回答任何问题，无法评估表达能力、逻辑结构、内容质量与岗位匹配。"},
 		Suggestions:  []string{"重新开始一次面试，并完整回答每个问题后再查看评估报告。"},
+		Summary:      "本次未检测到有效回答，建议重新练习。",
 		ModelVersion: modelVersion,
 	}
 }
@@ -245,6 +248,7 @@ func tooBriefFeedback(modelVersion string) *Feedback {
 		Strengths:    []string{"面试已结束，但候选人回答内容过少。"},
 		Weaknesses:   []string{"回答过于简短，缺乏实质内容，无法有效评估各项能力。"},
 		Suggestions:  []string{"重新开始一次面试，针对每个问题给出具体、完整的回答。"},
+		Summary:      "回答内容过少，未能充分展示能力，建议完整作答后重新评估。",
 		ModelVersion: modelVersion,
 	}
 }

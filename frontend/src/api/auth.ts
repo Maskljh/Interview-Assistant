@@ -3,6 +3,7 @@ import { fetchJSON, setToken } from './client';
 export interface User {
   id: number;
   email: string;
+  username?: string;
 }
 
 export interface AuthResponse {
@@ -28,4 +29,9 @@ export async function register(email: string, password: string): Promise<AuthRes
   });
   setToken(data.token);
   return data;
+}
+
+/** 拉取当前登录用户资料（用户名等），用于刷新侧边栏/弹窗。 */
+export async function getMe(): Promise<User> {
+  return fetchJSON<User>('/api/auth/me');
 }

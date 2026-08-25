@@ -11,6 +11,7 @@ import RegisterPage from './pages/RegisterPage';
 import QuestionBankPage from './pages/QuestionBankPage';
 import ReportPage from './pages/ReportPage';
 import TrendsPage from './pages/TrendsPage';
+import WelcomePage from './pages/WelcomePage';
 
 export default function App() {
   return (
@@ -21,6 +22,14 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <WelcomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/history"
             element={
               <ProtectedRoute>
                 <InterviewListPage />

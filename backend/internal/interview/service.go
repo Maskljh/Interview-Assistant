@@ -104,7 +104,34 @@ func (s *Service) Create(ctx context.Context, userID int64, jobJD string, resume
 	if err := validateCompanyStyle(style); err != nil {
 		return nil, err
 	}
-	return s.repo.Create(userID, jobJD, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, cameraEnabled)
+
+	// Derive a short job title from the JD (and resume) for the report header
+	// and interview room top bar. Best-effort: a failed LLM call leaves the
+	// title NULL and the UI falls back to the JD.
+	title := s.deriveJobTitle(ctx, jobJD, resume)
+
+	session, err := s.repo.Create(userID, jobJD, title, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, cameraEnabled)
+	if err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+// deriveJobTitle asks the LLM for a concise job title. On any failure it
+// returns "" so creation never blocks on the title.
+func (s *Service) deriveJobTitle(ctx context.Context, jobJD string, resume *string) string {
+	if s.llm == nil {
+		return ""
+	}
+	resumeText := ""
+	if resume != nil {
+		resumeText = *resume
+	}
+	var out llm.JobTitleOut
+	if err := s.llm.ChatJSON(ctx, llm.JobTitleSystem(), llm.JobTitleUser(jobJD, resumeText), &out); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out.Title)
 }
 
 func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, []Question, error) {
@@ -153,7 +180,14 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	}
 
 	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	return s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
+	session, questions, err := s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Record which bank questions were used so the question bank can show real
+	// usage counts. Best-effort: never blocks session creation.
+	s.repo.RecordQuestionUsage(userID, questionIDs, session.ID)
+	return session, questions, nil
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {
@@ -421,6 +455,59 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 	default:
 		return nil, ErrLLMFailure
 	}
+}
+
+// SkipQuestion advances the live session to the next question without scoring
+// the current one: the skipped turn never gets a candidate answer, so the
+// evaluator has nothing to score it against. Skipping the final question ends
+// the session.
+func (s *Service) SkipQuestion(ctx context.Context, userID, sessionID int64) ([]OutboundMessage, error) {
+	session, questions, err := s.loadOwnedSession(ctx, userID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != StatusInProgress {
+		return nil, ErrInvalidState
+	}
+	state, err := s.store.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
+		return nil, ErrInvalidState
+	}
+
+	total := len(questions)
+	progress := &Progress{Current: state.QuestionIndex + 1, Total: total}
+	nextIndex := state.QuestionIndex + 1
+	if nextIndex >= total {
+		doneMsgs, err := s.finishSession(ctx, sessionID, state)
+		if err != nil {
+			return nil, err
+		}
+		return append([]OutboundMessage{{Type: "status", Content: "thinking"}}, doneMsgs...), nil
+	}
+
+	q, err := s.repo.GetQuestionByIndex(sessionID, nextIndex)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.MarkQuestionAsked(sessionID, q.Seq); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.AppendTurn(sessionID, "interviewer", "question", q.Question, nil); err != nil {
+		return nil, err
+	}
+	state.QuestionIndex = nextIndex
+	state.FollowUpsOnCurrent = 0
+	state.TurnCount++
+	state.PendingKind = "question"
+	state.PendingText = q.Question
+	if err := s.store.Save(ctx, state, liveStateTTL); err != nil {
+		return nil, err
+	}
+	progress.Current = nextIndex + 1
+	return []OutboundMessage{{Type: "question", Content: q.Question, Progress: progress}}, nil
 }
 
 func (s *Service) ForceEnd(ctx context.Context, userID, sessionID int64) error {

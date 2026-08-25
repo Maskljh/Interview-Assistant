@@ -14,6 +14,7 @@ type Item struct {
 	Dimension       *string   `json:"dimension"`
 	Reference       *string   `json:"reference"`
 	Starred         bool      `json:"starred"`
+	UsageCount      int       `json:"usage_count"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 

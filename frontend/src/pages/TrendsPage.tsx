@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
+  Bar,
+  BarChart,
+  Cell,
+  LabelList,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -27,39 +26,16 @@ const SOURCE_TABS: { value: TrendsSource; label: string }[] = [
   { value: 'bank', label: '题库练习' },
 ];
 
-const DIM_LINES: { key: 'expression' | 'logic' | 'content' | 'job_match'; label: string }[] = [
-  { key: 'expression', label: '表达能力' },
-  { key: 'logic', label: '逻辑结构' },
-  { key: 'content', label: '内容质量' },
-  { key: 'job_match', label: '岗位匹配' },
-];
-
-const DIM_COLORS: Record<string, string> = {
-  expression: '#0070f3',
-  logic: '#7928ca',
-  content: '#f5a623',
-  job_match: '#50e3c2',
+const DIM_KEYS = ['expression', 'logic', 'content', 'job_match'] as const;
+const DIM_LABELS: Record<(typeof DIM_KEYS)[number], string> = {
+  expression: '表达能力',
+  logic: '逻辑结构',
+  content: '内容质量',
+  job_match: '岗位匹配',
 };
 
-// 自定义 Tooltip 内容，确保每个节点显示正确的分数
-function TotalTooltipContent({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0]?.payload;
-  return (
-    <div style={{
-      background: '#fff',
-      border: '1px solid #e8e8e8',
-      borderRadius: 8,
-      padding: '8px 12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-      fontSize: 13,
-      lineHeight: 1.5,
-    }}>
-      <div style={{ fontWeight: 500, marginBottom: 2 }}>{point?.date}</div>
-      <div>{payload[0]?.value} 分 · {point?.job_tag}</div>
-    </div>
-  );
-}
+/** 柱状图蓝色透明度渐变（Figma #1A52C7，0.55 → 0.9） */
+const BAR_OPACITIES = [0.55, 0.62, 0.69, 0.76, 0.83, 0.9];
 
 export default function TrendsPage() {
   const navigate = useNavigate();
@@ -92,13 +68,106 @@ export default function TrendsPage() {
   }, [load]);
 
   const s = data?.summary;
+  const points = data?.points ?? [];
+
+  // 最近 6 场（按返回顺序取最后 6 条，倒序展示为第1场→第6场）
+  const recent6 = points.slice(-6);
+
+  // 连续练习：最近 6 场中从最早一场起连续有分数的场次
+  const consecutive = (() => {
+    let n = 0;
+    for (const p of recent6) {
+      if (p.total != null) n += 1;
+      else break;
+    }
+    return n;
+  })();
+
+  // 优先短板：所有场次中各维度平均分最低的一项
+  const weakestDim = (() => {
+    if (points.length === 0) return null;
+    const sums: Record<string, number> = { expression: 0, logic: 0, content: 0, job_match: 0 };
+    for (const p of points) {
+      for (const k of DIM_KEYS) sums[k] += p[k] ?? 0;
+    }
+    let minKey: (typeof DIM_KEYS)[number] | null = null;
+    let minAvg = Infinity;
+    for (const k of DIM_KEYS) {
+      const avg = sums[k] / points.length;
+      if (avg < minAvg) {
+        minAvg = avg;
+        minKey = k;
+      }
+    }
+    return minKey ? DIM_LABELS[minKey] : null;
+  })();
+
+  // 保持强项：所有场次中各维度平均分最高的一项
+  const strongestDim = (() => {
+    if (points.length === 0) return null;
+    const sums: Record<string, number> = { expression: 0, logic: 0, content: 0, job_match: 0 };
+    for (const p of points) {
+      for (const k of DIM_KEYS) sums[k] += p[k] ?? 0;
+    }
+    let maxKey: (typeof DIM_KEYS)[number] | null = null;
+    let maxAvg = -Infinity;
+    for (const k of DIM_KEYS) {
+      const avg = sums[k] / points.length;
+      if (avg > maxAvg) {
+        maxAvg = avg;
+        maxKey = k;
+      }
+    }
+    return maxKey ? DIM_LABELS[maxKey] : null;
+  })();
+
+  // 波动关注：各维度跨场次标准差最大的一项
+  const volatileDim = (() => {
+    if (points.length < 3) return null;
+    const means: Record<string, number> = { expression: 0, logic: 0, content: 0, job_match: 0 };
+    for (const k of DIM_KEYS) {
+      means[k] = points.reduce((a, p) => a + (p[k] ?? 0), 0) / points.length;
+    }
+    let maxKey: (typeof DIM_KEYS)[number] | null = null;
+    let maxStd = -Infinity;
+    for (const k of DIM_KEYS) {
+      const variance =
+        points.reduce((a, p) => a + ((p[k] ?? 0) - means[k]) ** 2, 0) / points.length;
+      const std = Math.sqrt(variance);
+      if (std > maxStd) {
+        maxStd = std;
+        maxKey = k;
+      }
+    }
+    return maxKey ? DIM_LABELS[maxKey] : null;
+  })();
+
+  // 训练计划：基于维度分数的 3 条建议（弱项 / 强项 / 波动），数据不足时给出通用文案
+  const planItems = [
+    weakestDim
+      ? { title: `1. ${weakestDim}专项`, desc: '优先补齐最低分维度，结合真实项目案例加强表达。' }
+      : { title: '1. 综合能力专项', desc: '积累更多面试场次后，再定位需要优先补齐的维度。' },
+    strongestDim
+      ? { title: `2. 保持${strongestDim}优势`, desc: '在稳定发挥优势维度的同时，思考如何把优势迁移到其他环节。' }
+      : { title: '2. 保持优势维度', desc: '完成更多场次后，识别稳定高分项并持续巩固。' },
+    volatileDim
+      ? { title: `3. 关注${volatileDim}波动`, desc: '该维度跨场次波动较大，建议针对不稳定因素做专项复盘。' }
+      : { title: '3. 复盘稳定性', desc: '完成更多场次后，观察各维度跨场波动，定位发挥不稳定的环节。' },
+  ];
+
+  const barData = recent6.map((p, i) => ({
+    name: `第${i + 1}场`,
+    score: p.total,
+    sessionId: p.session_id,
+    fillOpacity: BAR_OPACITIES[i] ?? 0.9,
+  }));
 
   return (
     <div className="interview-page">
       <AppNav tab="trends" />
-      <main className="interview-main">
-        <h1>成长分析</h1>
-        <p className="interview-subtitle">查看历史面试的分数趋势与维度变化。</p>
+      <main className="interview-main interview-main--wide">
+        <h1>成长看板</h1>
+        <p className="interview-subtitle">把单场反馈转化为下一轮可验证的改进。</p>
 
         {error && <p className="interview-error">{error}</p>}
 
@@ -144,86 +213,78 @@ export default function TrendsPage() {
           </p>
         ) : data ? (
           <>
-            <div className="trends-summary-grid">
-              <div className="trends-summary-card">
-                <span className="trends-summary-label">面试场次</span>
-                <span className="trends-summary-value">{s?.total_sessions}</span>
+            {/* 4 个统计卡 */}
+            <div className="trends-figma-stats">
+              <div className="trends-figma-stat">
+                <span className="trends-figma-stat-label">本周训练</span>
+                <span className="trends-figma-stat-value">{s?.total_sessions} 场</span>
               </div>
-              <div className="trends-summary-card">
-                <span className="trends-summary-label">平均分</span>
-                <span className="trends-summary-value">{s?.avg_score}</span>
+              <div className="trends-figma-stat">
+                <span className="trends-figma-stat-label">平均得分</span>
+                <span className="trends-figma-stat-value">{s?.avg_score}</span>
               </div>
-              <div className="trends-summary-card">
-                <span className="trends-summary-label">最高分</span>
-                <span className="trends-summary-value">{s?.max_score}</span>
+              <div className="trends-figma-stat">
+                <span className="trends-figma-stat-label">连续练习</span>
+                <span className="trends-figma-stat-value">{consecutive} 场</span>
               </div>
-              <div className="trends-summary-card">
-                <span className="trends-summary-label">最低分</span>
-                <span className="trends-summary-value">{s?.min_score}</span>
-              </div>
-              <div className="trends-summary-card">
-                <span className="trends-summary-label">最近 vs 最早</span>
-                <span
-                  className={`trends-summary-value${
-                    (s?.delta ?? 0) >= 0 ? ' trends-delta-up' : ' trends-delta-down'
-                  }`}
-                >
-                  {(s?.delta ?? 0) >= 0 ? `+${s?.delta}` : `${s?.delta}`}
-                </span>
+              <div className="trends-figma-stat">
+                <span className="trends-figma-stat-label">优先短板</span>
+                <span className="trends-figma-stat-value">{weakestDim ?? '—'}</span>
               </div>
             </div>
 
-            <h2 className="interview-section-title">总分趋势</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.points.map((p, i) => ({ ...p, idx: i }))}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="idx" tick={{ fontSize: 12 }} />
-                <YAxis domain={[0, 100]} />
-                <Tooltip content={<TotalTooltipContent />} />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  name="总分"
-                  stroke="#171717"
-                  strokeWidth={2}
-                  dot={(props: any) => {
-                    const { cx, cy, payload } = props;
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={5}
-                        fill="#171717"
-                        stroke="#fff"
-                        strokeWidth={2}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/interviews/${payload.session_id}/report?from=trends`)}
+            {/* 下排：柱状图 + 下一步训练计划 */}
+            <div className="trends-figma-grid">
+              <section className="trends-figma-card trends-figma-chart-card">
+                <h2 className="trends-figma-card-title">近 {recent6.length} 场综合得分</h2>
+                <div className="trends-figma-chart">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={barData} margin={{ top: 24, right: 16, bottom: 8, left: -20 }}>
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 12, fill: '#131e2b' }}
+                        axisLine={{ stroke: '#e3e0d8' }}
+                        tickLine={false}
                       />
-                    );
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#8b95a3' }} axisLine={false} tickLine={false} />
+                      <Bar
+                        dataKey="score"
+                        radius={[8, 8, 0, 0]}
+                        barSize={64}
+                        onClick={(entry: any) => {
+                          if (entry?.sessionId) {
+                            navigate(`/interviews/${entry.sessionId}/report?from=trends`);
+                          }
+                        }}
+                      >
+                        <LabelList dataKey="score" position="top" offset={24} style={{ fontSize: 12, fill: '#131e2b' }} />
+                        {barData.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill="#1a52c7"
+                            fillOpacity={entry.fillOpacity}
+                            cursor="pointer"
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
 
-            <h2 className="interview-section-title">维度趋势</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.points.map((p, i) => ({ ...p, idx: i }))}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="idx" tick={{ fontSize: 12 }} />
-                <YAxis domain={[0, 100]} />
-                <Tooltip />
-                <Legend />
-                {DIM_LINES.map((dim) => (
-                  <Line
-                    key={dim.key}
-                    type="monotone"
-                    dataKey={dim.key}
-                    name={dim.label}
-                    stroke={DIM_COLORS[dim.key]}
-                  />
+              <section className="trends-figma-card trends-figma-plan-card">
+                <h2 className="trends-figma-card-title">下一步训练计划</h2>
+                {planItems.map((item) => (
+                  <div key={item.title} className="trends-figma-plan-item">
+                    <p className="trends-figma-plan-title">{item.title}</p>
+                    <p className="trends-figma-plan-desc">{item.desc}</p>
+                  </div>
                 ))}
-              </LineChart>
-            </ResponsiveContainer>
+                <Link className="trends-figma-plan-btn" to="/interviews/new">
+                  安排下一次练习
+                </Link>
+              </section>
+            </div>
           </>
         ) : null}
       </main>

@@ -14,11 +14,11 @@ func NewRepo(db *sql.DB) *Repo {
 	return &Repo{db: db}
 }
 
-func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, error) {
+func (r *Repo) Create(userID int64, jobJD, jobTitle string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, error) {
 	res, err := r.db.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusDraft),
+		`INSERT INTO interview_sessions (user_id, job_jd, job_title, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, nullTitle(jobTitle), nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusDraft),
 	)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (r *Repo) Create(userID int64, jobJD string, resume *string, resumeFileURL,
 
 func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, job_title, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE user_id = ?
@@ -57,7 +57,7 @@ func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 
 func (r *Repo) GetByID(id int64) (*Session, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, job_jd, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
+		`SELECT id, user_id, job_jd, job_title, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,
 		        started_at, ended_at, created_at
 		 FROM interview_sessions
 		 WHERE id = ?`,
@@ -132,7 +132,7 @@ type rowScanner interface {
 
 func scanSession(row rowScanner) (*Session, error) {
 	var s Session
-	var resume, resumeFileURL, jdFileURL sql.NullString
+	var jobTitle, resume, resumeFileURL, jdFileURL sql.NullString
 	var score sql.NullInt64
 	var feedback []byte
 	var mode, inputMode, persona, difficulty, style, status string
@@ -140,11 +140,15 @@ func scanSession(row rowScanner) (*Session, error) {
 	var gaps []byte
 
 	err := row.Scan(
-		&s.ID, &s.UserID, &s.JobJD, &jdFileURL, &resume, &resumeFileURL, &mode, &inputMode, &persona, &difficulty, &style, &cameraEnabled, &gaps, &status, &score, &feedback,
+		&s.ID, &s.UserID, &s.JobJD, &jobTitle, &jdFileURL, &resume, &resumeFileURL, &mode, &inputMode, &persona, &difficulty, &style, &cameraEnabled, &gaps, &status, &score, &feedback,
 		&s.StartedAt, &s.EndedAt, &s.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if jobTitle.Valid {
+		v := jobTitle.String
+		s.JobTitle = &v
 	}
 	if resume.Valid {
 		v := resume.String
@@ -183,6 +187,22 @@ func nullString(s *string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: *s, Valid: true}
+}
+
+// nullTitle converts a derived job title to a NULL-able column value; an empty
+// title is stored as NULL (session was created before title derivation or the
+// LLM call failed).
+func nullTitle(title string) sql.NullString {
+	if title == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: title, Valid: true}
+}
+
+// SetJobTitle persists a derived job title; an empty title clears it to NULL.
+func (r *Repo) SetJobTitle(sessionID int64, title string) error {
+	_, err := r.db.Exec(`UPDATE interview_sessions SET job_title = ? WHERE id = ?`, nullTitle(title), sessionID)
+	return err
 }
 
 // nullGapsJSON marshals precheck gaps for a JSON column; empty stays NULL.
@@ -258,6 +278,20 @@ func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, i
 		return nil, nil, err
 	}
 	return session, questions, nil
+}
+
+// RecordQuestionUsage inserts one usage row per bank question selected into a
+// from-bank practice session. It never fails the session creation: an
+// incomplete record just means the usage count may undercount.
+func (r *Repo) RecordQuestionUsage(userID int64, questionIDs []int64, sessionID int64) {
+	for _, qid := range questionIDs {
+		if _, err := r.db.Exec(
+			`INSERT IGNORE INTO question_usage (user_id, question_id, session_id) VALUES (?, ?, ?)`,
+			userID, qid, sessionID,
+		); err != nil {
+			continue
+		}
+	}
 }
 
 func (r *Repo) StartSession(sessionID int64, questions []struct {

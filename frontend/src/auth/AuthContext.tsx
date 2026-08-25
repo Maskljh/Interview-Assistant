@@ -14,6 +14,7 @@ const USER_KEY = 'auth_user';
 export interface User {
   id: number;
   email: string;
+  username?: string;
 }
 
 interface AuthContextValue {
@@ -21,6 +22,10 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** 模拟登录：不请求后端，直接以访客身份进入主页（UI 还原阶段使用）。 */
+  loginAsGuest: () => void;
+  /** 从后端刷新当前用户资料（用户名等）并更新本地存储。 */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -65,9 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const fresh = await authApi.getMe();
+    setUser((prev) => {
+      const next = { ...(prev ?? { id: fresh.id, email: fresh.email }), ...fresh };
+      storeUser(next);
+      return next;
+    });
+  }, []);
+
+  const loginAsGuest = useCallback(() => {
+    setToken('guest-session');
+    storeUser({ id: 0, email: 'guest' });
+    setUser({ id: 0, email: 'guest' });
+  }, []);
+
   const value = useMemo(
-    () => ({ user, login, register, logout }),
-    [user, login, register, logout],
+    () => ({ user, login, register, logout, loginAsGuest, refreshUser }),
+    [user, login, register, logout, loginAsGuest, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

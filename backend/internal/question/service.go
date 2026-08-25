@@ -177,7 +177,10 @@ func (s *Service) List(ctx context.Context, userID int64, f ListFilter) ([]Item,
 	return items, err
 }
 
-func (s *Service) PatchStar(ctx context.Context, userID, id int64, starred bool) (*Item, error) {
+// Patch updates any of the provided optional fields on a bank question.
+// Nil pointers leave the corresponding field unchanged; empty strings clear
+// nullable text fields. starred is applied separately to keep old callers working.
+func (s *Service) Patch(ctx context.Context, userID, id int64, starred *bool, question, answer, jobTag, dimension *string) (*Item, error) {
 	item, err := s.repo.GetByID(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -188,10 +191,66 @@ func (s *Service) PatchStar(ctx context.Context, userID, id int64, starred bool)
 	if item.UserID != userID {
 		return nil, ErrNotFound
 	}
-	if err := s.repo.UpdateStarred(id, starred); err != nil {
-		return nil, err
+
+	changed := false
+	if starred != nil {
+		if err := s.repo.UpdateStarred(id, *starred); err != nil {
+			return nil, err
+		}
+		item.Starred = *starred
+		changed = true
 	}
-	item.Starred = starred
+	if question != nil {
+		trimmed := strings.TrimSpace(*question)
+		if trimmed == "" {
+			return nil, ErrInvalidInput
+		}
+		if err := s.repo.UpdateField(id, "question", trimmed); err != nil {
+			return nil, err
+		}
+		item.Question = trimmed
+		changed = true
+	}
+	if answer != nil {
+		trimmed := strings.TrimSpace(*answer)
+		if err := s.repo.UpdateNullableField(id, "answer", trimmed); err != nil {
+			return nil, err
+		}
+		if trimmed == "" {
+			item.Answer = nil
+		} else {
+			item.Answer = &trimmed
+		}
+		changed = true
+	}
+	if jobTag != nil {
+		trimmed := strings.TrimSpace(*jobTag)
+		if err := s.repo.UpdateNullableField(id, "job_tag", trimmed); err != nil {
+			return nil, err
+		}
+		if trimmed == "" {
+			item.JobTag = nil
+		} else {
+			item.JobTag = &trimmed
+		}
+		changed = true
+	}
+	if dimension != nil {
+		trimmed := strings.TrimSpace(*dimension)
+		if err := s.repo.UpdateNullableField(id, "dimension", trimmed); err != nil {
+			return nil, err
+		}
+		if trimmed == "" {
+			item.Dimension = nil
+		} else {
+			item.Dimension = &trimmed
+		}
+		changed = true
+	}
+
+	if !changed {
+		return item, nil
+	}
 	return item, nil
 }
 

@@ -22,6 +22,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      // 开发模式不注册 Service Worker，避免缓存旧资源导致界面不更新。
+      devOptions: { enabled: false },
       manifest: {
         name: '模拟面试助手',
         short_name: '模拟面试',

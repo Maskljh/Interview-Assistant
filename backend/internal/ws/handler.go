@@ -111,18 +111,31 @@ func (h *Handler) Serve(c *gin.Context) {
 		if err := conn.ReadJSON(&clientMsg); err != nil {
 			return
 		}
-		if clientMsg.Type != "answer" {
-			continue
-		}
-		answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content, clientMsg.VoiceDurationMs)
-		if err != nil {
-			_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
-			continue
-		}
-		for _, m := range answerMsgs {
-			if err := writeJSON(conn, toServerMsg(m)); err != nil {
-				return
+		switch clientMsg.Type {
+		case "answer":
+			answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content, clientMsg.VoiceDurationMs)
+			if err != nil {
+				_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
+				continue
 			}
+			for _, m := range answerMsgs {
+				if err := writeJSON(conn, toServerMsg(m)); err != nil {
+					return
+				}
+			}
+		case "skip_question":
+			skipMsgs, err := h.svc.SkipQuestion(ctx, userID, sessionID)
+			if err != nil {
+				_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
+				continue
+			}
+			for _, m := range skipMsgs {
+				if err := writeJSON(conn, toServerMsg(m)); err != nil {
+					return
+				}
+			}
+		default:
+			continue
 		}
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestValidateSignRequest(t *testing.T) {
+func TestValidateUpload(t *testing.T) {
 	cases := []struct {
 		name        string
 		kind        string
@@ -22,9 +22,9 @@ func TestValidateSignRequest(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateSignRequest(tc.kind, tc.filename, tc.contentType, tc.size)
+			err := validateUpload(tc.kind, tc.filename, tc.contentType, tc.size)
 			if (err != nil) != tc.wantErr {
-				t.Fatalf("validateSignRequest(%q,%q,%q,%d) err=%v wantErr=%v", tc.kind, tc.filename, tc.contentType, tc.size, err, tc.wantErr)
+				t.Fatalf("validateUpload(%q,%q,%q,%d) err=%v wantErr=%v", tc.kind, tc.filename, tc.contentType, tc.size, err, tc.wantErr)
 			}
 		})
 	}

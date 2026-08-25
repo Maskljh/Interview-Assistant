@@ -119,7 +119,11 @@ func (h *Handler) Focused(c *gin.Context) {
 }
 
 type patchRequest struct {
-	Starred bool `json:"starred"`
+	Starred   *bool   `json:"starred"`
+	Question  *string `json:"question"`
+	Answer    *string `json:"answer"`
+	JobTag    *string `json:"job_tag"`
+	Dimension *string `json:"dimension"`
 }
 
 func (h *Handler) Patch(c *gin.Context) {
@@ -139,9 +143,13 @@ func (h *Handler) Patch(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.PatchStar(c.Request.Context(), userID.(int64), id, req.Starred)
+	item, err := h.svc.Patch(c.Request.Context(), userID.(int64), id, req.Starred, req.Question, req.Answer, req.JobTag, req.Dimension)
 	if errors.Is(err, ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if errors.Is(err, ErrInvalidInput) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid question fields"})
 		return
 	}
 	if err != nil {

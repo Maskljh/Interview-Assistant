@@ -96,14 +96,14 @@ export default function InterviewDetailPage() {
 
   return (
     <div className="interview-page">
-      <AppNav tab={fromQuestions ? 'questions' : 'interviews'} />
+      <AppNav tab={fromQuestions ? 'questions' : 'history'} />
       <main className="interview-main">
         {fromQuestions ? (
           <Link className="interview-back-link" to="/questions">
             ← 返回题库页
           </Link>
         ) : (
-          <Link className="interview-back-link" to="/">
+          <Link className="interview-back-link" to="/history">
             ← 全部面试
           </Link>
         )}
@@ -114,108 +114,113 @@ export default function InterviewDetailPage() {
           <p className="interview-error">{error}</p>
         ) : interview ? (
           <>
-            <h1>面试 #{interview.id}</h1>
-            <div className="interview-detail-meta">
-              <span className={`status-pill status-pill--${interview.status}`}>
-                {STATUS_LABELS[interview.status]}
-              </span>
-              <span className="mode-pill">{MODE_LABELS[interview.mode]}</span>
-              <span className="mode-pill">
-                {INPUT_MODE_LABELS[interview.input_mode]}
-              </span>
-              {interview.persona !== 'standard' && (
-                <span className="mode-pill">
-                  {PERSONA_LABELS[interview.persona]}
+            {/* 标题区卡片 */}
+            <section className="interview-detail-card">
+              <h1>面试 #{interview.id}</h1>
+              <div className="interview-detail-meta">
+                <span className={`status-pill status-pill--${interview.status}`}>
+                  {STATUS_LABELS[interview.status]}
                 </span>
-              )}
-              {interview.difficulty !== 'medium' && (
+                <span className="mode-pill">{MODE_LABELS[interview.mode]}</span>
                 <span className="mode-pill">
-                  {DIFFICULTY_LABELS[interview.difficulty]}
+                  {INPUT_MODE_LABELS[interview.input_mode]}
                 </span>
-              )}
-              {interview.company_style !== 'general' && (
-                <span className="mode-pill">
-                  {COMPANY_STYLE_LABELS[interview.company_style]}
-                </span>
-              )}
-              {interview.score != null && (
-                <span className="mode-pill">得分 {interview.score}</span>
-              )}
-            </div>
-
-            <div className="interview-list-links" style={{ marginBottom: 'var(--space-xl)' }}>
-              {interview.status === 'in_progress' && (
-                <Link
-                  className="interview-inline-link"
-                  to={`/interviews/${interview.id}/room`}
-                >
-                  继续面试
-                </Link>
-              )}
-              {!fromQuestions && interview.questions.length > 0 && (
-                <button
-                  type="button"
-                  className="interview-inline-link"
-                  onClick={() => void handleSaveToBank()}
-                  disabled={savingToBank}
-                >
-                  {savingToBank ? '存入中…' : '存入题库'}
-                </button>
-              )}
-            </div>
-            {(interview.resume_file_url || interview.jd_file_url) && (
-              <div
-                className="interview-list-links"
-                style={{ marginBottom: 'var(--space-md)' }}
-              >
-                {interview.resume_file_url && (
-                  <a
-                    className="interview-inline-link"
-                    href={interview.resume_file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    查看简历原文件
-                  </a>
+                {interview.persona !== 'standard' && (
+                  <span className="mode-pill">
+                    {PERSONA_LABELS[interview.persona]}
+                  </span>
                 )}
-                {interview.jd_file_url && (
-                  <a
-                    className="interview-inline-link"
-                    href={interview.jd_file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    查看 JD 原文件
-                  </a>
+                {interview.difficulty !== 'medium' && (
+                  <span className="mode-pill">
+                    {DIFFICULTY_LABELS[interview.difficulty]}
+                  </span>
+                )}
+                {interview.company_style !== 'general' && (
+                  <span className="mode-pill">
+                    {COMPANY_STYLE_LABELS[interview.company_style]}
+                  </span>
+                )}
+                {interview.score != null && (
+                  <span className="mode-pill">得分 {interview.score}</span>
                 )}
               </div>
-            )}
-            {bankMessage && <p className="interview-success">{bankMessage}</p>}
-            {bankError && <p className="interview-error">{bankError}</p>}
 
-            <h2 className="interview-section-title">对话记录</h2>
-            {sortedTurns.length === 0 ? (
-              <p className="interview-subtitle">暂无对话记录。</p>
-            ) : (
-              <div className="interview-transcript">
-                {sortedTurns.map((turn) => (
-                  <article
-                    key={turn.id}
-                    className={`transcript-turn${
-                      turn.role === 'interviewer' ? ' transcript-turn--interviewer' : ''
-                    }`}
+              {/* 操作区 */}
+              <div className="interview-detail-actions">
+                {interview.status === 'in_progress' && (
+                  <Link
+                    className="interview-submit"
+                    to={`/interviews/${interview.id}/room`}
                   >
-                    <div className="transcript-turn-header">
-                      <span className="transcript-role">{roleLabel(turn.role)}</span>
-                      <time className="transcript-time" dateTime={turn.created_at}>
-                        {formatDateZh(turn.created_at)}
-                      </time>
-                    </div>
-                    <p className="transcript-content">{turn.content}</p>
-                  </article>
-                ))}
+                    继续面试
+                  </Link>
+                )}
+                {!fromQuestions && interview.questions.length > 0 && (
+                  <button
+                    type="button"
+                    className="interview-submit"
+                    onClick={() => void handleSaveToBank()}
+                    disabled={savingToBank}
+                  >
+                    {savingToBank ? '存入中…' : '存入题库'}
+                  </button>
+                )}
               </div>
-            )}
+
+              {(interview.resume_file_url || interview.jd_file_url) && (
+                <div className="interview-detail-files">
+                  {interview.resume_file_url && (
+                    <a
+                      className="interview-inline-link"
+                      href={interview.resume_file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      查看简历原文件
+                    </a>
+                  )}
+                  {interview.jd_file_url && (
+                    <a
+                      className="interview-inline-link"
+                      href={interview.jd_file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      查看 JD 原文件
+                    </a>
+                  )}
+                </div>
+              )}
+              {bankMessage && <p className="interview-success">{bankMessage}</p>}
+              {bankError && <p className="interview-error">{bankError}</p>}
+            </section>
+
+            {/* 对话记录卡片 */}
+            <section className="interview-detail-card">
+              <h2 className="interview-section-title">对话记录</h2>
+              {sortedTurns.length === 0 ? (
+                <p className="interview-subtitle">暂无对话记录。</p>
+              ) : (
+                <div className="interview-transcript">
+                  {sortedTurns.map((turn) => (
+                    <article
+                      key={turn.id}
+                      className={`transcript-turn${
+                        turn.role === 'interviewer' ? ' transcript-turn--interviewer' : ''
+                      }`}
+                    >
+                      <div className="transcript-turn-header">
+                        <span className="transcript-role">{roleLabel(turn.role)}</span>
+                        <time className="transcript-time" dateTime={turn.created_at}>
+                          {formatDateZh(turn.created_at)}
+                        </time>
+                      </div>
+                      <p className="transcript-content">{turn.content}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         ) : null}
       </main>

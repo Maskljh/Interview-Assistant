@@ -2,11 +2,11 @@
   "version": 3,
   "managed": true,
   "indexPath": ".wpscomate/index.md",
-  "structureHash": "sha256:2f6b9f79ffe60404",
+  "structureHash": "sha256:7519f431c86d5cc5",
   "contentSignalHash": "sha256:82af195c0c3bc2d2",
   "descriptionHash": "sha256:e3b0c44298fc1c14",
   "descriptionStatus": "pending",
-  "generatedAt": "2026-08-20T08:20:34.118Z",
+  "generatedAt": "2026-08-20T09:35:36.304Z",
   "scanTruncated": false,
   "scanTruncateReason": null,
   "renderedTruncated": true,
@@ -14,7 +14,7 @@
   "renderOmittedDirectories": [
     {
       "path": ".",
-      "omittedChildCount": 51,
+      "omittedChildCount": 54,
       "reason": "child-limit"
     }
   ],

@@ -40,6 +40,7 @@ type Session struct {
 	ID            int64
 	UserID        int64
 	JobJD         string
+	JobTitle      *string
 	ResumeText    *string
 	ResumeFileURL *string
 	JDFileURL     *string

@@ -1,6 +1,19 @@
 .interview-page {
   min-height: 100svh;
   background: var(--color-canvas);
+  display: grid;
+  grid-template-columns: 228px 1fr;
+}
+
+/* 实时面试页等无侧边导航页面：单栏 */
+.interview-page--immersive {
+  grid-template-columns: 1fr;
+}
+
+/* 侧边导航由 AppNav.css 提供（fixed 固定）；内容区在侧栏右侧第二列 */
+.interview-page > .interview-main {
+  min-width: 0;
+  grid-column: 2;
 }
 
 /* ─── Header ─── */
@@ -15,6 +28,97 @@
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+/* 实时面试沉浸式页：顶栏为深色通栏（Figma 02 面试状态栏 #131e2b） */
+.interview-page--immersive .interview-header {
+  height: 76px;
+  padding: 0 42px;
+  background: #131e2b;
+  border-bottom: none;
+}
+
+.interview-page--immersive .interview-brand {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #ffffff;
+}
+
+.interview-page--immersive .interview-header-link {
+  color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.interview-page--immersive .interview-header-link:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 顶栏中部：左岗位+模式标签，右进度+倒计时+录音状态 */
+.interview-header-context {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-width: 0;
+  padding: 0 var(--space-xl);
+}
+
+.interview-page--immersive .room-topbar-job {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.interview-page--immersive .room-topbar-meta {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.interview-page--immersive .room-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  white-space: nowrap;
+}
+
+.interview-page--immersive .room-topbar-progress {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.interview-page--immersive .room-topbar-timer {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.interview-page--immersive .room-rec-ok {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  color: #148c56;
+}
+
+/* 深色顶栏上的浅色模式标签 */
+.interview-page--immersive .mode-pill--light {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .interview-brand {
@@ -68,16 +172,34 @@
 
 /* ─── Main column ─── */
 .interview-main {
-  max-width: 640px;
+  max-width: 860px;
   margin: 0 auto;
-  padding: var(--space-3xl) var(--space-lg);
+  padding: 30px 48px 64px;
+}
+
+/* 成长看板等宽布局页：容纳图表卡 + 计划卡（占满侧栏右侧整列） */
+.interview-main--wide {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 30px 48px 64px;
+}
+
+/* 实时面试沉浸式页：全宽单栏布局（无侧边导航） */
+.interview-page--immersive .interview-main {
+  max-width: none;
+  padding: 32px 42px;
+  grid-column: 1;
 }
 
 .interview-main h1 {
-  margin: 0 0 6px;
-  font: var(--text-display-md);
+  margin: 0 0 8px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 36px;
   color: var(--color-ink);
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .interview-subtitle {
@@ -241,7 +363,7 @@
   color: var(--color-on-primary);
   background: var(--color-primary);
   border: none;
-  border-radius: var(--rounded-pill);
+  border-radius: 12px;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: all 0.15s ease;
@@ -269,7 +391,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .interview-list-item {
@@ -277,16 +399,17 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  padding: var(--space-md) var(--space-lg);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-lg);
-  background: var(--color-canvas);
+  padding: 20px 24px;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  background: #fffdf7;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .interview-list-item:hover {
-  border-color: var(--color-hairline-strong);
-  box-shadow: var(--shadow-xs);
+  border-color: #4879b8;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.14);
 }
 
 .interview-list-meta {
@@ -381,9 +504,10 @@
 .interview-empty {
   padding: var(--space-2xl) var(--space-xl);
   text-align: center;
-  border: 1px dashed var(--color-hairline);
-  border-radius: var(--rounded-lg);
-  background: var(--color-canvas-soft);
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  background: #fffdf7;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
 }
 
 .interview-empty p {
@@ -393,11 +517,45 @@
 }
 
 /* ─── Detail page ─── */
+.interview-detail-card {
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.interview-detail-card h1 {
+  margin-bottom: 12px;
+}
+
+.interview-detail-card .interview-section-title {
+  margin-bottom: 16px;
+}
+
 .interview-detail-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: var(--space-xl);
+  margin-bottom: 16px;
+}
+
+.interview-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.interview-detail-actions .interview-submit {
+  margin-top: 0;
+}
+
+.interview-detail-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .interview-section-title {
@@ -564,8 +722,10 @@
 
 .interview-room-form {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
 }
 
 /* ─── Voice controls ─── */
@@ -651,29 +811,59 @@
   cursor: not-allowed;
 }
 
-/* ─── Room actions ─── */
+/* ─── Room actions（右下角三按钮：暂停 / 结束本场 / 跳过问题）─── */
 .interview-room-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: 12px;
   align-items: center;
+  margin-left: auto;
 }
 
-.interview-room-end {
-  padding: 8px 20px;
-  font: var(--text-body-sm);
-  font-weight: 500;
-  color: var(--color-error-deep);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-pill);
+/* 暂停 / 跳过问题：浅蓝底深字（Figma #eff4ff / #141e33） */
+.interview-room-action {
+  min-width: 96px;
+  height: 48px;
+  padding: 0 16px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #141e33;
+  background: #eff4ff;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.interview-room-action:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.interview-room-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 结束本场：红底白字（Figma #ed4f44 / #ffffff） */
+.interview-room-end {
+  min-width: 96px;
+  height: 48px;
+  padding: 0 16px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #ffffff;
+  background: #ed4f44;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
 }
 
 .interview-room-end:hover:not(:disabled) {
-  background: var(--color-error-soft);
-  border-color: var(--color-error-soft);
+  filter: brightness(0.94);
 }
 
 .interview-room-end:disabled {
@@ -952,21 +1142,156 @@
 }
 
 .trends-summary-card {
-  padding: var(--space-md);
+  padding: var(--space-lg);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-md);
-  background: var(--color-canvas);
+  border-radius: var(--rounded-lg);
+  background: var(--color-canvas-soft);
 }
 
 .trends-summary-label {
   font: var(--text-caption);
   color: var(--color-mute);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .trends-summary-value {
-  font: var(--text-display-sm);
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.2;
   color: var(--color-ink);
+}
+
+/* ─── Trends · 按 Figma「04 成长看板」─── */
+.trends-figma-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.trends-figma-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 28px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.trends-figma-stat-label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+.trends-figma-stat-value {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+.trends-figma-grid {
+  display: grid;
+  grid-template-columns: 1fr 426px;
+  gap: 24px;
+  align-items: start;
+}
+
+.trends-figma-card {
+  padding: 30px 28px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.trends-figma-card-title {
+  margin: 0 0 20px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.trends-figma-chart {
+  width: 100%;
+}
+
+.trends-figma-plan-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.trends-figma-plan-item {
+  padding: 14px 0;
+  border-top: 1px solid #efece4;
+}
+
+.trends-figma-plan-item:first-of-type {
+  border-top: none;
+}
+
+.trends-figma-plan-title {
+  margin: 0 0 4px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.trends-figma-plan-desc {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+.trends-figma-plan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  margin-top: auto;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #ffffff;
+  background: #2b508e;
+  border: 1px solid #2b508e;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.trends-figma-plan-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 1200px) {
+  .trends-figma-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .trends-figma-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 599px) {
+  .trends-figma-stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─── Question bank groups ─── */
@@ -978,10 +1303,11 @@
 }
 
 .question-group {
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--rounded-lg);
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: var(--shadow-xs);
+  background: #fffdf7;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
 }
 
 .question-group-header {
@@ -989,9 +1315,9 @@
   align-items: center;
   gap: var(--space-sm);
   width: 100%;
-  padding: 14px var(--space-md);
-  background: var(--color-canvas-soft-2);
-  border-bottom: 1px solid var(--color-hairline);
+  padding: 16px 20px;
+  background: #fffdf7;
+  border-bottom: 1px solid #efece4;
   cursor: default;
   text-align: left;
 }
@@ -1249,4 +1575,1478 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
+}
+
+/* ─── 简历来源选择 / 从简历库挑选 ─── */
+.resume-choose-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resume-choose-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px 18px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.resume-choose-option:hover {
+  border-color: #2b508e;
+  background: #f3f7fd;
+}
+
+.resume-choose-option-title {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.resume-choose-option-desc {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+.resume-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.resume-pick-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.resume-pick-item:hover {
+  border-color: #2b508e;
+  background: #f3f7fd;
+}
+
+.resume-pick-name {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #131e2b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resume-pick-meta {
+  flex-shrink: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b79;
+}
+
+/* ─── Create page · 按 Figma「01 准备配置」像素级还原 ───
+   画板 1440×900；侧边导航 228；内容区 x 起点 276。 */
+.interview-main.interview-create {
+  max-width: none;
+  margin: 0;
+  padding: 30px 48px 64px;
+}
+
+.interview-create h1 {
+  margin: 0 0 8px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+.interview-create .interview-subtitle {
+  margin: 0 0 30px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #5f6b7a;
+}
+
+/* 训练准备进度：1096×62 白底卡，圆角14，阴影(0,8,20) */
+.prep-steps {
+  display: flex;
+  align-items: center;
+  gap: 56px;
+  width: 1096px;
+  height: 62px;
+  padding: 0 26px;
+  margin: 0 0 30px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.prep-steps span {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 22px;
+  color: #5f6b7a;
+  white-space: nowrap;
+}
+
+.prep-steps span:first-child {
+  color: #5f6b7a;
+}
+
+/* 双卡布局：左侧 710 + gap 32 + 右侧 350 = 1092 */
+.prep-grid {
+  display: grid;
+  grid-template-columns: 710px 350px;
+  gap: 32px;
+  align-items: start;
+  width: 1092px;
+}
+
+.prep-card {
+  padding: 30px 32px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.1);
+  box-sizing: border-box;
+}
+
+/* 左卡：710×570 */
+.prep-card:first-child {
+  min-height: 570px;
+}
+
+/* 右卡：350×570 */
+.prep-card--plan {
+  min-height: 570px;
+}
+
+.prep-card-head h2 {
+  margin: 0 0 6px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.prep-card-head p {
+  margin: 0 0 28px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+/* 资料行：标签在上(12px)，值在下(14px)，右侧链接(12px) */
+.prep-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid #efece4;
+}
+
+.prep-row:first-of-type {
+  border-top: none;
+  padding-top: 8px;
+}
+
+.prep-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.prep-row-label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+.prep-row-value {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+  word-break: break-all;
+}
+
+.prep-row-link {
+  flex-shrink: 0;
+  margin-top: 18px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #2b508e;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.prep-row-link:hover {
+  color: #1a52c7;
+}
+
+/* 对话框内的表单字段 */
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dialog-field label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #131e2b;
+}
+
+.dialog-field input[type='file'] {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color: #5f6b7a;
+}
+
+.dialog-field textarea {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  min-height: 140px;
+  padding: 10px 14px;
+  border: 1px solid #d1d9e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #131e2b;
+  resize: vertical;
+  line-height: 1.6;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dialog-field textarea:focus {
+  border-color: #4879b8;
+  box-shadow: 0 0 0 3px rgba(72, 121, 184, 0.18);
+}
+
+.dialog-file-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dialog-success {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color: #148c57;
+}
+
+.dialog-error {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c50000;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #f5c6c6;
+}
+
+/* 拖拽上传区 */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 24px;
+  border: 2px dashed #d1d9e3;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  text-align: center;
+}
+
+.dropzone:hover {
+  border-color: #4879b8;
+  background: #f8fbff;
+}
+
+.dropzone.is-dragging {
+  border-color: #2b508e;
+  background: #eef3fb;
+}
+
+.dropzone.is-busy {
+  cursor: wait;
+  opacity: 0.85;
+}
+
+.dropzone-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: #2b508e;
+  background: #eef3fb;
+  border-radius: 50%;
+}
+
+.dropzone-title {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #131e2b;
+}
+
+.dropzone-hint {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  color: #8b95a3;
+}
+
+.dropzone-busy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.dropzone-busy p {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  color: #5f6b7a;
+}
+
+.dropzone-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #d1d9e3;
+  border-top-color: #2b508e;
+  border-radius: 50%;
+  animation: dropzone-spin 0.8s linear infinite;
+}
+
+@keyframes dropzone-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropzone-spinner {
+    animation: none;
+  }
+}
+
+/* 计划项选择：胶囊式单选 */
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.choice-pill {
+  padding: 12px 16px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: #5f6b7a;
+  background: #ffffff;
+  border: 1px solid #d1d9e3;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.choice-pill:hover {
+  border-color: #4879b8;
+  color: #131e2b;
+}
+
+.choice-pill.is-selected {
+  color: #ffffff;
+  background: #2b508e;
+  border-color: #2b508e;
+}
+
+/* 右侧计划卡：四行摘要，行距 56px */
+.prep-card--plan .prep-card-head h2 {
+  margin-bottom: 34px;
+}
+
+.prep-plan-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.prep-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 17px 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+  background: none;
+  border: none;
+  border-top: 1px solid #efece4;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  text-align: left;
+}
+
+.prep-plan-row:first-child {
+  border-top: none;
+}
+
+.prep-plan-row:hover {
+  background: rgba(72, 121, 184, 0.05);
+}
+
+.prep-plan-value {
+  color: #5f6b7a;
+}
+
+.prep-plan-form {
+  margin-top: 30px;
+}
+
+.prep-start-btn {
+  width: 292px;
+  height: 52px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 22px;
+  color: #ffffff;
+  background: #2b508e;
+  border: 1px solid #2b508e;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.prep-start-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.prep-start-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .prep-grid {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .prep-steps {
+    width: 100%;
+    gap: 28px;
+  }
+}
+
+@media (max-width: 900px) {
+  .prep-card--plan {
+    min-height: 0;
+  }
+}
+
+/* ─── Interview room · 按 Figma「02 实时面试」─── */
+.room-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.room-topbar-job {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.room-topbar-title {
+  font: var(--text-display-sm);
+  color: var(--color-ink);
+}
+
+.room-topbar-meta {
+  font: var(--text-body-sm);
+  color: var(--color-mute);
+}
+
+.room-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.room-topbar-progress {
+  font: var(--text-body-sm-strong);
+  color: var(--color-mute);
+  white-space: nowrap;
+}
+
+.room-topbar-timer {
+  font: var(--text-body-sm-strong);
+  color: var(--color-ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-rec-ok {
+  font: var(--text-body-sm);
+  font-weight: 500;
+  color: #148c57;
+  white-space: nowrap;
+}
+
+/* 左右两栏：左摄像头预览（约 44%），右双卡片（约 56%），按 Figma 02 */
+.room-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.room-grid-right {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+}
+
+/* 摄像头预览：整块深色面板（Figma #131e2b 圆角18） */
+.room-camera {
+  padding: var(--space-lg);
+  background: #131e2b;
+  border-radius: 18px;
+}
+
+.room-camera .room-card-title {
+  color: #ffffff;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  margin-bottom: var(--space-md);
+}
+
+.room-camera-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1c2938;
+}
+
+.room-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.room-camera-placeholder,
+.room-camera-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font: var(--text-body-sm);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.room-camera-error {
+  color: #ffd5d5;
+}
+
+/* 右侧堆叠双卡：暖白卡片（Figma #fffcf7 圆角16） */
+.room-cards--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.room-card {
+  padding: 30px 32px;
+  background: #fffcf7;
+  border: 1px solid #e9e2d8;
+  border-radius: 16px;
+}
+
+.room-card-title {
+  margin: 0 0 var(--space-md);
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.room-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.room-card-count {
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
+.room-question-text {
+  margin: 0 0 var(--space-sm);
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.room-question-hint {
+  margin: 0 0 var(--space-sm);
+  font: var(--text-caption);
+  color: var(--color-mute);
+  line-height: 1.6;
+}
+
+.room-question-status {
+  margin: var(--space-md) 0 0;
+  font: var(--text-caption);
+  color: #148c57;
+}
+
+@media (max-width: 900px) {
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 实时面试页·实时转写卡：紧凑呈现（Figma 02） */
+.interview-page--immersive .interview-room-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: none;
+}
+
+.interview-page--immersive .transcript-turn {
+  padding: 0 0 12px;
+  border: none;
+  border-bottom: 1px solid #efece4;
+  border-radius: 0;
+  background: transparent;
+}
+
+.interview-page--immersive .transcript-turn:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.interview-page--immersive .transcript-role {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+.interview-page--immersive .transcript-content {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.interview-page--immersive .transcript-new-badge {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  color: #1951c6;
+  background: #eff4ff;
+}
+
+.interview-page--immersive .interview-room-thinking {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  color: #1951c6;
+  font-style: normal;
+}
+
+/* ─── Report · 按 Figma「03 面试报告」─── */
+/* 报告页容器与「01 准备配置」对齐：内容区 x 起点 276（侧边栏 228 + 48） */
+.interview-page .interview-main:has(.report-grid) {
+  max-width: none;
+  margin: 0;
+  padding: 30px 48px 64px;
+}
+
+/* 报告页标题：与「01 准备配置」h1 一致（衬线 30/700），返回链接贴左上 */
+.interview-page .interview-main:has(.report-grid) .interview-back-link {
+  display: block;
+  margin: 0 0 12px;
+}
+
+.interview-page .interview-main:has(.report-grid) h1 {
+  margin: 0 0 8px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+/* 顶部元信息行：岗位 | 日期 | 时长 */
+.report-meta {
+  margin: 0 0 24px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #5f6b7a;
+}
+
+/* 2×2 布局：上行总评+优势与短板，下行能力维度+证据与建议 */
+.report-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.report-grid-row {
+  display: flex;
+  gap: 28px;
+  align-items: stretch;
+}
+
+/* 下行间距 30（Figma） */
+.report-grid-row--bottom {
+  gap: 30px;
+}
+
+/* 上行：360 : 944（等比缩放） */
+.report-grid-row--top .report-card--score {
+  flex: 0 0 27.03%;
+}
+.report-grid-row--top .report-card--strengths {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 下行：542 : 760（等比缩放） */
+.report-grid-row--bottom .report-card--dims {
+  flex: 0 0 41.63%;
+}
+.report-grid-row--bottom .report-card--advice {
+  flex: 1;
+  min-width: 0;
+}
+
+.report-card {
+  padding: 30px 32px;
+  background: #fffcf7;
+  border: 1px solid #e9e2d8;
+  border-radius: 16px;
+}
+
+/* 上行卡高 182，下行卡高 430（Figma 固定高度） */
+.report-grid-row--top .report-card {
+  height: 182px;
+  box-sizing: border-box;
+}
+.report-grid-row--bottom .report-card {
+  height: 430px;
+  box-sizing: border-box;
+}
+
+.report-card-title {
+  margin: 0 0 18px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+/* 总评卡 */
+.report-card--score .report-card-label {
+  display: block;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  margin-bottom: 12px;
+}
+
+.report-score-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.report-score-num {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+.report-score-max {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.report-score-note {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+/* 优势与短板：卡内左右两栏 */
+.report-card--strengths {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+.report-strengths-col {
+  min-width: 0;
+}
+
+.report-strengths-col .report-card-title {
+  margin-bottom: 12px;
+}
+
+.report-inline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-inline-list li {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.report-inline-list--good li {
+  color: #148c56;
+}
+
+.report-inline-list--warn li {
+  color: #bf471e;
+}
+
+/* 能力维度：进度条 */
+.report-dim-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.report-dim-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.report-dim-bar-label {
+  width: 88px;
+  flex-shrink: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.report-dim-bar-track {
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: #e5edf9;
+  overflow: hidden;
+}
+
+.report-dim-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: #1951c6;
+}
+
+.report-dim-bar-value {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #131e2b;
+}
+
+/* 证据与建议（设计稿白底） */
+.report-card--advice {
+  background: #ffffff;
+  border-color: #e9e2d8;
+}
+
+.report-suggestions {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-suggestions li {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+.report-quick-empty {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  color: #5f6b7a;
+}
+
+/* 附加区：表达分析 / 行为信号（2×2 网格下方） */
+.report-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.report-extra .report-card {
+  background: #fffcf7;
+  border-color: #e9e2d8;
+}
+
+.report-extra p {
+  margin: 0 0 6px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+@media (max-width: 1100px) {
+  .report-grid-row--top,
+  .report-grid-row--bottom {
+    flex-direction: column;
+  }
+  .report-grid-row--top .report-card--score,
+  .report-grid-row--bottom .report-card--dims {
+    flex: none;
+  }
+  .report-grid-row--top .report-card,
+  .report-grid-row--bottom .report-card {
+    height: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .report-card--strengths {
+    grid-template-columns: 1fr;
+  }
+}
+/* ─── Question bank · 按 Figma「07 题库管理」─── */
+/* 与「01 准备配置」容器一致：内容 x 起点 276（侧边栏 228 + 48） */
+.interview-main--wide:has(.question-bank-head) {
+  padding: 30px 48px 64px;
+}
+
+.question-bank-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.question-bank-head h1 {
+  margin: 0 0 8px;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+.question-bank-head .interview-subtitle {
+  margin: 0;
+}
+
+.question-bank-new-btn {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  color: #ffffff;
+  background: #2b508e;
+  border: 1px solid #2b508e;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.question-bank-new-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* 概览卡（Figma 210×88） */
+.question-bank-overview {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 32px;
+}
+
+.question-bank-overview-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 210px;
+  height: 88px;
+  padding: 0 24px;
+  box-sizing: border-box;
+  background: #fffcf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.question-bank-overview-num {
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 32px;
+  color: #131e2b;
+}
+
+.question-bank-overview-num--blue {
+  color: #4879b8;
+}
+
+.question-bank-overview-label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 20px;
+  color: #5f6b7a;
+}
+
+/* 标签胶囊 + 搜索 */
+.question-bank-filter-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.question-bank-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.question-bank-tag {
+  padding: 7px 14px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.question-bank-tag:hover {
+  border-color: #4879b8;
+  color: #131e2b;
+}
+
+.question-bank-tag.is-active {
+  color: #ffffff;
+  background: #2b508e;
+  border-color: #2b508e;
+}
+
+.question-bank-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 272px;
+  padding: 9px 14px;
+  background: #ffffff;
+  border: 1px solid #d1d9e3;
+  border-radius: 10px;
+}
+
+.question-bank-search-icon {
+  font-size: 16px;
+  color: #5f6b7a;
+}
+
+.question-bank-search input {
+  flex: 1;
+  min-width: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color: #131e2b;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+/* 题目列表 */
+.question-bank-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.question-bank-list-head h2 {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+}
+
+.question-bank-sort {
+  padding: 7px 16px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+}
+
+/* 扁平题目行 */
+.question-bank-flat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.question-bank-flat-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.question-bank-no {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  color: #2b508e;
+  background: #e1ebf6;
+  border-radius: 12px;
+}
+
+.question-bank-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question-bank-row-question {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 22px;
+  color: #131e2b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.question-bank-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.question-bank-row-tag {
+  padding: 3px 12px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  white-space: nowrap;
+}
+
+.question-bank-usage {
+  flex-shrink: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 20px;
+  color: #5f6b7a;
+  white-space: nowrap;
+}
+
+.question-bank-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.question-bank-edit-btn {
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 20px;
+  color: #2b508e;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.question-bank-edit-btn:hover {
+  color: #1a52c7;
+}
+
+.question-bank-delete-btn {
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 20px;
+  color: #b8454a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.question-bank-delete-btn:hover {
+  color: #8f2f35;
+}
+
+@media (max-width: 900px) {
+  .question-bank-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .question-bank-search {
+    width: 100%;
+  }
+
+  .question-bank-flat-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* ─── History · 按 Figma「07 题库管理」样式效仿 ─── */
+/* 与题库页一致：内容 x 起点 276 */
+.interview-main--history {
+  padding: 30px 32px 64px 48px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fffcf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
+}
+
+.history-no {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  color: #2b508e;
+  background: #e1ebf6;
+  border-radius: 12px;
+}
+
+.history-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-row-title {
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 22px;
+  color: #131e2b;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-title:hover {
+  color: #2b508e;
+}
+
+.history-row-date {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 18px;
+  color: #5f6b7a;
+}
+
+.history-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-score {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #4879b8;
+  white-space: nowrap;
+}
+
+.history-row-links {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.history-link {
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 20px;
+  color: #2b508e;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.history-link:hover {
+  color: #1a52c7;
+}
+
+@media (max-width: 900px) {
+  .history-row {
+    flex-wrap: wrap;
+  }
 }

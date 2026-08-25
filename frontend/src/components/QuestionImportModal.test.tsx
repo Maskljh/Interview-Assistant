@@ -7,6 +7,11 @@ import { ApiError } from '../api/client';
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
+// 组件内解析文档文件会用到 pdfjs（需要 DOMMatrix）；测试里 mock 掉文本解析器
+vi.mock('../lib/resumeParse', () => ({
+  extractResumeText: vi.fn(async () => '文件解析出的文本'),
+}));
+
 vi.mock('../api/questions', async (importOriginal) => {
   const actual = (await importOriginal()) as object;
   return {
@@ -113,5 +118,21 @@ describe('QuestionImportModal', () => {
     });
     // 通用 502 文案不得出现
     expect(screen.queryByText('服务器开小差了，请稍后重试')).toBeNull();
+  });
+
+  it('parses a document file via text extraction then LLM', async () => {
+    const { container } = renderModal();
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!fileInput) throw new Error('file input not found');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['resume'], 'notes.pdf', { type: 'application/pdf' })] },
+    });
+    // 选择文件后显示文件名，点解析走文本提取 + parseImportText
+    expect(screen.getByText('notes.pdf')).toBeTruthy();
+    fireEvent.click(screen.getByText('解析'));
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
+    });
+    expect(parseImportText).toHaveBeenCalled();
   });
 });

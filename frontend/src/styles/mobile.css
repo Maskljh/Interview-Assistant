@@ -6,9 +6,19 @@
   display: none;
 }
 
+/* Figma 侧边导航仅在桌面显示；<600px 收起为底部 tabbar */
+.app-sidebar {
+  display: none;
+}
+
 @media (max-width: 599px) {
   body {
     overflow-x: hidden; /* M1: no horizontal overflow */
+  }
+
+  /* --- 双栏布局回退为单栏 --- */
+  .interview-page {
+    grid-template-columns: 1fr;
   }
 
   /* --- Header: compact; nav links move to the bottom tab bar --- */

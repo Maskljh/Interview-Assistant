@@ -1,7 +1,7 @@
 <!-- wps-comate:index v3 -->
 # Workspace Index
 
-Updated: 2026-08-20 16:20
+Updated: 2026-08-20 17:35
 Root: .
 Purpose: AI-powered mock interview practice: create sessions from a job description, answ.
 
@@ -37,7 +37,7 @@ C:\Users\l\Desktop\Interview Assistant/
 ├── docker-compose.yml — 容器编排配置
 ├── README.md — 项目说明文档
 ├── ... — 还有更多文件（目录超过 30 个条目）
-├── .worktrees\feat-mvp-v1\.env.example — 环境变量模板
+├── .playwright-cli\... — 还有更多文件（目录超过 30 个条目）
 └── ...
 ```
 

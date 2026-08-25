@@ -1,147 +1,89 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
-  createInterviewFromBank,
-  type InterviewMode,
-  type Persona,
-} from '../api/interviews';
-import {
   deleteQuestion,
-  deleteQuestions,
   listQuestions,
   patchQuestion,
   type Question,
 } from '../api/questions';
-import { DIMENSION_LABELS, PERSONA_LABELS, SOURCE_LABELS } from '../lib/labels';
+import { DIMENSION_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import ConfirmModal from '../components/ConfirmModal';
 import QuestionImportModal from '../components/QuestionImportModal';
+import Dialog from '../components/Dialog';
 
-const MODE_OPTIONS: { value: InterviewMode; label: string }[] = [
-  { value: 'behavioral', label: '行为面试' },
-  { value: 'technical', label: '技术面试' },
-  { value: 'mixed', label: '综合' },
-];
-
-const PERSONAS: Persona[] = ['standard', 'strict_tech', 'warm_hr', 'stress'];
-
-function toggleSelected(ids: number[], id: number): number[] {
-  const index = ids.indexOf(id);
-  if (index >= 0) {
-    return [...ids.slice(0, index), ...ids.slice(index + 1)];
-  }
-  return [...ids, id];
-}
-
-/** 按 source_session_id 分组，无来源的单独一组 */
-function groupBySession(questions: Question[]) {
-  const groups = new Map<number | null, Question[]>();
-  for (const q of questions) {
-    const key = q.source_session_id ?? null;
-    const arr = groups.get(key) ?? [];
-    arr.push(q);
-    groups.set(key, arr);
-  }
-  // 有 session 的在前（按 session id 倒序），无 session 的在后
-  const sorted = [...groups.entries()].sort((a, b) => {
-    if (a[0] === null) return 1;
-    if (b[0] === null) return -1;
-    return b[0] - a[0];
-  });
-  return sorted;
+/** 本周开始的时间戳（周一 00:00） */
+function startOfWeek(now = new Date()): number {
+  const d = new Date(now);
+  const day = (d.getDay() + 6) % 7; // 周一到周日
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return d.getTime();
 }
 
 export default function QuestionBankPage() {
-  const navigate = useNavigate();
-
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [starting, setStarting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [starredOnly, setStarredOnly] = useState(false);
-  const [jobTag, setJobTag] = useState('');
+  // 筛选
+  const [activeTag, setActiveTag] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [dimension, setDimension] = useState('');
-  const [importOpen, setImportOpen] = useState(false);
-  const [mode, setMode] = useState<InterviewMode>('mixed');
-  const [persona, setPersona] = useState<Persona>('standard');
 
-  // 展开的题目 ID 集合
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-  // 展开的分组 session ID 集合
-  const [expandedGroups, setExpandedGroups] = useState<Set<number | null>>(new Set());
+  // 导入 / 编辑弹窗
+  const [importOpen, setImportOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Question | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const loadQuestions = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await listQuestions({
-        ...(starredOnly ? { starred: true } : {}),
-        ...(jobTag.trim() ? { job_tag: jobTag.trim() } : {}),
-        ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
-        ...(dimension ? { dimension } : {}),
-      });
+      const data = await listQuestions();
       setQuestions(data);
-      setSelectedIds((prev) =>
-        prev.filter((id) => data.some((item) => item.id === id)),
-      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '加载题库失败');
     } finally {
       setLoading(false);
     }
-  }, [starredOnly, jobTag, searchQuery, dimension]);
+  }, []);
 
   useEffect(() => {
     void loadQuestions();
   }, [loadQuestions]);
 
-  const groups = useMemo(() => groupBySession(questions), [questions]);
-
-  function toggleExpand(id: number) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleGroup(sessionId: number | null) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(sessionId)) next.delete(sessionId);
-      else next.add(sessionId);
-      return next;
-    });
-  }
-
-  async function handleToggleStar(item: Question) {
-    const next = !item.starred;
-    try {
-      const updated = await patchQuestion(item.id, { starred: next });
-      setQuestions((prev) =>
-        prev.map((q) => (q.id === item.id ? updated : q)),
-      );
-      if (starredOnly && !next) {
-        setQuestions((prev) => prev.filter((q) => q.id !== item.id));
-        setSelectedIds((prev) => prev.filter((id) => id !== item.id));
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : '更新收藏失败');
+  // 标签列表：从题目维度去重生成
+  const tags = useMemo(() => {
+    const set = new Set<string>();
+    for (const q of questions) {
+      if (q.dimension) set.add(q.dimension);
     }
-  }
+    return [...set].sort();
+  }, [questions]);
 
-  function handleDelete(item: Question) {
-    setDeleteTarget(item);
-  }
+  // 概览：总数 + 本周新增
+  const totalCount = questions.length;
+  const weekStart = useMemo(() => startOfWeek(), []);
+  const weekNew = useMemo(
+    () => questions.filter((q) => new Date(q.created_at).getTime() >= weekStart).length,
+    [questions, weekStart],
+  );
+
+  // 过滤后的题目列表
+  const filtered = useMemo(() => {
+    let list = questions;
+    if (activeTag !== 'all') {
+      list = list.filter((q) => q.dimension === activeTag);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((item) => item.question.toLowerCase().includes(q));
+    }
+    return list;
+  }, [questions, activeTag, searchQuery]);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -149,7 +91,6 @@ export default function QuestionBankPage() {
     try {
       await deleteQuestion(deleteTarget.id);
       setQuestions((prev) => prev.filter((q) => q.id !== deleteTarget.id));
-      setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '删除失败');
@@ -158,317 +99,154 @@ export default function QuestionBankPage() {
     }
   }
 
-  function handleBulkDelete() {
-    if (selectedIds.length === 0) return;
-    setBulkDeleteOpen(true);
-  }
-
-  async function confirmBulkDelete() {
-    setDeleting(true);
-    try {
-      await deleteQuestions(selectedIds);
-      setQuestions((prev) => prev.filter((q) => !selectedIds.includes(q.id)));
-      setSelectedIds([]);
-      setBulkDeleteOpen(false);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : '批量删除失败');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  function toggleGroupSelect(sessionId: number | null) {
-    const groupItems = questions.filter((q) => (q.source_session_id ?? null) === sessionId);
-    const groupIds = groupItems.map((q) => q.id);
-    const allSelected = groupIds.every((id) => selectedIds.includes(id));
-    if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !groupIds.includes(id)));
-    } else {
-      setSelectedIds((prev) => [...new Set([...prev, ...groupIds])]);
-    }
-  }
-
-  async function handleStartPractice() {
-    if (selectedIds.length === 0) {
-      setError('请至少选择一道题目');
+  async function handleSaveEdit() {
+    if (!editTarget) return;
+    const question = editTarget.question.trim();
+    if (!question) {
+      setError('题干不能为空');
       return;
     }
-    setStarting(true);
+    setSaving(true);
     setError('');
     try {
-      const interview = await createInterviewFromBank({
-        question_ids: selectedIds,
-        mode,
-        input_mode: 'voice',
-        persona,
+      const updated = await patchQuestion(editTarget.id, {
+        question: editTarget.question,
+        answer: editTarget.answer ?? '',
+        job_tag: editTarget.job_tag ?? '',
+        dimension: editTarget.dimension ?? '',
       });
-      navigate(`/interviews/${interview.id}/room`, { replace: true });
+      setQuestions((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
+      setEditTarget(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '创建练习失败');
+      setError(err instanceof ApiError ? err.message : '保存失败');
     } finally {
-      setStarting(false);
+      setSaving(false);
     }
   }
 
   return (
     <div className="interview-page">
       <AppNav tab="questions" />
-      <main className="interview-main">
-        <h1>题库</h1>
-        <p className="interview-subtitle">按面试分组浏览，收藏、筛选并多选题目开始练习</p>
-
-        <div className="question-bank-actions question-bank-import-row">
+      <main className="interview-main interview-main--wide">
+        <div className="question-bank-head">
+          <div>
+            <h1>题库管理</h1>
+            <p className="interview-subtitle">
+              导入、维护你的专属问题；也可以在面试中让 AI 自主动态提问。
+            </p>
+          </div>
           <button
             type="button"
-            className="interview-submit"
+            className="question-bank-new-btn"
             onClick={() => setImportOpen(true)}
           >
-            导入题目
+            ＋ 新建题目
           </button>
-        </div>
-
-        <div className="question-bank-filters">
-          <div className="interview-field">
-            <label htmlFor="job-tag-filter">岗位标签</label>
-            <input
-              id="job-tag-filter"
-              type="text"
-              value={jobTag}
-              onChange={(e) => setJobTag(e.target.value)}
-              placeholder="按岗位标签筛选…"
-            />
-          </div>
-          <div className="interview-field">
-            <label htmlFor="search-q">搜索</label>
-            <input
-              id="search-q"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索题干…"
-            />
-          </div>
-          <div className="interview-field">
-            <label htmlFor="dimension-filter">维度</label>
-            <select
-              id="dimension-filter"
-              value={dimension}
-              onChange={(e) => setDimension(e.target.value)}
-            >
-              <option value="">全部维度</option>
-              {Object.entries(DIMENSION_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="question-bank-checkbox-label">
-            <input
-              type="checkbox"
-              checked={starredOnly}
-              onChange={(e) => setStarredOnly(e.target.checked)}
-            />
-            仅收藏
-          </label>
         </div>
 
         {error && <p className="interview-error">{error}</p>}
 
+        {/* 概览卡 */}
+        <div className="question-bank-overview">
+          <div className="question-bank-overview-card">
+            <span className="question-bank-overview-num">{totalCount}</span>
+            <span className="question-bank-overview-label">题库题目总数</span>
+          </div>
+          <div className="question-bank-overview-card">
+            <span className="question-bank-overview-num question-bank-overview-num--blue">
+              {weekNew}
+            </span>
+            <span className="question-bank-overview-label">本周新增题目</span>
+          </div>
+        </div>
+
+        {/* 标签胶囊筛选 + 搜索 */}
+        <div className="question-bank-filter-row">
+          <div className="question-bank-tags">
+            <button
+              type="button"
+              className={`question-bank-tag${activeTag === 'all' ? ' is-active' : ''}`}
+              onClick={() => setActiveTag('all')}
+            >
+              全部 {totalCount}
+            </button>
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={`question-bank-tag${activeTag === tag ? ' is-active' : ''}`}
+                onClick={() => setActiveTag(tag)}
+              >
+                {DIMENSION_LABELS[tag] ?? tag}
+              </button>
+            ))}
+          </div>
+          <div className="question-bank-search">
+            <span className="question-bank-search-icon" aria-hidden="true">⌕</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索题目关键词"
+            />
+          </div>
+        </div>
+
+        {/* 题目列表 */}
+        <div className="question-bank-list-head">
+          <h2>题目列表</h2>
+          <span className="question-bank-sort">最近添加↓</span>
+        </div>
+
         {loading ? (
           <p className="interview-loading">加载中…</p>
-        ) : questions.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="interview-empty">
             <p>题库暂无题目。完成面试后可将题目存入题库。</p>
           </div>
         ) : (
-          <div className="question-bank-groups">
-            {groups.map(([sessionId, items]) => {
-              const groupExpanded = expandedGroups.has(sessionId);
-              const sampleTag = items[0]?.job_tag;
-              const sampleDate = items[0]?.created_at?.slice(0, 10);
-              return (
-                <div key={sessionId ?? 'none'} className="question-group">
-                  <div className="question-group-header">
-                    <button
-                      type="button"
-                      className="question-group-toggle"
-                      onClick={() => toggleGroup(sessionId)}
-                    >
-                      <span className="question-group-arrow">{groupExpanded ? '▾' : '▸'}</span>
-                      <span className="question-group-title">
-                        {sessionId
-                          ? `面试 #${sessionId}`
-                          : `独立题目${SOURCE_LABELS[items[0]?.source ?? ''] ?? ''}`}
+          <ul className="question-bank-flat-list">
+            {filtered.map((item, index) => (
+              <li key={item.id} className="question-bank-flat-row">
+                <span className="question-bank-no">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <div className="question-bank-row-main">
+                  <p className="question-bank-row-question">{item.question}</p>
+                  <div className="question-bank-row-tags">
+                    {item.dimension && (
+                      <span className="question-bank-row-tag">
+                        {DIMENSION_LABELS[item.dimension] ?? item.dimension}
                       </span>
-                      {sampleTag && <span className="mode-pill">{sampleTag}</span>}
-                      {sampleDate && <span className="question-group-date">{sampleDate}</span>}
-                      <span className="question-group-count">{items.length} 题</span>
-                    </button>
-                    {sessionId != null && (
-                      <Link
-                        className="interview-inline-link question-group-view"
-                        to={`/interviews/${sessionId}?from=questions`}
-                      >
-                        查看
-                      </Link>
                     )}
-                    <label className="question-group-select-all">
-                      <input
-                        type="checkbox"
-                        checked={items.length > 0 && items.every((q) => selectedIds.includes(q.id))}
-                        onChange={() => toggleGroupSelect(sessionId)}
-                      />
-                      <span>全选</span>
-                    </label>
+                    {item.job_tag && (
+                      <span className="question-bank-row-tag">{item.job_tag}</span>
+                    )}
                   </div>
-
-                  {groupExpanded && (
-                    <ul className="interview-list question-group-list">
-                      {items.map((item) => {
-                        const checked = selectedIds.includes(item.id);
-                        const expanded = expandedIds.has(item.id);
-                        return (
-                          <li key={item.id} className="interview-list-item question-bank-row">
-                            <label className="question-bank-select">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() =>
-                                  setSelectedIds((prev) => toggleSelected(prev, item.id))
-                                }
-                              />
-                            </label>
-                            <div className="interview-list-meta question-bank-content">
-                              <button
-                                type="button"
-                                className="question-bank-text question-bank-expand-btn"
-                                onClick={() => toggleExpand(item.id)}
-                              >
-                                <span className="question-bank-arrow">{expanded ? '▾' : '▸'}</span>
-                                {item.question}
-                              </button>
-                              {item.dimension && (
-                                <span className="mode-pill">
-                                  {DIMENSION_LABELS[item.dimension] ?? item.dimension}
-                                </span>
-                              )}
-                              {item.source === 'import' && (
-                                <span className="mode-pill">
-                                  {SOURCE_LABELS.import}
-                                </span>
-                              )}
-
-                              {expanded && (
-                                <div className="question-detail">
-                                  {item.user_answer && (
-                                    <div className="question-detail-section">
-                                      <span className="question-detail-label">你的作答</span>
-                                      <p className="question-detail-content question-detail-user">
-                                        {item.user_answer}
-                                      </p>
-                                    </div>
-                                  )}
-                                  {item.answer && (
-                                    <div className="question-detail-section">
-                                      <span className="question-detail-label">参考答案</span>
-                                      <p className="question-detail-content">
-                                        {item.answer}
-                                      </p>
-                                    </div>
-                                  )}
-                                  {item.reference && (
-                                    <div className="question-detail-section">
-                                      <span className="question-detail-label">出处</span>
-                                      <p className="question-detail-content">
-                                        {item.reference}
-                                      </p>
-                                    </div>
-                                  )}
-                                  {!item.user_answer && !item.answer && (
-                                    <p className="question-detail-empty">暂无作答记录</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="interview-list-links">
-                              <button
-                                type="button"
-                                className="interview-inline-link question-bank-star"
-                                onClick={() => void handleToggleStar(item)}
-                                aria-label={item.starred ? '取消收藏' : '收藏'}
-                              >
-                                {item.starred ? '★' : '☆'}
-                              </button>
-                              <button
-                                type="button"
-                                className="interview-inline-link interview-inline-link--danger"
-                                onClick={() => void handleDelete(item)}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
                 </div>
-              );
-            })}
-          </div>
+                <span className="question-bank-usage">
+                  {item.usage_count > 0 ? `已使用 ${item.usage_count} 次` : '未使用'}
+                </span>
+                <div className="question-bank-row-actions">
+                  <button
+                    type="button"
+                    className="question-bank-edit-btn"
+                    onClick={() => setEditTarget(item)}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className="question-bank-delete-btn"
+                    onClick={() => setDeleteTarget(item)}
+                  >
+                    删除
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-
-        <div className="question-bank-actions">
-          <span className="question-bank-selected">
-            已选 {selectedIds.length} 题
-          </span>
-          {selectedIds.length > 0 && (
-            <button
-              type="button"
-              className="question-bank-bulk-delete"
-              onClick={() => void handleBulkDelete()}
-            >
-              删除选中
-            </button>
-          )}
-          <div className="interview-field question-bank-mode">
-            <label htmlFor="practice-mode">模式</label>
-            <select
-              id="practice-mode"
-              value={mode}
-              onChange={(e) => setMode(e.target.value as InterviewMode)}
-            >
-              {MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="interview-field question-bank-mode">
-            <label htmlFor="practice-persona">面试官风格</label>
-            <select
-              id="practice-persona"
-              value={persona}
-              onChange={(e) => setPersona(e.target.value as Persona)}
-            >
-              {PERSONAS.map((value) => (
-                <option key={value} value={value}>
-                  {PERSONA_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="button"
-            className="interview-submit"
-            disabled={starting || selectedIds.length === 0}
-            onClick={() => void handleStartPractice()}
-          >
-            {starting ? '创建中…' : '开始练习'}
-          </button>
-        </div>
 
         <QuestionImportModal
           open={importOpen}
@@ -490,15 +268,69 @@ export default function QuestionBankPage() {
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteTarget(null)}
       />
-      <ConfirmModal
-        open={bulkDeleteOpen}
-        title="批量删除"
-        description={`确定删除选中的 ${selectedIds.length} 道题目吗？删除后不可恢复。`}
-        confirmLabel={`删除选中的 ${selectedIds.length} 道`}
-        loading={deleting}
-        onConfirm={() => void confirmBulkDelete()}
-        onCancel={() => setBulkDeleteOpen(false)}
-      />
+
+      {/* 编辑题目弹窗 */}
+      <Dialog
+        open={editTarget !== null}
+        title="编辑题目"
+        onClose={() => setEditTarget(null)}
+        width={560}
+        footer={
+          <>
+            <button type="button" className="btn btn--secondary" onClick={() => setEditTarget(null)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => void handleSaveEdit()}
+              disabled={saving}
+            >
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </>
+        }
+      >
+        {editTarget && (
+          <div className="dialog-field">
+            <label htmlFor="edit-question">题干</label>
+            <textarea
+              id="edit-question"
+              value={editTarget.question}
+              onChange={(e) => setEditTarget({ ...editTarget, question: e.target.value })}
+              placeholder="输入题目…"
+            />
+            <label htmlFor="edit-answer">参考答案</label>
+            <textarea
+              id="edit-answer"
+              value={editTarget.answer ?? ''}
+              onChange={(e) => setEditTarget({ ...editTarget, answer: e.target.value })}
+              placeholder="参考答案（可选）…"
+            />
+            <label htmlFor="edit-job-tag">岗位标签</label>
+            <input
+              id="edit-job-tag"
+              type="text"
+              value={editTarget.job_tag ?? ''}
+              onChange={(e) => setEditTarget({ ...editTarget, job_tag: e.target.value })}
+              placeholder="如：前端开发工程师"
+            />
+            <label htmlFor="edit-dimension">维度</label>
+            <select
+              id="edit-dimension"
+              value={editTarget.dimension ?? ''}
+              onChange={(e) => setEditTarget({ ...editTarget, dimension: e.target.value })}
+            >
+              <option value="">无</option>
+              {Object.entries(DIMENSION_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

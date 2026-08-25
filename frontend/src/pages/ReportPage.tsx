@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
+  getInterview,
   getReport,
   retryReport,
   type InterviewFeedback,
@@ -24,6 +25,45 @@ const DIMENSION_LABELS: { key: keyof InterviewFeedback['dimensions']; label: str
     { key: 'job_match', label: '岗位匹配' },
   ];
 
+// 报告页元信息行：岗位名来自会话的 job_title（创建时由 LLM 从 JD+简历推理），
+// 未推理到时回退为 JD 首行摘要；时长由 started_at → ended_at 计算。
+function formatReportDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}.${m}.${day}`;
+}
+
+function formatDuration(startedAt: string | null, endedAt: string | null): string {
+  if (!startedAt || !endedAt) return '进行中';
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '进行中';
+  const mins = Math.max(1, Math.round((end - start) / 60000));
+  return `${mins} 分钟`;
+}
+
+// jobTitleLabel 优先用 LLM 推理出的岗位名；为空时回退到 JD 第一行（截断 20 字）。
+function jobTitleLabel(meta: {
+  job_title: string | null;
+  job_jd: string;
+} | null): string {
+  if (meta?.job_title && meta.job_title.trim()) {
+    return meta.job_title.trim();
+  }
+  if (meta?.job_jd) {
+    const firstLine = meta.job_jd.split('\n').map((l) => l.trim()).find((l) => l !== '');
+    if (firstLine) {
+      const runes = [...firstLine];
+      return runes.length <= 20 ? firstLine : runes.slice(0, 20).join('') + '…';
+    }
+  }
+  return '未命名岗位';
+}
+
 const EMOTION_LABELS: Record<Emotion, string> = {
   smile: '微笑',
   neutral: '中性',
@@ -45,6 +85,13 @@ export default function ReportPage() {
   const [error, setError] = useState('');
   const [expression, setExpression] = useState<ExpressionResult | null>(null);
   const [behavior, setBehavior] = useState<BehaviorResult | null>(null);
+  const [interviewMeta, setInterviewMeta] = useState<{
+    job_title: string | null;
+    job_jd: string;
+    created_at: string | null;
+    started_at: string | null;
+    ended_at: string | null;
+  } | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const pollCountRef = useRef(0);
   const [pollFailed, setPollFailed] = useState(false);
@@ -115,6 +162,22 @@ export default function ReportPage() {
 
     void load();
 
+    getInterview(interviewId)
+      .then((data) => {
+        if (!cancelled) {
+          setInterviewMeta({
+            job_title: data.job_title,
+            job_jd: data.job_jd,
+            created_at: data.created_at,
+            started_at: data.started_at,
+            ended_at: data.ended_at,
+          });
+        }
+      })
+      .catch(() => {
+        /* silent: meta line is optional */
+      });
+
     fetchExpression(interviewId)
       .then((res) => {
         if (!cancelled) setExpression(res);
@@ -162,26 +225,37 @@ export default function ReportPage() {
 
   return (
     <div className="interview-page">
-      <AppNav tab={fromTrends ? 'trends' : 'interviews'} />
+      <AppNav tab={fromTrends ? 'trends' : 'history'} />
       <main className="interview-main">
         {fromTrends ? (
           <Link className="interview-back-link" to="/trends">
             ← 返回成长分析
           </Link>
         ) : (
-          <Link className="interview-back-link" to="/">
+          <Link className="interview-back-link" to="/history">
             ← 全部面试
           </Link>
         )}
 
         <h1>面试报告</h1>
+        <p className="report-meta">
+          {jobTitleLabel(interviewMeta)}
+          {interviewMeta?.created_at && (
+            <>
+              {' | '}
+              {formatReportDate(interviewMeta.created_at)}
+            </>
+          )}
+          {' | '}
+          {formatDuration(interviewMeta?.started_at ?? null, interviewMeta?.ended_at ?? null)}
+        </p>
 
         {loading ? (
           <p className="interview-loading">加载报告中…</p>
         ) : error && !feedback ? (
           <div className="interview-stub">
             <p className="interview-error">{error}</p>
-            <Link className="interview-inline-link" to="/">
+            <Link className="interview-inline-link" to="/history">
               ← 返回列表
             </Link>
           </div>
@@ -204,30 +278,90 @@ export default function ReportPage() {
           </div>
         ) : feedback ? (
           <>
-            <div className="report-score-card">
-              <span className="report-score-label">总分</span>
-              <span className="report-score-value">{feedback.total_score}</span>
+            {/* 2×2 布局：总评+优势与短板（上行）/ 能力维度+证据与建议（下行）（Figma 03 面试报告） */}
+            <div className="report-grid">
+              <div className="report-grid-row report-grid-row--top">
+                {/* 总评 */}
+                <section className="report-card report-card--score">
+                  <span className="report-card-label">综合表现</span>
+                  <div className="report-score-value">
+                    <span className="report-score-num">{feedback.total_score}</span>
+                    <span className="report-score-max">/ 100</span>
+                  </div>
+                  <p className="report-score-note">
+                    {feedback.summary?.trim() || '暂无总评'}
+                  </p>
+                </section>
+
+                {/* 优势与短板：左本场亮点，右优先改进 */}
+                <section className="report-card report-card--strengths">
+                  <div className="report-strengths-col">
+                    <h2 className="report-card-title">本场亮点</h2>
+                    <ul className="report-inline-list report-inline-list--good">
+                      {feedback.strengths.length > 0 ? (
+                        feedback.strengths.map((item) => <li key={item}>✓ {item}</li>)
+                      ) : (
+                        <li>暂无亮点</li>
+                      )}
+                    </ul>
+                  </div>
+                  <div className="report-strengths-col">
+                    <h2 className="report-card-title">优先改进</h2>
+                    <ul className="report-inline-list report-inline-list--warn">
+                      {feedback.weaknesses.length > 0 ? (
+                        feedback.weaknesses.map((item) => <li key={item}>• {item}</li>)
+                      ) : (
+                        <li>暂无改进项</li>
+                      )}
+                    </ul>
+                  </div>
+                </section>
+              </div>
+
+              <div className="report-grid-row report-grid-row--bottom">
+                {/* 能力维度：4 维进度条 */}
+                <section className="report-card report-card--dims">
+                  <h2 className="report-card-title">能力维度</h2>
+                  <div className="report-dim-bars">
+                    {DIMENSION_LABELS.map(({ key, label }) => {
+                      const score = feedback.dimensions[key];
+                      return (
+                        <div key={key} className="report-dim-bar">
+                          <span className="report-dim-bar-label">{label}</span>
+                          <div className="report-dim-bar-track">
+                            <div
+                              className="report-dim-bar-fill"
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
+                          <span className="report-dim-bar-value">{score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* 证据与建议：下一轮训练建议 */}
+                <section className="report-card report-card--advice">
+                  <h2 className="report-card-title">下一轮训练建议</h2>
+                  {feedback.suggestions.length > 0 ? (
+                    <ol className="report-suggestions">
+                      {feedback.suggestions.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="report-quick-empty">暂无训练建议</p>
+                  )}
+                </section>
+              </div>
             </div>
 
-            <h2 className="interview-section-title">维度评分</h2>
-            <div className="report-dimensions">
-              {DIMENSION_LABELS.map(({ key, label }) => (
-                <div key={key} className="report-dimension">
-                  <span className="report-dimension-label">{label}</span>
-                  <span className="report-dimension-value">
-                    {feedback.dimensions[key]}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <ReportList title="优点" items={feedback.strengths} />
-            <ReportList title="问题" items={feedback.weaknesses} />
-            <ReportList title="改进建议" items={feedback.suggestions} />
-
+            {/* 附加区：表达分析 / 行为信号（2×2 网格下方） */}
+            <div className="report-extra">
             {expression && (
-              <div className="profile-card">
-                <h3 className="interview-section-title">表达分析</h3>
+              <div className="report-card">
+                <h2 className="report-card-title">表达分析</h2>
                 {expression.speech_rate_cpm !== null ? (
                   <p>
                     语速 {expression.speech_rate_cpm} 字/分钟（一般 100–200
@@ -258,8 +392,8 @@ export default function ReportPage() {
             )}
 
             {behavior && behavior.available && (
-              <div className="profile-card">
-                <h3 className="interview-section-title">行为信号（辅助参考）</h3>
+              <div className="report-card">
+                <h2 className="report-card-title">行为信号（辅助参考）</h2>
                 <p className="behavior-note">
                   本指标基于表情动作统计，仅供参考，不计入评分。
                 </p>
@@ -312,26 +446,12 @@ export default function ReportPage() {
                   )}
               </div>
             )}
+            </div>
 
             <p className="report-model-version">模型：{feedback.model_version}</p>
           </>
         ) : null}
       </main>
     </div>
-  );
-}
-
-function ReportList({ title, items }: { title: string; items: string[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <>
-      <h2 className="interview-section-title">{title}</h2>
-      <ul className="report-list">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </>
   );
 }

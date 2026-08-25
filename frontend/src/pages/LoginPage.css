@@ -1,0 +1,214 @@
+/* ─── 独立登录页 · 按 Figma「00 独立登录页」还原 ─── */
+
+.login-page {
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: 648px 1fr;
+  background: #f5f2ec;
+}
+
+/* 左侧深蓝品牌区 */
+.login-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 80px 72px;
+  background: #131e2b;
+  color: #ffffff;
+  overflow: hidden;
+}
+
+.login-brand-logo {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 36px;
+}
+
+.login-brand-title {
+  margin: 216px 0 0;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 36px;
+  letter-spacing: 0;
+}
+
+.login-brand-sub {
+  margin: 28px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #d9e3f0;
+}
+
+/* 品牌区右下角装饰圆 */
+.login-brand-deco {
+  position: absolute;
+  right: -40px;
+  bottom: -40px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: #4879b8;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* 右侧登录卡区域 */
+.login-card-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+
+.login-card {
+  position: relative;
+  width: 470px;
+  padding: 48px 52px 52px;
+  background: #fffdf7;
+  border: 1px solid rgba(209, 217, 227, 0.78);
+  border-radius: 20px;
+  box-shadow: 0 18px 36px rgba(19, 30, 43, 1);
+}
+
+/* 卡片顶部强调线 */
+.login-card-accent {
+  position: absolute;
+  top: -1px;
+  left: 52px;
+  width: 42px;
+  height: 4px;
+  border-radius: 2px;
+  background: #4879b8;
+}
+
+.login-card-title {
+  margin: 0;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 27px;
+  line-height: 36px;
+  color: #131e2b;
+}
+
+.login-card-subtitle {
+  margin: 10px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: #5f6b7a;
+}
+
+/* 登录表单字段 */
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.login-field label {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #131e2b;
+}
+
+.login-field input {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 1px solid #d1d9e3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #131e2b;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-field input:focus {
+  border-color: #4879b8;
+  box-shadow: 0 0 0 3px rgba(72, 121, 184, 0.18);
+}
+
+.login-error {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  color: #c50000;
+  background: #fef2f2;
+  border-radius: 10px;
+  text-align: left;
+}
+
+/* WPS 授权主按钮 */
+.login-wps-btn {
+  display: block;
+  width: 100%;
+  margin-top: 26px;
+  padding: 16px 24px;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  color: #ffffff;
+  background: #2b508e;
+  border: 1px solid #2b508e;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(43, 80, 142, 1);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.login-wps-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.login-wps-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.login-wps-btn:active {
+  filter: brightness(0.96);
+  transform: translateY(0);
+}
+
+.login-wps-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 8px 16px rgba(43, 80, 142, 1), 0 0 0 3px rgba(26, 82, 199, 0.35);
+}
+
+/* 按钮下方授权说明 */
+.login-card-note {
+  margin: 30px 0 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 14.5px;
+  text-align: center;
+  color: #5f6b7a;
+}
+
+.login-card-note a {
+  color: #1a52c7;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-card-note a:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wps-btn {
+    transition: none;
+    transform: none !important;
+  }
+}

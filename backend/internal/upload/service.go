@@ -1,23 +1,30 @@
 package upload
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"path"
 	"strings"
 	"time"
-
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 const (
 	MaxFileSize = 10 * 1024 * 1024 // 10MB
-	PutURLTTL   = 5 * time.Minute
+	// PutURLTTL 保留：前端不再直连 OSS，但作为上传窗口的超时参考保留。
+	PutURLTTL = 5 * time.Minute
 
 	KindResume = "resume"
 	KindJD     = "jd"
+
+	uploadDir = "uploads" // OSS 对象前缀
 )
 
-// ErrNotConfigured is returned by SignUpload when OSS is not configured
+// ErrNotConfigured is returned when OSS is not configured
 // (missing endpoint/bucket/access key). Handlers map it to 503.
 var ErrNotConfigured = errors.New("oss not configured")
 
@@ -33,7 +40,7 @@ var allowedContentTypes = map[string]bool{
 	"application/msword": true,
 }
 
-func validateSignRequest(kind, filename, contentType string, size int64) error {
+func validateUpload(kind, filename, contentType string, size int64) error {
 	if kind != KindResume && kind != KindJD {
 		return fmt.Errorf("invalid kind")
 	}
@@ -63,37 +70,127 @@ type OSSConfig struct {
 }
 
 type Service struct {
-	cfg OSSConfig
+	cfg    OSSConfig
+	client *http.Client
 }
 
 func NewService(cfg OSSConfig) *Service {
-	return &Service{cfg: cfg}
+	return &Service{
+		cfg:    cfg,
+		client: &http.Client{Timeout: 60 * time.Second},
+	}
 }
 
-func (s *Service) SignUpload(userID int64, kind, filename, contentType string, size int64) (key, putURL, objectURL string, expiresIn int, err error) {
-	if s.cfg.Endpoint == "" || s.cfg.Bucket == "" || s.cfg.AccessKeyID == "" {
-		return "", "", "", 0, ErrNotConfigured
+// ready reports whether OSS is fully configured.
+func (s *Service) ready() bool {
+	return s.cfg.Endpoint != "" && s.cfg.Bucket != "" && s.cfg.AccessKeyID != ""
+}
+
+// regionHost returns the virtual-hosted-style OSS host, e.g. bucket.oss-cn-beijing.aliyuncs.com
+func (s *Service) regionHost() string {
+	region := s.cfg.Region
+	if region == "" {
+		region = "oss-cn-hangzhou"
 	}
-	if err = validateSignRequest(kind, filename, contentType, size); err != nil {
-		return "", "", "", 0, err
+	region = strings.TrimPrefix(region, "https://")
+	region = strings.TrimPrefix(region, "http://")
+	region = strings.TrimSuffix(region, ".aliyuncs.com")
+	if !strings.HasPrefix(region, "oss-") {
+		region = "oss-" + region
 	}
-	client, err := oss.New(s.cfg.Endpoint, s.cfg.AccessKeyID, s.cfg.AccessKeySecret)
-	if err != nil {
-		return "", "", "", 0, err
+	return fmt.Sprintf("%s.%s.aliyuncs.com", s.cfg.Bucket, region)
+}
+
+// sign computes the OSS V1 header signature (HMAC-SHA1 + Base64).
+// stringToSign = method + "\n" + contentMD5 + "\n" + contentType + "\n" + date + "\n" + resource
+func (s *Service) sign(method, contentType, date, resource string) string {
+	stringToSign := method + "\n\n" + contentType + "\n" + date + "\n" + resource
+	mac := hmac.New(sha1.New, []byte(s.cfg.AccessKeySecret))
+	mac.Write([]byte(stringToSign))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// Upload streams the uploaded file to OSS and returns the object key and a
+// same-origin URL (served through /api/uploads/object) so browsers never touch OSS directly.
+func (s *Service) Upload(userID int64, kind, filename, contentType string, r io.Reader, size int64) (key, objectURL string, err error) {
+	if !s.ready() {
+		return "", "", ErrNotConfigured
 	}
-	bucket, err := client.Bucket(s.cfg.Bucket)
-	if err != nil {
-		return "", "", "", 0, err
+	if err = validateUpload(kind, filename, contentType, size); err != nil {
+		return "", "", err
 	}
 
 	dot := strings.LastIndexByte(filename, '.')
 	ext := strings.ToLower(filename[dot:])
-	key = fmt.Sprintf("uploads/%d/%d%s", userID, time.Now().UnixNano(), ext)
+	key = fmt.Sprintf("%s/%d/%d%s", uploadDir, userID, time.Now().UnixNano(), ext)
 
-	putURL, err = bucket.SignURL(key, oss.HTTPPut, int64(PutURLTTL.Seconds()))
+	host := s.regionHost()
+	date := time.Now().UTC().Format(http.TimeFormat)
+	resource := "/" + s.cfg.Bucket + "/" + key
+	sig := s.sign("PUT", contentType, date, resource)
+
+	req, err := http.NewRequest(http.MethodPut, "https://"+host+"/"+key, r)
 	if err != nil {
-		return "", "", "", 0, err
+		return "", "", err
 	}
-	objectURL = s.cfg.Endpoint + "/" + key
-	return key, putURL, objectURL, int(PutURLTTL.Seconds()), nil
+	req.Header.Set("Date", date)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "OSS "+s.cfg.AccessKeyID+":"+sig)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return "", "", fmt.Errorf("oss upload failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	objectURL = "/api/uploads/object?key=" + key
+	return key, objectURL, nil
+}
+
+// Proxy streams an OSS object back to the client through the API server
+// (keeps the object private and avoids browser CORS to OSS).
+func (s *Service) Proxy(c http.ResponseWriter, key string) error {
+	if !s.ready() {
+		return ErrNotConfigured
+	}
+	key = strings.TrimSpace(key)
+	key = strings.TrimPrefix(path.Clean("/"+key), "/")
+	if key == "" || strings.Contains(key, "..") || !strings.HasPrefix(key, uploadDir+"/") {
+		return errors.New("invalid key")
+	}
+
+	host := s.regionHost()
+	date := time.Now().UTC().Format(http.TimeFormat)
+	resource := "/" + s.cfg.Bucket + "/" + key
+	sig := s.sign("GET", "", date, resource)
+
+	req, err := http.NewRequest(http.MethodGet, "https://"+host+"/"+key, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Date", date)
+	req.Header.Set("Authorization", "OSS "+s.cfg.AccessKeyID+":"+sig)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("oss fetch error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	c.Header().Set("Content-Type", ct)
+	c.Header().Set("Cache-Control", "private, max-age=300")
+	_, _ = io.Copy(c, resp.Body)
+	return nil
 }

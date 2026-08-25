@@ -8,35 +8,42 @@ import (
 	"github.com/interview-assistant/backend/internal/auth"
 )
 
-type signRequest struct {
-	Kind        string `json:"kind"`
-	Filename    string `json:"filename"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
-}
-
-type signResponse struct {
+type uploadResponse struct {
 	Key       string `json:"key"`
-	PutURL    string `json:"put_url"`
-	ObjectURL string `json:"object_url"`
+	URL       string `json:"url"` // same-origin URL via /api/uploads/object
 	ExpiresIn int    `json:"expires_in"`
 }
 
 func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
 	g := r.Group("/api/uploads")
 	g.Use(auth.Middleware(secret))
-	g.POST("/sign", func(c *gin.Context) {
+
+	// POST /api/uploads — upload a resume/JD file to OSS via server proxy.
+	g.POST("", func(c *gin.Context) {
 		userID, ok := c.Get("userID")
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		var req signRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+
+		kind := c.PostForm("kind")
+		fileHeader, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
 			return
 		}
-		key, putURL, objectURL, expiresIn, err := svc.SignUpload(userID.(int64), req.Kind, req.Filename, req.ContentType, req.Size)
+		if fileHeader.Size > MaxFileSize {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid size"})
+			return
+		}
+		f, err := fileHeader.Open()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read file"})
+			return
+		}
+		defer f.Close()
+
+		key, objectURL, err := svc.Upload(userID.(int64), kind, fileHeader.Filename, fileHeader.Header.Get("Content-Type"), f, fileHeader.Size)
 		if err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, ErrNotConfigured) {
@@ -45,6 +52,18 @@ func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
 			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, signResponse{Key: key, PutURL: putURL, ObjectURL: objectURL, ExpiresIn: expiresIn})
+		c.JSON(http.StatusOK, uploadResponse{Key: key, URL: objectURL, ExpiresIn: int(PutURLTTL.Seconds())})
+	})
+
+	// GET /api/uploads/object?key=... — proxy an OSS object through the API server.
+	g.GET("/object", func(c *gin.Context) {
+		if err := svc.Proxy(c.Writer, c.Query("key")); err != nil {
+			status := http.StatusBadRequest
+			if errors.Is(err, ErrNotConfigured) {
+				status = http.StatusServiceUnavailable
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
 	})
 }

@@ -11,6 +11,7 @@ export interface Question {
   dimension: string | null;
   reference: string | null;
   starred: boolean;
+  usage_count: number;
   created_at: string;
 }
 
@@ -64,9 +65,17 @@ export async function importQuestionsFromSession(
   );
 }
 
+export interface PatchQuestionBody {
+  starred?: boolean;
+  question?: string;
+  answer?: string;
+  job_tag?: string;
+  dimension?: string;
+}
+
 export async function patchQuestion(
   id: number,
-  body: { starred: boolean },
+  body: PatchQuestionBody,
 ): Promise<Question> {
   return fetchJSON<Question>(`/api/questions/${id}`, {
     method: 'PATCH',

@@ -2,6 +2,7 @@ package question
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -268,11 +269,11 @@ func (r *Repo) InsertImportedBatch(userID int64, questions []ParsedQuestion, job
 func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 	var clauses []string
 	var args []any
-	clauses = append(clauses, "user_id = ?")
+	clauses = append(clauses, "qb.user_id = ?")
 	args = append(args, userID)
 
 	if f.Starred != nil {
-		clauses = append(clauses, "starred = ?")
+		clauses = append(clauses, "qb.starred = ?")
 		if *f.Starred {
 			args = append(args, 1)
 		} else {
@@ -280,23 +281,26 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 		}
 	}
 	if f.JobTag != "" {
-		clauses = append(clauses, "job_tag = ?")
+		clauses = append(clauses, "qb.job_tag = ?")
 		args = append(args, f.JobTag)
 	}
 	if f.Query != "" {
-		clauses = append(clauses, "question LIKE ?")
+		clauses = append(clauses, "qb.question LIKE ?")
 		args = append(args, "%"+f.Query+"%")
 	}
 	if f.Dimension != "" {
-		clauses = append(clauses, "dimension = ?")
+		clauses = append(clauses, "qb.dimension = ?")
 		args = append(args, f.Dimension)
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
-		 FROM question_bank
+		`SELECT qb.id, qb.user_id, MAX(qb.question), MAX(qb.answer), MAX(qb.user_answer), MAX(qb.source), MAX(qb.source_session_id), MAX(qb.job_tag), MAX(qb.dimension), MAX(qb.reference), MAX(qb.starred), MAX(qb.created_at),
+		        COUNT(qu.id) AS usage_count
+		 FROM question_bank qb
+		 LEFT JOIN question_usage qu ON qu.question_id = qb.id AND qu.user_id = qb.user_id
 		 WHERE %s
-		 ORDER BY created_at DESC`,
+		 GROUP BY qb.id
+		 ORDER BY qb.created_at DESC`,
 		strings.Join(clauses, " AND "),
 	)
 	rows, err := r.db.Query(query, args...)
@@ -318,8 +322,12 @@ func (r *Repo) List(userID int64, f ListFilter) ([]Item, error) {
 
 func (r *Repo) GetByID(id int64) (*Item, error) {
 	row := r.db.QueryRow(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
-		 FROM question_bank WHERE id = ?`,
+		`SELECT qb.id, qb.user_id, MAX(qb.question), MAX(qb.answer), MAX(qb.user_answer), MAX(qb.source), MAX(qb.source_session_id), MAX(qb.job_tag), MAX(qb.dimension), MAX(qb.reference), MAX(qb.starred), MAX(qb.created_at),
+		        COUNT(qu.id) AS usage_count
+		 FROM question_bank qb
+		 LEFT JOIN question_usage qu ON qu.question_id = qb.id AND qu.user_id = qb.user_id
+		 WHERE qb.id = ?
+		 GROUP BY qb.id`,
 		id,
 	)
 	return scanItem(row)
@@ -346,10 +354,13 @@ func (r *Repo) UpdateDimensionByText(userID int64, questionText, dimension strin
 // one dimension, capped at limit, belonging to the user.
 func (r *Repo) ListByDimensionForFocused(userID int64, dimension string, limit int) ([]Item, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, question, answer, user_answer, source, source_session_id, job_tag, dimension, reference, starred, created_at
-		 FROM question_bank
-		 WHERE user_id = ? AND dimension = ?
-		 ORDER BY starred DESC, created_at DESC
+		`SELECT qb.id, qb.user_id, MAX(qb.question), MAX(qb.answer), MAX(qb.user_answer), MAX(qb.source), MAX(qb.source_session_id), MAX(qb.job_tag), MAX(qb.dimension), MAX(qb.reference), MAX(qb.starred), MAX(qb.created_at),
+		        COUNT(qu.id) AS usage_count
+		 FROM question_bank qb
+		 LEFT JOIN question_usage qu ON qu.question_id = qb.id AND qu.user_id = qb.user_id
+		 WHERE qb.user_id = ? AND qb.dimension = ?
+		 GROUP BY qb.id
+		 ORDER BY qb.starred DESC, qb.created_at DESC
 		 LIMIT ?`,
 		userID, dimension, limit,
 	)
@@ -377,6 +388,36 @@ func (r *Repo) UpdateStarred(id int64, starred bool) error {
 	return err
 }
 
+// UpdateField sets a non-nullable text column (whitelisted) on a bank question.
+func (r *Repo) UpdateField(id int64, column, value string) error {
+	if !allowedQuestionColumn(column) {
+		return errors.New("invalid column")
+	}
+	_, err := r.db.Exec(`UPDATE question_bank SET `+column+` = ? WHERE id = ?`, value, id)
+	return err
+}
+
+// UpdateNullableField sets a nullable text column; empty value clears it to NULL.
+func (r *Repo) UpdateNullableField(id int64, column, value string) error {
+	if !allowedQuestionColumn(column) {
+		return errors.New("invalid column")
+	}
+	if value == "" {
+		_, err := r.db.Exec(`UPDATE question_bank SET `+column+` = NULL WHERE id = ?`, id)
+		return err
+	}
+	_, err := r.db.Exec(`UPDATE question_bank SET `+column+` = ? WHERE id = ?`, value, id)
+	return err
+}
+
+func allowedQuestionColumn(column string) bool {
+	switch column {
+	case "question", "answer", "job_tag", "dimension":
+		return true
+	}
+	return false
+}
+
 func (r *Repo) Delete(id int64) error {
 	_, err := r.db.Exec(`DELETE FROM question_bank WHERE id = ?`, id)
 	return err
@@ -398,6 +439,7 @@ func scanItem(row scanner) (*Item, error) {
 	if err := row.Scan(
 		&item.ID, &item.UserID, &item.Question, &answer, &userAnswer,
 		&item.Source, &sourceSessionID, &jobTag, &dimension, &reference, &starred, &item.CreatedAt,
+		&item.UsageCount,
 	); err != nil {
 		return nil, err
 	}

@@ -53,6 +53,7 @@ type listItemResponse struct {
 type sessionResponse struct {
 	ID            int64              `json:"id"`
 	JobJD         string             `json:"job_jd"`
+	JobTitle      *string            `json:"job_title"`
 	ResumeText    *string            `json:"resume_text"`
 	ResumeFileURL *string            `json:"resume_file_url"`
 	JDFileURL     *string            `json:"jd_file_url"`
@@ -272,6 +273,7 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 	resp := sessionResponse{
 		ID:            session.ID,
 		JobJD:         session.JobJD,
+		JobTitle:      session.JobTitle,
 		ResumeText:    session.ResumeText,
 		ResumeFileURL: session.ResumeFileURL,
 		JDFileURL:     session.JDFileURL,

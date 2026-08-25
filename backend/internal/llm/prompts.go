@@ -20,6 +20,44 @@ Rules:
 - All question and intent text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
+type JobTitleOut struct {
+	Title string `json:"title"`
+}
+
+// JobTitleSystem instructs the model to derive a short job title from a JD
+// (and optional resume). The title is stored on the session and shown in the
+// report header and interview room top bar.
+func JobTitleSystem() string {
+	return `You are a hiring analyst. Derive the job title from the job description (and optional resume).
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"title":"..."}
+
+Rules:
+- title must be a concise job title of at most 20 Chinese characters, e.g. "高级产品经理"
+- Include the seniority or direction when the JD states it clearly, e.g. "高级产品经理 · 增长方向"
+- Never fabricate details that are not in the job description; if the JD is a practice set with no real title, fall back to "未命名岗位"
+- title must be written in Chinese (Simplified) unless the job description itself names the title in another language`
+
+}
+
+// JobTitleUser builds the user prompt for job-title derivation.
+func JobTitleUser(jobJD, resume string) string {
+	if resume == "" {
+		return fmt.Sprintf(`Derive the job title from this job description.
+
+Job description:
+%s`, jobJD)
+	}
+	return fmt.Sprintf(`Derive the job title from this job description and resume.
+
+Job description:
+%s
+
+Resume:
+%s`, jobJD, resume)
+}
+
 // DimensionLabels maps dimension keys to Chinese labels for prompt text.
 var DimensionLabels = map[string]string{
 	"expression": "表达能力",
@@ -270,6 +308,7 @@ type EvaluateOut struct {
 	Strengths    []string `json:"strengths"`
 	Weaknesses   []string `json:"weaknesses"`
 	Suggestions  []string `json:"suggestions"`
+	Summary      string   `json:"summary,omitempty"`
 	ModelVersion string   `json:"model_version,omitempty"`
 }
 
@@ -277,17 +316,18 @@ func EvaluateSessionSystem() string {
 	return `You are an expert interview coach. Evaluate the candidate's performance in a completed interview session.
 
 Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
-{"total_score":0,"dimensions":{"expression":0,"logic":0,"content":0,"job_match":0},"strengths":["..."],"weaknesses":["..."],"suggestions":["..."],"model_version":"..."}
+{"total_score":0,"dimensions":{"expression":0,"logic":0,"content":0,"job_match":0},"strengths":["..."],"weaknesses":["..."],"suggestions":["..."],"summary":"...","model_version":"..."}
 
 Rules:
 - total_score and each dimension score must be integers from 0 to 100
 - strengths, weaknesses, and suggestions must be non-empty arrays of specific, actionable strings
+- summary must be a single concise sentence (under 60 characters) summarizing the overall performance, e.g. "表达清晰，实验思维较强；需补足结论边界与风险识别。"
 - Avoid vague praise like "good communication" without evidence; cite what the candidate did well or poorly
 - suggestions must be concrete actions the candidate can take to improve
 - model_version may be omitted
 - If the candidate gave no answers, or only very brief or perfunctory answers (e.g. "I don't know", "嗯", empty), then total_score and every dimension score must be at most 30, and weaknesses/suggestions must reflect the lack of substantive answers
 - NEVER invent or fabricate candidate answers, behaviors, or experiences that do not appear in the transcript. Base every score strictly on the transcript content. If the transcript contains no candidate answer for a question, do not credit the candidate for it
-- All strengths, weaknesses, and suggestions text must be written in Chinese (Simplified). Do not use any other language.`
+- All strengths, weaknesses, suggestions, and summary text must be written in Chinese (Simplified). Do not use any other language.`
 }
 
 func EvaluateSessionUser(jobJD, resume, mode string, questions []QuestionContext, turns []TurnContext) string {

@@ -5,9 +5,12 @@
 Write-Host "=== 模拟面试助手 启动 ===" -ForegroundColor Cyan
 
 # 1. 启动 Docker 容器 (MySQL/Redis)
+# 容器名 = 项目目录名(小写) + compose 服务名；本项目目录为 "Interview Assistant"，
+# 故默认 interview-assistant-mysql-1 / interview-assistant-redis-1。
 Write-Host "[1/3] 启动 Docker 容器..." -ForegroundColor Yellow
 try {
-    docker start feat-v2b-voice-mysql-1 feat-v2b-voice-redis-1 2>$null
+    $proj = (Split-Path -Leaf (Get-Location)).ToLower() -replace '[^a-z0-9\-_]', '-'
+    docker start "$proj-mysql-1" "$proj-redis-1" 2>$null
     if (-not $?) {
         docker compose up -d 2>$null
     }

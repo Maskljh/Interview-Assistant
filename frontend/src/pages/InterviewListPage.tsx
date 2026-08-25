@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -6,10 +6,7 @@ import {
   type InterviewListItem,
 } from '../api/interviews';
 import {
-  COMPANY_STYLE_LABELS,
-  DIFFICULTY_LABELS,
   MODE_LABELS,
-  PERSONA_LABELS,
   STATUS_LABELS,
   formatDateZh,
 } from '../lib/labels';
@@ -17,38 +14,30 @@ import './InterviewPages.css';
 import { entryLinksFor, type EntryStatus } from '../lib/listEntries';
 import AppNav from '../components/AppNav';
 
-function InterviewRow({ item }: { item: InterviewListItem }) {
+function InterviewRow({ item, index }: { item: InterviewListItem; index: number }) {
   return (
-    <li className="interview-list-item">
-      <div className="interview-list-meta">
-        <Link className="interview-list-title" to={`/interviews/${item.id}`}>
+    <li className="history-row">
+      <span className="history-no">{String(index + 1).padStart(2, '0')}</span>
+      <div className="history-row-main">
+        <Link className="history-row-title" to={`/interviews/${item.id}`}>
           面试 #{item.id}
         </Link>
-        <span className="interview-list-date">{formatDateZh(item.created_at)}</span>
-        <div className="interview-list-badges">
+        <span className="history-row-date">{formatDateZh(item.created_at)}</span>
+        <div className="history-row-badges">
           <span className={`status-pill status-pill--${item.status}`}>
             {STATUS_LABELS[item.status]}
           </span>
           <span className="mode-pill">{MODE_LABELS[item.mode]}</span>
-          {item.persona !== 'standard' && (
-            <span className="mode-pill">{PERSONA_LABELS[item.persona]}</span>
-          )}
-          {item.difficulty !== 'medium' && (
-            <span className="mode-pill">{DIFFICULTY_LABELS[item.difficulty]}</span>
-          )}
-          {item.company_style !== 'general' && (
-            <span className="mode-pill">{COMPANY_STYLE_LABELS[item.company_style]}</span>
-          )}
           {item.score != null && (
-            <span className="mode-pill">得分 {item.score}</span>
+            <span className="history-score">得分 {item.score}</span>
           )}
         </div>
       </div>
-      <div className="interview-list-links">
+      <div className="history-row-links">
         {entryLinksFor((item.status === 'completed' || item.status === 'in_progress' ? item.status : 'other') as EntryStatus).map((link) => (
           <Link
             key={link.label}
-            className="interview-inline-link"
+            className="history-link"
             to={
               link.to === ''
                 ? `/interviews/${item.id}`
@@ -96,28 +85,65 @@ export default function InterviewListPage() {
     };
   }, []);
 
+  // 概览：总数 / 已完成 / 平均分
+  const totalCount = interviews.length;
+  const completedCount = interviews.filter((i) => i.status === 'completed').length;
+  const avgScore = useMemo(() => {
+    const scored = interviews.filter((i) => i.score != null);
+    if (scored.length === 0) return null;
+    const sum = scored.reduce((acc, i) => acc + (i.score ?? 0), 0);
+    return Math.round(sum / scored.length);
+  }, [interviews]);
+
   return (
     <div className="interview-page">
-      <AppNav tab="interviews" />
-      <main className="interview-main">
-        <h1>我的面试</h1>
-        <p className="interview-subtitle">练习记录与历史回看</p>
+      <AppNav tab="history" />
+      <main className="interview-main interview-main--wide interview-main--history">
+        <div className="question-bank-head">
+          <div>
+            <h1>我的面试</h1>
+            <p className="interview-subtitle">练习记录与历史回看</p>
+          </div>
+          <Link className="question-bank-new-btn" to="/interviews/new">
+            ＋ 新建面试
+          </Link>
+        </div>
 
         {error && <p className="interview-error">{error}</p>}
+
+        {/* 概览卡 */}
+        <div className="question-bank-overview">
+          <div className="question-bank-overview-card">
+            <span className="question-bank-overview-num">{totalCount}</span>
+            <span className="question-bank-overview-label">面试总数</span>
+          </div>
+          <div className="question-bank-overview-card">
+            <span className="question-bank-overview-num question-bank-overview-num--blue">
+              {completedCount}
+            </span>
+            <span className="question-bank-overview-label">已完成场次</span>
+          </div>
+          <div className="question-bank-overview-card">
+            <span className="question-bank-overview-num question-bank-overview-num--blue">
+              {avgScore ?? '—'}
+            </span>
+            <span className="question-bank-overview-label">平均得分</span>
+          </div>
+        </div>
 
         {loading ? (
           <p className="interview-loading">加载中…</p>
         ) : interviews.length === 0 ? (
           <div className="interview-empty">
             <p>还没有面试记录，开始你的第一场练习吧。</p>
-            <Link className="interview-header-cta" to="/interviews/new">
+            <Link className="interview-submit" to="/interviews/new">
               新建面试
             </Link>
           </div>
         ) : (
-          <ul className="interview-list">
-            {interviews.map((item) => (
-              <InterviewRow key={item.id} item={item} />
+          <ul className="history-list">
+            {interviews.map((item, index) => (
+              <InterviewRow key={item.id} item={item} index={index} />
             ))}
           </ul>
         )}
