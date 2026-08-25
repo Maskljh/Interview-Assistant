@@ -6,6 +6,8 @@ backend/bin/
 .DS_Store
 .superpowers/
 .worktrees/
+.dsh/
+.zcode/
 
 # Local Go / npm build caches
 backend/.gopath/
