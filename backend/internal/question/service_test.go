@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -23,7 +24,7 @@ import (
 	"github.com/interview-assistant/backend/internal/ocr"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/sessionredis"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,7 +32,7 @@ func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -83,7 +84,6 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
 	question.RegisterRoutes(r, sqlDB, secret, llmClient, nil)
@@ -102,7 +102,6 @@ func testRouterWithOCR(t *testing.T, sqlDB *sql.DB, llmClient llm.Client, ocrCli
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
 	question.RegisterRoutes(r, sqlDB, secret, llmClient, ocrClient)
@@ -181,26 +180,30 @@ func (failingLLM) ChatJSON(ctx context.Context, system, user string, out any) er
 	return fmt.Errorf("classification failed")
 }
 
-func registerUser(t *testing.T, r *gin.Engine, email string) string {
+// registerUser inserts a user directly and returns an app JWT for that user
+// (email/password auth was removed in favor of WPS OAuth).
+func registerUser(t *testing.T, sqlDB *sql.DB, email string) string {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "password123",
-	})
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register %s status = %d, body = %s", email, w.Code, w.Body.String())
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
 	}
-	var resp struct {
-		Token string `json:"token"`
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	return resp.Token
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	return token
 }
 
 func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int64 {
@@ -340,7 +343,7 @@ func TestImportFromSessionCopiesMainQuestions(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-question-import@example.com")
+	token := registerUser(t, sqlDB, "test-question-import@example.com")
 	jobJD := "Backend engineer JD"
 	sessionID := createInterview(t, r, token, jobJD, "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
@@ -379,7 +382,7 @@ func TestImportEmptySessionReturns400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-question-empty@example.com")
+	token := registerUser(t, sqlDB, "test-question-empty@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -396,8 +399,8 @@ func TestImportForeignSessionReturns404(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	tokenA := registerUser(t, r, "test-question-foreign-a@example.com")
-	tokenB := registerUser(t, r, "test-question-foreign-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-question-foreign-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-question-foreign-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -416,7 +419,7 @@ func TestPatchStarAndFilter(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	token := registerUser(t, r, "test-question-patch@example.com")
+	token := registerUser(t, sqlDB, "test-question-patch@example.com")
 	jobJD := "Backend engineer JD"
 	sessionID := createInterview(t, r, token, jobJD, "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
@@ -465,8 +468,8 @@ func TestDeleteOwnQuestion(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	tokenA := registerUser(t, r, "test-question-delete-a@example.com")
-	tokenB := registerUser(t, r, "test-question-delete-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-question-delete-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-question-delete-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -508,8 +511,8 @@ func TestListIsolation(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	tokenA := registerUser(t, r, "test-question-isolate-a@example.com")
-	tokenB := registerUser(t, r, "test-question-isolate-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-question-isolate-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-question-isolate-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -537,7 +540,7 @@ func TestImportClassifiesDimensions(t *testing.T) {
 	r := testRouter(t, sqlDB, &classifyingLLM{out: classOut})
 
 	const email = "test-question-classify@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -570,7 +573,7 @@ func TestImportClassificationFailureKeepsQuestions(t *testing.T) {
 	r := testRouter(t, sqlDB, failingLLM{})
 
 	const email = "test-question-classify-fail@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -609,7 +612,7 @@ func TestListFiltersByDimension(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-listdim@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	userID := userIDByEmail(t, sqlDB, email)
 	insertBankQuestion(t, sqlDB, userID, "logic question", false, "logic")
 	insertBankQuestion(t, sqlDB, userID, "content question", false, "content")
@@ -628,9 +631,8 @@ func TestListFiltersByDimension(t *testing.T) {
 
 func TestFocusedStarredFirstAndLimit(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB, nil)
 
-	_ = registerUser(t, r, "test-question-focused@example.com")
+	_ = registerUser(t, sqlDB, "test-question-focused@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-question-focused@example.com")
 	id1 := insertBankQuestion(t, sqlDB, userID, "focused q1", true, "logic")
 	id2 := insertBankQuestion(t, sqlDB, userID, "focused q2", true, "logic")
@@ -682,7 +684,7 @@ func TestImportFromSessionIncludesFollowUps(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-followup@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -715,7 +717,7 @@ func TestImportFromSessionDeduplicates(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-dedupe@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -746,7 +748,7 @@ func TestImportBackfillsUserAnswer(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-backfill@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -776,7 +778,7 @@ func TestImportStoresUserAnswerForFollowUps(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-followup-ua@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "candidate", "answer", "A1")
@@ -803,7 +805,7 @@ func TestImportSkipsUnansweredQuestionBeforeFollowUp(t *testing.T) {
 	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-question-skip-unanswered@example.com"
-	token := registerUser(t, r, email)
+	token := registerUser(t, sqlDB, email)
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 	seedTurn(t, sqlDB, sessionID, 1, "interviewer", "question", "Q1")
 	seedTurn(t, sqlDB, sessionID, 2, "interviewer", "follow_up", "F1")
@@ -840,10 +842,9 @@ func (p *parseLLM) ChatJSON(ctx context.Context, system, user string, out any) e
 
 func TestImportConfirmedStoresImportSource(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-import-confirm@example.com"
-	_ = registerUser(t, r, email)
+	_ = registerUser(t, sqlDB, email)
 	userID := userIDByEmail(t, sqlDB, email)
 
 	svc := question.NewService(sqlDB, nil)
@@ -877,10 +878,9 @@ func TestImportConfirmedStoresImportSource(t *testing.T) {
 // transaction under strict SQL mode.
 func TestImportConfirmedTruncatesLongJobTag(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-import-confirm-tag@example.com"
-	_ = registerUser(t, r, email)
+	_ = registerUser(t, sqlDB, email)
 	userID := userIDByEmail(t, sqlDB, email)
 
 	svc := question.NewService(sqlDB, nil)
@@ -917,10 +917,9 @@ func TestImportConfirmedTruncatesLongJobTag(t *testing.T) {
 
 func TestImportConfirmedDeduplicates(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB, nil)
 
 	const email = "test-import-confirm-dedupe@example.com"
-	_ = registerUser(t, r, email)
+	_ = registerUser(t, sqlDB, email)
 	userID := userIDByEmail(t, sqlDB, email)
 
 	svc := question.NewService(sqlDB, nil)
@@ -954,10 +953,9 @@ func TestImportConfirmedClassifiesDimensions(t *testing.T) {
 		Question  string `json:"question"`
 		Dimension string `json:"dimension"`
 	}{Question: "导入分类题", Dimension: "content"})
-	r := testRouter(t, sqlDB, &classifyingLLM{out: classOut})
 
 	const email = "test-import-confirm-classify@example.com"
-	_ = registerUser(t, r, email)
+	_ = registerUser(t, sqlDB, email)
 	userID := userIDByEmail(t, sqlDB, email)
 
 	svc := question.NewService(sqlDB, &classifyingLLM{out: classOut})
@@ -1012,7 +1010,7 @@ func TestImportParseTextHandler(t *testing.T) {
 	}{Question: "解析题", Answer: "解析答案"})
 	r := testRouter(t, sqlDB, &svcOut)
 
-	token := registerUser(t, r, "test-import-parse@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse@example.com")
 	body, _ := json.Marshal(map[string]string{"text": "面经内容"})
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
@@ -1040,7 +1038,7 @@ func TestImportConfirmHandler(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-import-confirm-h@example.com")
+	token := registerUser(t, sqlDB, "test-import-confirm-h@example.com")
 	body, _ := json.Marshal(map[string]any{
 		"items": []map[string]any{
 			{"question": "接口入库题", "answer": "答", "reference": "出处"},
@@ -1095,7 +1093,7 @@ func TestImportParseImageMultipart(t *testing.T) {
 	// which the fake LLM turns into a structured item.
 	r := testRouterWithOCR(t, sqlDB, &svcOut, fakeOCR{})
 
-	token := registerUser(t, r, "test-import-parse-img@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse-img@example.com")
 	body, contentType := newMultipartImageBody(t, "shot.png", []byte(validPNG))
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))
@@ -1127,7 +1125,7 @@ func TestImportParseImageTooLarge400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
 
-	token := registerUser(t, r, "test-import-parse-img-big@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse-img-big@example.com")
 	// Exceeds maxImportImageBytes (5MB): content is a JPEG header so it would
 	// pass MIME validation if it ever got there; the size check must reject it.
 	content := append([]byte("\xff\xd8\xff\xe0"), bytes.Repeat([]byte{0x00}, 5<<20+1)...)
@@ -1152,7 +1150,7 @@ func TestImportParseImageOversizedMultipartBody400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
 
-	token := registerUser(t, r, "test-import-parse-img-body@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse-img-body@example.com")
 	// maxImportMultipartBodyBytes = 5MB + 1MB. A file of 6MB+1 plus multipart
 	// overhead pushes the whole body over the reader limit.
 	content := append([]byte("\xff\xd8\xff\xe0"), bytes.Repeat([]byte{0x00}, (5<<20)+(1<<20)+1)...)
@@ -1174,7 +1172,7 @@ func TestImportParseImageUnsupportedType400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouterWithOCR(t, sqlDB, nil, fakeOCR{})
 
-	token := registerUser(t, r, "test-import-parse-img-type@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse-img-type@example.com")
 	// Plain text bytes are not a supported image type.
 	body, contentType := newMultipartImageBody(t, "notes.txt", []byte("not an image"))
 	w := httptest.NewRecorder()
@@ -1195,7 +1193,7 @@ func TestImportParseImageOCRUnavailable502(t *testing.T) {
 	// No OCR client configured → ParseFromImage returns ErrOCRUnavailable.
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-import-parse-img-502@example.com")
+	token := registerUser(t, sqlDB, "test-import-parse-img-502@example.com")
 	body, contentType := newMultipartImageBody(t, "shot.png", []byte(validPNG))
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/questions/import/parse", bytes.NewReader(body))

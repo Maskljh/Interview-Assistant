@@ -1,27 +1,24 @@
 package profile_test
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/profile"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 )
 
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -56,38 +53,35 @@ func testRouter(t *testing.T, sqlDB *sql.DB) *gin.Engine {
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	return r
 }
 
 // registerUser creates a user through the user service HTTP routes and
 // returns the real userID and the auth token.
-func registerUser(t *testing.T, r *gin.Engine, email string) (int64, string) {
+// registerUser inserts a user directly and returns the real userID and an app
+// JWT for that user (email/password auth was removed in favor of WPS OAuth).
+func registerUser(t *testing.T, sqlDB *sql.DB, email string) (int64, string) {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "password123",
-	})
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register %s status = %d, body = %s", email, w.Code, w.Body.String())
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
 	}
-	var resp struct {
-		Token string `json:"token"`
-		User  struct {
-			ID int64 `json:"id"`
-		} `json:"user"`
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	if resp.User.ID == 0 {
-		t.Fatalf("register %s returned zero user id", email)
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
 	}
-	return resp.User.ID, resp.Token
+	return id, token
 }
 
 // fb is the feedback_json template used to seed completed sessions. It matches
@@ -130,8 +124,7 @@ func assertWeak(t *testing.T, p profile.Profile, want []string, wantSessions int
 
 func TestWeaknessesPicksBelowAverage(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-profile-belowavg@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-profile-belowavg@example.com")
 
 	// content is consistently ~52 vs 90 for the other three dims.
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 90, fmt.Sprintf(fb, 90, 90, 90, 50, 90), 3)
@@ -148,8 +141,7 @@ func TestWeaknessesPicksBelowAverage(t *testing.T) {
 
 func TestWeaknessesMaxTwoSortedByGap(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-profile-max2@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-profile-max2@example.com")
 
 	// Means 50, 60, 90, 90 -> average 72.5; gaps: expression 22.5, logic 12.5.
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 50, 60, 90, 90), 1)
@@ -163,8 +155,7 @@ func TestWeaknessesMaxTwoSortedByGap(t *testing.T) {
 
 func TestWeaknessesEmptyHistory(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-profile-empty@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-profile-empty@example.com")
 
 	p, err := profile.NewService(sqlDB).Weaknesses(context.Background(), userID, 5)
 	if err != nil {
@@ -175,8 +166,7 @@ func TestWeaknessesEmptyHistory(t *testing.T) {
 
 func TestWeaknessesSkipsUnparseableFeedback(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-profile-badjson@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-profile-badjson@example.com")
 
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 80, fmt.Sprintf(fb, 80, 50, 80, 90, 90), 2)
 
@@ -198,9 +188,8 @@ func TestWeaknessesSkipsUnparseableFeedback(t *testing.T) {
 
 func TestWeaknessesIsolation(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userA, _ := registerUser(t, r, "test-profile-iso-a@example.com")
-	userB, _ := registerUser(t, r, "test-profile-iso-b@example.com")
+	userA, _ := registerUser(t, sqlDB, "test-profile-iso-a@example.com")
+	userB, _ := registerUser(t, sqlDB, "test-profile-iso-b@example.com")
 
 	insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 50, 50, 90, 90), 1)
 	insertCompletedSession(t, sqlDB, userB, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 90, 90, 50, 50), 1)
@@ -223,8 +212,7 @@ func TestWeaknessesIsolation(t *testing.T) {
 
 func TestWeaknessesSessionWindow(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-profile-window@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-profile-window@example.com")
 
 	// 7 sessions, all content-weak.
 	for i := 0; i < 7; i++ {

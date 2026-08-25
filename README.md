@@ -61,7 +61,7 @@ Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自
 
 ## 2. 应用数据库迁移
 
-按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `014_job_title.sql`）：
+按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `015_wps_oauth.sql`）：
 
 - **全新数据库**：每个文件执行一次。
 - **已有数据库**：只应用当前 schema 之后新增的文件（例如 `013_resume_files.sql` 新增 `users.username` 列与 `resume_files` 表；`014_job_title.sql` 新增 `interview_sessions.job_title` 列与 `question_usage` 表）。
@@ -91,6 +91,12 @@ done
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `JWT_SECRET` | **是** | — | JWT 访问令牌签名密钥 |
+| `WPS_CLIENT_ID` | 是 | — | WPS 开放平台应用 ID（登录唯一方式，缺省时 WPS 登录返回 503） |
+| `WPS_CLIENT_SECRET` | 是 | — | WPS 开放平台应用密钥 |
+| `WPS_REDIRECT_URI` | 否 | `http://127.0.0.1:18365/callback` | WPS 授权回调地址（须与开放平台登记一致） |
+| `WPS_CALLBACK_ADDR` | 否 | `:18365` | WPS 回调专用监听端口 |
+| `WPS_SCOPE` | 否 | `kso.user_base.read` | WPS 授权范围 |
+| `WPS_FRONTEND_REDIRECT` | 否 | `http://localhost:5174` | 授权成功后前端跳转地址 |
 | `HTTP_ADDR` | 否 | `:8080` | API 监听地址（生产常用 `:9090`） |
 | `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；本机密码 `123456` 时改为 `root:123456@...`） |
 | `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址 |
@@ -109,7 +115,9 @@ done
 | `OSS_ACCESS_KEY_ID` | 否‡ | — | OSS AccessKey ID |
 | `OSS_ACCESS_KEY_SECRET` | 否‡ | — | OSS AccessKey Secret |
 
-\* 无 `DEEPSEEK_API_KEY`：开始面试返回 `502`、报告不可用；注册/登录/增删改查/归属校验仍正常。
+\* 无 `DEEPSEEK_API_KEY`：开始面试返回 `502`、报告不可用；增删改查/归属校验仍正常。
+
+**登录方式**：本应用已切换为 **WPS OAuth 唯一登录**（`/api/auth/wps/authorize|called|exchange`），账号密码注册/登录接口已移除。前端登录页只显示 WPS 授权入口；未配置 `WPS_CLIENT_ID/SECRET` 时授权接口返回 `503`。首次 WPS 登录会按 openid 自动创建用户。
 
 \*\* **必填**（语音是唯一作答方式）：缺阿里云语音变量时 `/api/speech/asr`、`/api/speech/tts` 返回 `502`，语音房间无法录音/播报，面试无法正常进行。
 
@@ -124,6 +132,9 @@ $env:JWT_SECRET = "dev-change-me"
 # 数据库在 3306；本机 MySQL 密码 123456：
 $env:MYSQL_DSN = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 $env:REDIS_ADDR = "127.0.0.1:6379"
+# WPS 登录（必填，唯一登录方式）：
+# $env:WPS_CLIENT_ID = "AK..."
+# $env:WPS_CLIENT_SECRET = "..."
 # 完整面试流需要：
 # $env:DEEPSEEK_API_KEY = "sk-..."
 # 语音作答（必填，唯一作答方式）：
@@ -141,6 +152,9 @@ $env:REDIS_ADDR = "127.0.0.1:6379"
 export JWT_SECRET=dev-change-me
 export MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
 export REDIS_ADDR=127.0.0.1:6379
+# WPS 登录（必填，唯一登录方式）：
+# export WPS_CLIENT_ID=AK...
+# export WPS_CLIENT_SECRET=...
 # export DEEPSEEK_API_KEY=sk-...
 # 语音作答（必填，唯一作答方式）：
 # export ALIYUN_ACCESS_KEY_ID=LTAI...
@@ -275,7 +289,7 @@ backend/                  Go API（Gin）、迁移、内部包
     expression/           表达分析（语速/口头禅/句长）
     upload/               OSS 服务端代理上传/读取（HMAC-SHA1 签名）
     ws/                   WebSocket 直播
-  migrations/             001..014 数据库迁移（014 = 岗位名 + 题库使用记录）
+  migrations/             001..015 数据库迁移（015 = WPS OAuth + username 补齐）
 frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis

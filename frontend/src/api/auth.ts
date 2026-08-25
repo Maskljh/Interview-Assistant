@@ -11,20 +11,27 @@ export interface AuthResponse {
   user: User;
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  const data = await fetchJSON<AuthResponse>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-    skipAuthRedirect: true,
-  });
-  setToken(data.token);
-  return data;
+export interface WPSAuthorizeResponse {
+  url: string;
 }
 
-export async function register(email: string, password: string): Promise<AuthResponse> {
-  const data = await fetchJSON<AuthResponse>('/api/auth/register', {
+/**
+ * 获取 WPS 授权页地址（后端生成 CSRF state 后返回），前端整页跳转。
+ */
+export async function authorizeWPS(): Promise<WPSAuthorizeResponse> {
+  return fetchJSON<WPSAuthorizeResponse>('/api/auth/wps/authorize', {
+    method: 'GET',
+    skipAuthRedirect: true,
+  });
+}
+
+/**
+ * 用 WPS 回调带回的一次性 oauth_code 换取应用 token 与用户信息。
+ */
+export async function exchangeWPS(code: string): Promise<AuthResponse> {
+  const data = await fetchJSON<AuthResponse>('/api/auth/wps/exchange', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ code }),
     skipAuthRedirect: true,
   });
   setToken(data.token);

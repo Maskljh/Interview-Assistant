@@ -12,18 +12,19 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/resume"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 )
 
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -51,28 +52,32 @@ func newRouter(t *testing.T, sqlDB *sql.DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	secret := "test-secret"
-	user.RegisterRoutes(r, sqlDB, secret)
+
 	resume.RegisterRoutes(r, sqlDB, secret, fakeUploader{})
 	return r
 }
 
-func register(t *testing.T, r *gin.Engine, email string) string {
+// register inserts a user directly and returns an app JWT for that user
+// (email/password auth was removed in favor of WPS OAuth).
+func register(t *testing.T, sqlDB *sql.DB, email string) string {
 	t.Helper()
-	w := httptest.NewRecorder()
-	body, _ := json.Marshal(map[string]string{"email": email, "password": "testpass123"})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register status = %d, body = %s", w.Code, w.Body.String())
+	secret := "test-secret"
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	var resp struct {
-		Token string `json:"token"`
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
 	}
-	return resp.Token
+	return token
 }
 
 func uploadResume(t *testing.T, r *gin.Engine, token, filename, text string) map[string]any {
@@ -102,7 +107,7 @@ func uploadResume(t *testing.T, r *gin.Engine, token, filename, text string) map
 func TestResumeUploadListRenameDelete(t *testing.T) {
 	sqlDB := testDB(t)
 	r := newRouter(t, sqlDB)
-	token := register(t, r, "test-resume-flow@example.com")
+	token := register(t, sqlDB, "test-resume-flow@example.com")
 
 	// 上传
 	item := uploadResume(t, r, token, "产品经理简历.pdf", "候选人：张三，3 年增长经验")
@@ -168,7 +173,7 @@ func TestResumeUploadListRenameDelete(t *testing.T) {
 func TestResumeLimitFive(t *testing.T) {
 	sqlDB := testDB(t)
 	r := newRouter(t, sqlDB)
-	token := register(t, r, "test-resume-limit@example.com")
+	token := register(t, sqlDB, "test-resume-limit@example.com")
 
 	for i := 1; i <= 5; i++ {
 		uploadResume(t, r, token, fmt.Sprintf("简历%d.pdf", i), fmt.Sprintf("文本%d", i))

@@ -7,7 +7,6 @@ import InterviewDetailPage from './pages/InterviewDetailPage';
 import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import QuestionBankPage from './pages/QuestionBankPage';
 import ReportPage from './pages/ReportPage';
 import TrendsPage from './pages/TrendsPage';
@@ -19,7 +18,6 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/"
             element={

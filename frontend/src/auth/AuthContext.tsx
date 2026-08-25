@@ -19,11 +19,9 @@ export interface User {
 
 interface AuthContextValue {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  /** 模拟登录：不请求后端，直接以访客身份进入主页（UI 还原阶段使用）。 */
-  loginAsGuest: () => void;
+  /** 用 WPS 回调带回的一次性 oauth_code 完成登录。 */
+  loginWithWPS: (code: string) => Promise<void>;
   /** 从后端刷新当前用户资料（用户名等）并更新本地存储。 */
   refreshUser: () => Promise<void>;
 }
@@ -52,14 +50,8 @@ function storeUser(user: User | null): void {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => readStoredUser());
 
-  const login = useCallback(async (email: string, password: string) => {
-    const data = await authApi.login(email, password);
-    setUser(data.user);
-    storeUser(data.user);
-  }, []);
-
-  const register = useCallback(async (email: string, password: string) => {
-    const data = await authApi.register(email, password);
+  const loginWithWPS = useCallback(async (code: string) => {
+    const data = await authApi.exchangeWPS(code);
     setUser(data.user);
     storeUser(data.user);
   }, []);
@@ -79,15 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const loginAsGuest = useCallback(() => {
-    setToken('guest-session');
-    storeUser({ id: 0, email: 'guest' });
-    setUser({ id: 0, email: 'guest' });
-  }, []);
-
   const value = useMemo(
-    () => ({ user, login, register, logout, loginAsGuest, refreshUser }),
-    [user, login, register, logout, loginAsGuest, refreshUser],
+    () => ({ user, logout, loginWithWPS, refreshUser }),
+    [user, logout, loginWithWPS, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

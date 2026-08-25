@@ -26,7 +26,7 @@ func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -73,7 +73,7 @@ func (fakeLLM) ChatJSON(ctx context.Context, system, user string, out any) error
 // Returns the session ID and a signed WS token.
 func seedInProgressSession(t *testing.T, svc *interview.Service, sqlDB *sql.DB, email string) (int64, string) {
 	t.Helper()
-	res, err := sqlDB.Exec(`INSERT INTO users (email, password_hash) VALUES (?, 'x')`, email)
+	res, err := sqlDB.Exec(`INSERT INTO users (email, password_hash, username) VALUES (?, 'x', '测试用户')`, email)
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}

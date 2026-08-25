@@ -12,6 +12,15 @@ type Config struct {
 	MySQLDSN              string
 	RedisAddr             string
 	JWTSecret             string
+	WPSClientID           string
+	WPSClientSecret       string
+	WPSRedirectURI        string
+	WPSCallbackAddr       string
+	WPSScope              string
+	WPSFrontendRedirect   string
+	WPSAuthEndpoint       string
+	WPSTokenEndpoint      string
+	WPSUserEndpoint       string
 	DeepSeekAPIKey        string
 	DeepSeekBaseURL       string
 	DeepSeekModel         string
@@ -38,6 +47,15 @@ func Load() (*Config, error) {
 		MySQLDSN:              getenv("MYSQL_DSN", "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"),
 		RedisAddr:             getenv("REDIS_ADDR", "127.0.0.1:6379"),
 		JWTSecret:             os.Getenv("JWT_SECRET"),
+		WPSClientID:           os.Getenv("WPS_CLIENT_ID"),
+		WPSClientSecret:       os.Getenv("WPS_CLIENT_SECRET"),
+		WPSRedirectURI:        getenv("WPS_REDIRECT_URI", "http://127.0.0.1:18365/callback"),
+		WPSCallbackAddr:       getenv("WPS_CALLBACK_ADDR", ":18365"),
+		WPSScope:              getenv("WPS_SCOPE", "kso.user_base.read"),
+		WPSFrontendRedirect:   getenv("WPS_FRONTEND_REDIRECT", "http://localhost:5174"),
+		WPSAuthEndpoint:       getenv("WPS_AUTH_ENDPOINT", "https://openapi.wps.cn/oauth2/auth"),
+		WPSTokenEndpoint:      getenv("WPS_TOKEN_ENDPOINT", "https://openapi.wps.cn/oauth2/token"),
+		WPSUserEndpoint:       getenv("WPS_USER_ENDPOINT", "https://openapi.wps.cn/v7/users/current"),
 		DeepSeekAPIKey:        os.Getenv("DEEPSEEK_API_KEY"),
 		DeepSeekBaseURL:       getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 		DeepSeekModel:         getenv("DEEPSEEK_MODEL", "deepseek-chat"),

@@ -44,15 +44,11 @@ export class ApiError extends Error {
 }
 
 const MESSAGE_MAP: Record<string, string> = {
-  'invalid credentials': '邮箱或密码错误',
-  'email already registered': '该邮箱已注册',
   'invalid email': '邮箱格式不正确',
-  'password must be at least 8 characters': '密码至少需要 8 位',
   'question generation failed': '题目生成失败，请检查服务器 AI 配置后重试',
   'not found': '未找到相关内容',
   'report not available': '报告尚未生成',
   'speech service unavailable': '语音服务暂不可用',
-  'digital human service unavailable': '数字人服务暂不可用',
 };
 
 const STATUS_MESSAGES: Record<number, string> = {
@@ -133,8 +129,7 @@ export async function fetchJSON<T>(
         : 'Unauthorized';
     if (
       !skipAuthRedirect &&
-      !window.location.pathname.startsWith('/login') &&
-      !window.location.pathname.startsWith('/register')
+      !window.location.pathname.startsWith('/login')
     ) {
       window.location.href = '/login';
     }

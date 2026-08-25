@@ -8,8 +8,6 @@ import { toUserMessage } from './client';
 
 describe('toUserMessage', () => {
   it('maps known backend error strings to Chinese', () => {
-    expect(toUserMessage(400, 'invalid credentials')).toBe('邮箱或密码错误');
-    expect(toUserMessage(400, 'email already registered')).toBe('该邮箱已注册');
     expect(toUserMessage(502, 'question generation failed')).toBe(
       '题目生成失败，请检查服务器 AI 配置后重试',
     );
@@ -17,14 +15,12 @@ describe('toUserMessage', () => {
     expect(toUserMessage(409, 'report not available')).toBe('报告尚未生成');
     expect(toUserMessage(503, 'speech service unavailable')).toBe('语音服务暂不可用');
     expect(toUserMessage(400, 'invalid email')).toBe('邮箱格式不正确');
-    expect(toUserMessage(400, 'password must be at least 8 characters')).toBe(
-      '密码至少需要 8 位',
-    );
-    expect(toUserMessage(503, 'digital human service unavailable')).toBe('数字人服务暂不可用');
   });
 
   it('normalizes whitespace and case before mapping', () => {
-    expect(toUserMessage(400, '  Invalid Credentials ')).toBe('邮箱或密码错误');
+    expect(toUserMessage(400, '  Question Generation Failed ')).toBe(
+      '题目生成失败，请检查服务器 AI 配置后重试',
+    );
   });
 
   it('falls back to status-based Chinese messages', () => {

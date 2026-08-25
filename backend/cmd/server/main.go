@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"net/url"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,7 @@ import (
 	"github.com/interview-assistant/backend/internal/speech"
 	"github.com/interview-assistant/backend/internal/upload"
 	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/wpsoauth"
 	"github.com/interview-assistant/backend/internal/ws"
 	"github.com/redis/go-redis/v9"
 )
@@ -101,6 +103,30 @@ func main() {
 	r.Use(corsMiddleware())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	user.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
+	wpsHandler := wpsoauth.RegisterRoutes(r, sqlDB, cfg.JWTSecret, wpsoauth.Config{
+		ClientID:         cfg.WPSClientID,
+		ClientSecret:     cfg.WPSClientSecret,
+		RedirectURI:      cfg.WPSRedirectURI,
+		Scope:            cfg.WPSScope,
+		FrontendRedirect: cfg.WPSFrontendRedirect,
+		AuthEndpoint:     cfg.WPSAuthEndpoint,
+		TokenEndpoint:    cfg.WPSTokenEndpoint,
+		UserEndpoint:     cfg.WPSUserEndpoint,
+	}, redisClient)
+
+	// WPS 回调专用监听：开放平台登记的回调地址是 127.0.0.1:18365/callback
+	// （与 mini-wps-comate 一致），在主业务端口之外单独监听该端口处理回调。
+	if cfg.WPSCallbackAddr != "" && cfg.WPSCallbackAddr != cfg.HTTPAddr {
+		callbackEngine := gin.New()
+		wpsHandler.RegisterCallbackListener(callbackEngine)
+		go func(addr string) {
+			log.Printf("WPS callback listener on %s", addr)
+			if err := callbackEngine.Run(addr); err != nil && err != http.ErrServerClosed {
+				log.Printf("wps callback listener stopped: %v", err)
+			}
+		}(cfg.WPSCallbackAddr)
+	}
+
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, ocrClient)
 	ocr.RegisterRoutes(r, cfg.JWTSecret, ocrClient)

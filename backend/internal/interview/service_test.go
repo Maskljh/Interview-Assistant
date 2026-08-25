@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -20,7 +21,7 @@ import (
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/profile"
 	"github.com/interview-assistant/backend/internal/sessionredis"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -28,7 +29,7 @@ func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -78,7 +79,6 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) *gin.Engine {
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
 	return r
@@ -149,26 +149,30 @@ func lastOutboundType(msgs []interview.OutboundMessage) string {
 	return ""
 }
 
-func registerUser(t *testing.T, r *gin.Engine, email string) string {
+// registerUser inserts a user directly and returns an app JWT for that user
+// (email/password auth was removed in favor of WPS OAuth).
+func registerUser(t *testing.T, sqlDB *sql.DB, email string) string {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "password123",
-	})
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register %s status = %d, body = %s", email, w.Code, w.Body.String())
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
 	}
-	var resp struct {
-		Token string `json:"token"`
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	return resp.Token
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	return token
 }
 
 func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int64 {
@@ -198,8 +202,8 @@ func TestGetForeignSessionReturnsNotFound(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	tokenA := registerUser(t, r, "test-interview-a@example.com")
-	tokenB := registerUser(t, r, "test-interview-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-interview-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-interview-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -215,7 +219,7 @@ func TestGetForeignSessionReturnsNotFound(t *testing.T) {
 func TestCreateRequiresJDAndValidMode(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-validate@example.com")
+	token := registerUser(t, sqlDB, "test-interview-validate@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd": "",
@@ -248,7 +252,7 @@ func TestStartPersistsQuestions(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	token := registerUser(t, r, "test-interview-start@example.com")
+	token := registerUser(t, sqlDB, "test-interview-start@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -287,8 +291,8 @@ func TestStartRejectsNonOwner(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
 
-	tokenA := registerUser(t, r, "test-interview-start-a@example.com")
-	tokenB := registerUser(t, r, "test-interview-start-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-interview-start-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-interview-start-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -366,7 +370,7 @@ func TestStartLLMFailureKeepsDraft(t *testing.T) {
 			sqlDB := testDB(t)
 			r := testRouter(t, sqlDB, tc.llm)
 
-			token := registerUser(t, r, tc.email)
+			token := registerUser(t, sqlDB, tc.email)
 			sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 			w := httptest.NewRecorder()
@@ -388,7 +392,7 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 	ctx := context.Background()
 
 	r := testRouter(t, sqlDB, fakeAlwaysFollowUpLLM(6))
-	token := registerUser(t, r, "test-interview-followup-cap@example.com")
+	token := registerUser(t, sqlDB, "test-interview-followup-cap@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -441,7 +445,7 @@ func TestSkipQuestionAdvancesAndEnds(t *testing.T) {
 	ctx := context.Background()
 
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
-	token := registerUser(t, r, "test-interview-skip@example.com")
+	token := registerUser(t, sqlDB, "test-interview-skip@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -506,7 +510,7 @@ func TestSkipQuestionEndsOnLastQuestion(t *testing.T) {
 	ctx := context.Background()
 
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
-	token := registerUser(t, r, "test-interview-skip-end@example.com")
+	token := registerUser(t, sqlDB, "test-interview-skip-end@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -597,7 +601,7 @@ func TestCreateFromBankOrdersQuestions(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-interview-frombank-order@example.com")
+	token := registerUser(t, sqlDB, "test-interview-frombank-order@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-order@example.com")
 
 	idA := insertBankQuestion(t, sqlDB, userID, "text-a")
@@ -637,7 +641,7 @@ func TestCreateFromBankOrdersQuestions(t *testing.T) {
 func TestCreateFromBankEmptyIDs400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-frombank-empty@example.com")
+	token := registerUser(t, sqlDB, "test-interview-frombank-empty@example.com")
 
 	body, _ := json.Marshal(map[string]any{
 		"question_ids": []int64{},
@@ -658,8 +662,8 @@ func TestCreateFromBankForeignID404(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
 
-	_ = registerUser(t, r, "test-interview-frombank-foreign-a@example.com")
-	tokenB := registerUser(t, r, "test-interview-frombank-foreign-b@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-frombank-foreign-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-interview-frombank-foreign-b@example.com")
 	userIDA := userIDByEmail(t, sqlDB, "test-interview-frombank-foreign-a@example.com")
 	bankID := insertBankQuestion(t, sqlDB, userIDA, "foreign question")
 
@@ -684,7 +688,7 @@ func TestCreateFromBankBeginLiveWorks(t *testing.T) {
 	ctx := context.Background()
 	r := testRouter(t, sqlDB, nil)
 
-	token := registerUser(t, r, "test-interview-frombank-begin@example.com")
+	token := registerUser(t, sqlDB, "test-interview-frombank-begin@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-begin@example.com")
 
 	idA := insertBankQuestion(t, sqlDB, userID, "Q1?")
@@ -706,7 +710,7 @@ func TestCreateFromBankBeginLiveWorks(t *testing.T) {
 func TestCreateDefaultsInputModeVoice(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-inputmode-default@example.com")
+	token := registerUser(t, sqlDB, "test-interview-inputmode-default@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd": "Backend engineer JD",
@@ -742,7 +746,7 @@ func TestCreateDefaultsInputModeVoice(t *testing.T) {
 func TestCreateForcesVoiceWhenClientSendsText(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-inputmode-forced@example.com")
+	token := registerUser(t, sqlDB, "test-interview-inputmode-forced@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd":     "Backend engineer JD",
@@ -777,7 +781,7 @@ func TestCreateForcesVoiceWhenClientSendsText(t *testing.T) {
 func TestCreateVoiceInputMode(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-inputmode-voice@example.com")
+	token := registerUser(t, sqlDB, "test-interview-inputmode-voice@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd":     "Backend engineer JD",
@@ -812,7 +816,7 @@ func TestCreateVoiceInputMode(t *testing.T) {
 func TestCreateInvalidInputMode400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-inputmode-invalid@example.com")
+	token := registerUser(t, sqlDB, "test-interview-inputmode-invalid@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd":     "Backend engineer JD",
@@ -832,7 +836,7 @@ func TestCreateInvalidInputMode400(t *testing.T) {
 func TestCreateFromBankVoiceInputMode(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-frombank-voice@example.com")
+	token := registerUser(t, sqlDB, "test-interview-frombank-voice@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-voice@example.com")
 	bankID := insertBankQuestion(t, sqlDB, userID, "voice question?")
 
@@ -872,7 +876,7 @@ func TestBeginLiveIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	r := testRouter(t, sqlDB, fakeQuestionsLLM(6))
-	token := registerUser(t, r, "test-interview-begin-idempotent@example.com")
+	token := registerUser(t, sqlDB, "test-interview-begin-idempotent@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -957,8 +961,7 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-weak-inject@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-weak-inject@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-weak-inject@example.com")
 
 	capLLM := &capturingLLM{}
@@ -987,8 +990,7 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-weak-none@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-weak-none@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-weak-none@example.com")
 
 	capLLM := &capturingLLM{}
@@ -1014,8 +1016,7 @@ func TestCreatePersistsPersona(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-persona-persist@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-persona-persist@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-persist@example.com")
 
 	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
@@ -1036,8 +1037,7 @@ func TestCreateDefaultsStandardPersona(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-persona-default@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-persona-default@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-default@example.com")
 
 	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
@@ -1054,8 +1054,7 @@ func TestCreateRejectsInvalidPersona(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-persona-invalid@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-persona-invalid@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-invalid@example.com")
 
 	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
@@ -1069,8 +1068,7 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-persona-start@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-persona-start@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-persona-start@example.com")
 
 	capLLM := &capturingLLM{}
@@ -1093,7 +1091,7 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 func TestListReturnsPersona(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-persona-list@example.com")
+	token := registerUser(t, sqlDB, "test-interview-persona-list@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd": "Backend engineer JD",
@@ -1133,7 +1131,7 @@ func TestListReturnsPersona(t *testing.T) {
 func TestCreateRejectsInvalidPersonaHTTP(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)
-	token := registerUser(t, r, "test-interview-persona-badhttp@example.com")
+	token := registerUser(t, sqlDB, "test-interview-persona-badhttp@example.com")
 
 	body, _ := json.Marshal(map[string]string{
 		"job_jd":  "Backend engineer JD",
@@ -1154,8 +1152,7 @@ func TestCreatePersistsPrecheckGaps(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-gaps-persist@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-gaps-persist@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-persist@example.com")
 
 	svc := interview.NewService(sqlDB, fakeQuestionsLLM(5), store)
@@ -1176,8 +1173,7 @@ func TestStartInjectsPrecheckGaps(t *testing.T) {
 	sqlDB := testDB(t)
 	store := testStore(t)
 	ctx := context.Background()
-	r := testRouter(t, sqlDB, nil)
-	_ = registerUser(t, r, "test-interview-gaps-start@example.com")
+	_ = registerUser(t, sqlDB, "test-interview-gaps-start@example.com")
 	userID := userIDByEmail(t, sqlDB, "test-interview-gaps-start@example.com")
 
 	capLLM := &capturingLLM{}

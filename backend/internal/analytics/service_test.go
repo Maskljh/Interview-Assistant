@@ -1,27 +1,24 @@
 package analytics_test
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/interview-assistant/backend/internal/analytics"
 	"github.com/interview-assistant/backend/internal/db"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 )
 
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -56,38 +53,35 @@ func testRouter(t *testing.T, sqlDB *sql.DB) *gin.Engine {
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	return r
 }
 
 // registerUser creates a user through the user service HTTP routes and
 // returns the real userID and the auth token.
-func registerUser(t *testing.T, r *gin.Engine, email string) (int64, string) {
+// registerUser inserts a user directly and returns the real userID and an app
+// JWT for that user (email/password auth was removed in favor of WPS OAuth).
+func registerUser(t *testing.T, sqlDB *sql.DB, email string) (int64, string) {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "password123",
-	})
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register %s status = %d, body = %s", email, w.Code, w.Body.String())
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
 	}
-	var resp struct {
-		Token string `json:"token"`
-		User  struct {
-			ID int64 `json:"id"`
-		} `json:"user"`
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	if resp.User.ID == 0 {
-		t.Fatalf("register %s returned zero user id", email)
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
 	}
-	return resp.User.ID, resp.Token
+	return id, token
 }
 
 // fb is the feedback_json template used to seed completed sessions. It matches
@@ -134,8 +128,7 @@ func insertVariantSession(t *testing.T, db *sql.DB, userID int64, jobJD, mode, s
 
 func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-summary@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-summary@example.com")
 
 	s1 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 72, fmt.Sprintf(fb, 72, 70, 75, 80, 85), 3)
 	s2 := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 78, 82, 90), 2)
@@ -209,8 +202,7 @@ func TestTrendsComputesSummaryAndOrder(t *testing.T) {
 
 func TestTrendsSkipsNonCompletedAndNullScore(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-skipstatus@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-skipstatus@example.com")
 
 	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
 
@@ -239,8 +231,7 @@ func TestTrendsSkipsNonCompletedAndNullScore(t *testing.T) {
 
 func TestTrendsSkipsBadFeedbackJSON(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-badjson@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-badjson@example.com")
 
 	valid := insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 2)
 
@@ -274,8 +265,7 @@ func TestTrendsSkipsBadFeedbackJSON(t *testing.T) {
 
 func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-filter@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-filter@example.com")
 
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)
@@ -323,9 +313,8 @@ func TestTrendsFiltersByJobTagAndMode(t *testing.T) {
 
 func TestTrendsIsolation(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userA, _ := registerUser(t, r, "test-trends-iso-a@example.com")
-	userB, _ := registerUser(t, r, "test-trends-iso-b@example.com")
+	userA, _ := registerUser(t, sqlDB, "test-trends-iso-a@example.com")
+	userB, _ := registerUser(t, sqlDB, "test-trends-iso-b@example.com")
 
 	a1 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "technical", 60, fmt.Sprintf(fb, 60, 60, 60, 60, 60), 2)
 	a2 := insertCompletedSession(t, sqlDB, userA, "Backend Engineer JD", "mixed", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 1)
@@ -358,8 +347,7 @@ func TestTrendsIsolation(t *testing.T) {
 
 func TestTrendsEmpty(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-empty@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-empty@example.com")
 
 	tr, err := analytics.NewService(sqlDB).Trends(context.Background(), userID, "", "", "")
 	if err != nil {
@@ -388,8 +376,7 @@ func TestTrendsEmpty(t *testing.T) {
 // filter, and that each point carries its source kind.
 func TestTrendsFiltersBySource(t *testing.T) {
 	sqlDB := testDB(t)
-	r := testRouter(t, sqlDB)
-	userID, _ := registerUser(t, r, "test-trends-source@example.com")
+	userID, _ := registerUser(t, sqlDB, "test-trends-source@example.com")
 
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "technical", 70, fmt.Sprintf(fb, 70, 70, 70, 70, 70), 3)
 	insertCompletedSession(t, sqlDB, userID, "Backend Engineer JD", "behavioral", 80, fmt.Sprintf(fb, 80, 80, 80, 80, 80), 2)

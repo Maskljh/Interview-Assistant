@@ -19,7 +19,7 @@ import (
 	"github.com/interview-assistant/backend/internal/interview"
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/sessionredis"
-	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/auth"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -27,7 +27,7 @@ func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		dsn = "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
+		dsn = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 	}
 	sqlDB, err := db.Open(dsn)
 	if err != nil {
@@ -136,33 +136,36 @@ func testRouter(t *testing.T, sqlDB *sql.DB, llmClient llm.Client) (*gin.Engine,
 	}
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	user.RegisterRoutes(r, sqlDB, secret)
 	svc := interview.NewService(sqlDB, llmClient, store)
 	interview.RegisterRoutes(r, secret, svc)
 	analysis.RegisterRoutes(r, sqlDB, secret, llmClient, "test-model")
 	return r, svc
 }
 
-func registerUser(t *testing.T, r *gin.Engine, email string) string {
+// registerUser inserts a user directly and returns an app JWT for that user
+// (email/password auth was removed in favor of WPS OAuth).
+func registerUser(t *testing.T, sqlDB *sql.DB, email string) string {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "password123",
-	})
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("register %s status = %d, body = %s", email, w.Code, w.Body.String())
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "test-secret"
 	}
-	var resp struct {
-		Token string `json:"token"`
+	res, err := sqlDB.Exec(
+		"INSERT INTO users (email, password_hash, username) VALUES (?, 'not-a-real-hash', ?)",
+		email, "测试用户",
+	)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", email, err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode register: %v", err)
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
 	}
-	return resp.Token
+	token, err := auth.IssueToken(secret, id, email, time.Hour)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	return token
 }
 
 func createInterview(t *testing.T, r *gin.Engine, token, jobJD, mode string) int64 {
@@ -243,7 +246,7 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
 	svc.SetEvaluator(analysisSvc)
 
-	token := registerUser(t, r, "test-analysis-finish@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-finish@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -315,7 +318,7 @@ func TestFinishEvaluateFailureCompletedAvailableFalse(t *testing.T) {
 	r, svc := testRouter(t, sqlDB, llmClient)
 	svc.SetEvaluator(failingEvaluator{})
 
-	token := registerUser(t, r, "test-analysis-eval-fail@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-eval-fail@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -381,7 +384,7 @@ func TestGetReportAvailableFalseWhenNoFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
 	r, _ := testRouter(t, sqlDB, llmClient)
-	token := registerUser(t, r, "test-analysis-no-fb@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-no-fb@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	_, err := sqlDB.Exec(
@@ -414,7 +417,7 @@ func TestGetReportReturnsFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
 	r, _ := testRouter(t, sqlDB, llmClient)
-	token := registerUser(t, r, "test-analysis-get-fb@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-get-fb@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	fb := fakeEvaluateFeedback()
@@ -447,7 +450,7 @@ func TestRetryReportGeneratesFeedback(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
 	r, _ := testRouter(t, sqlDB, llmClient)
-	token := registerUser(t, r, "test-analysis-retry@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-retry@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	_, err := sqlDB.Exec(
@@ -495,8 +498,8 @@ func TestGetReportForeignSessionReturnsNotFound(t *testing.T) {
 	sqlDB := testDB(t)
 	llmClient := fakeFullLLM(5, "finish")
 	r, _ := testRouter(t, sqlDB, llmClient)
-	tokenA := registerUser(t, r, "test-analysis-foreign-a@example.com")
-	tokenB := registerUser(t, r, "test-analysis-foreign-b@example.com")
+	tokenA := registerUser(t, sqlDB, "test-analysis-foreign-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-analysis-foreign-b@example.com")
 	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
 
 	_, _ = sqlDB.Exec(`UPDATE interview_sessions SET status = 'completed', ended_at = NOW() WHERE id = ?`, sessionID)
@@ -533,7 +536,7 @@ func TestEvaluateNoAnswersReturnsLowScoreWithoutLLM(t *testing.T) {
 	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
 	svc.SetEvaluator(analysisSvc)
 
-	token := registerUser(t, r, "test-analysis-no-answer@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-no-answer@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
@@ -599,7 +602,7 @@ func TestEvaluateTooBriefAnswersReturnsLowScore(t *testing.T) {
 	analysisSvc := analysis.NewService(sqlDB, llmClient, "test-model")
 	svc.SetEvaluator(analysisSvc)
 
-	token := registerUser(t, r, "test-analysis-too-brief@example.com")
+	token := registerUser(t, sqlDB, "test-analysis-too-brief@example.com")
 	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
 
 	w := httptest.NewRecorder()
