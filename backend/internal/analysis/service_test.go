@@ -265,12 +265,16 @@ func TestFinishWritesFeedbackJSON(t *testing.T) {
 	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
 		t.Fatalf("BeginLive: %v", err)
 	}
+	// 第一题为自我介绍开场题：答完进入第一道正式题；再答正式题后 LLM 返回 finish 结束会话。
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "我是候选人，下面开始正式作答。", nil); err != nil {
+		t.Fatalf("HandleAnswer intro: %v", err)
+	}
 	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "I have solid experience building backend services with Go and SQL, and I can explain my approach to designing scalable APIs in detail.", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
 	for _, m := range msgs {
-		if m.Type == "done" {
+		if m.Type == "done" || m.Type == "closing" {
 			break
 		}
 	}
@@ -336,6 +340,10 @@ func TestFinishEvaluateFailureCompletedAvailableFalse(t *testing.T) {
 
 	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
 		t.Fatalf("BeginLive: %v", err)
+	}
+	// 第一题为自我介绍开场题：答完进入第一道正式题；再答正式题后 LLM 返回 finish 结束会话。
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "我是候选人。", nil); err != nil {
+		t.Fatalf("HandleAnswer intro: %v", err)
 	}
 	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "my answer", nil); err != nil {
 		t.Fatalf("HandleAnswer: %v", err)

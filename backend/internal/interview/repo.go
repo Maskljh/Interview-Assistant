@@ -68,7 +68,7 @@ func (r *Repo) GetByID(id int64) (*Session, error) {
 
 func (r *Repo) ListQuestions(sessionID int64) ([]Question, error) {
 	rows, err := r.db.Query(
-		`SELECT id, session_id, seq, question, intent, asked
+		`SELECT id, session_id, seq, question, kind, intent, asked
 		 FROM interview_questions
 		 WHERE session_id = ?
 		 ORDER BY seq`,
@@ -84,7 +84,7 @@ func (r *Repo) ListQuestions(sessionID int64) ([]Question, error) {
 		var q Question
 		var intent sql.NullString
 		var asked int
-		if err := rows.Scan(&q.ID, &q.SessionID, &q.Seq, &q.Question, &intent, &asked); err != nil {
+		if err := rows.Scan(&q.ID, &q.SessionID, &q.Seq, &q.Question, &q.Kind, &intent, &asked); err != nil {
 			return nil, err
 		}
 		if intent.Valid {
@@ -236,7 +236,7 @@ func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	return text, nil
 }
 
-func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD, jobTitle string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, texts []string, cameraEnabled bool) (*Session, []Question, error) {
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD, jobTitle string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, items []QuestionInput, cameraEnabled bool) (*Session, []Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, nil, err
@@ -256,10 +256,10 @@ func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD, jobTitle string, re
 		return nil, nil, err
 	}
 
-	for i, text := range texts {
+	for _, item := range items {
 		if _, err := tx.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent, asked) VALUES (?, ?, ?, NULL, 0)`,
-			sessionID, i+1, text,
+			`INSERT INTO interview_questions (session_id, seq, question, kind, intent, asked) VALUES (?, ?, ?, ?, NULL, 0)`,
+			sessionID, item.Seq, item.Question, item.Kind,
 		); err != nil {
 			return nil, nil, err
 		}
@@ -294,11 +294,7 @@ func (r *Repo) RecordQuestionUsage(userID int64, questionIDs []int64, sessionID 
 	}
 }
 
-func (r *Repo) StartSession(sessionID int64, questions []struct {
-	Seq      int
-	Question string
-	Intent   string
-}) ([]Question, error) {
+func (r *Repo) StartSession(sessionID int64, questions []QuestionInput) ([]Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
@@ -313,9 +309,13 @@ func (r *Repo) StartSession(sessionID int64, questions []struct {
 		if q.Intent != "" {
 			intentPtr = &q.Intent
 		}
+		kind := q.Kind
+		if kind == "" {
+			kind = QuestionKindGenerated
+		}
 		if _, err := tx.Exec(
-			`INSERT INTO interview_questions (session_id, seq, question, intent, asked) VALUES (?, ?, ?, ?, 0)`,
-			sessionID, q.Seq, q.Question, nullString(intentPtr),
+			`INSERT INTO interview_questions (session_id, seq, question, kind, intent, asked) VALUES (?, ?, ?, ?, ?, 0)`,
+			sessionID, q.Seq, q.Question, kind, nullString(intentPtr),
 		); err != nil {
 			return nil, err
 		}
@@ -367,7 +367,7 @@ func (r *Repo) MarkQuestionAsked(sessionID int64, questionSeq int) error {
 
 func (r *Repo) GetQuestionByIndex(sessionID int64, index int) (*Question, error) {
 	row := r.db.QueryRow(
-		`SELECT id, session_id, seq, question, intent, asked
+		`SELECT id, session_id, seq, question, kind, intent, asked
 		 FROM interview_questions
 		 WHERE session_id = ?
 		 ORDER BY seq
@@ -377,7 +377,7 @@ func (r *Repo) GetQuestionByIndex(sessionID int64, index int) (*Question, error)
 	var q Question
 	var intent sql.NullString
 	var asked int
-	if err := row.Scan(&q.ID, &q.SessionID, &q.Seq, &q.Question, &intent, &asked); err != nil {
+	if err := row.Scan(&q.ID, &q.SessionID, &q.Seq, &q.Question, &q.Kind, &intent, &asked); err != nil {
 		return nil, err
 	}
 	if intent.Valid {

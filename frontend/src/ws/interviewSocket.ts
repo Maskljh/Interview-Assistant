@@ -5,7 +5,8 @@ export type ServerMsgType =
   | 'question'
   | 'follow_up'
   | 'status'
-  | 'done';
+  | 'done'
+  | 'closing';
 
 export interface ServerMsg {
   type: ServerMsgType;

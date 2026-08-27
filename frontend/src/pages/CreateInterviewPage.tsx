@@ -80,6 +80,10 @@ export default function CreateInterviewPage() {
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // 题库勾选上限与推荐范围（需求确认：硬上限 10，推荐 5~8）。
+  const MAX_BANK_QUESTIONS = 10;
+  const BANK_RECOMMEND_MIN = 5;
+  const BANK_RECOMMEND_MAX = 8;
   // 已选题目详情（用于卡片内列表展示）
   const selectedQuestions = useMemo(
     () =>
@@ -88,6 +92,12 @@ export default function CreateInterviewPage() {
         .filter((q): q is Question => Boolean(q)),
     [selectedIds, bankQuestions],
   );
+  // 单项目提示：勾选的题目都来自同一个 job_tag 时，提示 AI 会补充简历其他项目/经历的题目。
+  const selectedJobTags = useMemo(
+    () => Array.from(new Set(selectedQuestions.map((q) => q.job_tag).filter(Boolean))),
+    [selectedQuestions],
+  );
+  const singleProjectHint = selectedIds.length > 0 && selectedJobTags.length === 1;
 
   // ── 通用 ──
   const [error, setError] = useState('');
@@ -397,6 +407,10 @@ export default function CreateInterviewPage() {
   }
 
   function toggleQuestion(id: number) {
+    if (!selectedIds.includes(id) && selectedIds.length >= MAX_BANK_QUESTIONS) {
+      setBankError(`最多选择 ${MAX_BANK_QUESTIONS} 题，请先取消部分已选题目`);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
@@ -413,6 +427,10 @@ export default function CreateInterviewPage() {
     const trimmedJd = jobJd.trim();
     if (!trimmedJd) {
       setError('请填写岗位信息');
+      return;
+    }
+    if (!resumeText.trim()) {
+      setError('请上传或填写简历');
       return;
     }
     setLoading(true);
@@ -553,7 +571,9 @@ export default function CreateInterviewPage() {
                 <h2 className="prep-new-card-title">选择题库</h2>
                 <div className="prep-new-card-actions">
                   {selectedIds.length > 0 && (
-                    <span className="prep-new-bank-count">共 {selectedIds.length} 题</span>
+                    <span className="prep-new-bank-count">
+                      共 {selectedIds.length} 题 · 建议 {BANK_RECOMMEND_MIN}~{BANK_RECOMMEND_MAX} 题
+                    </span>
                   )}
                   <button
                     type="button"
@@ -566,6 +586,7 @@ export default function CreateInterviewPage() {
               </div>
               <div className="prep-new-bank-area">
                 {selectedIds.length > 0 ? (
+                  <>
                   <div className="prep-new-bank-list">
                     {selectedQuestions.map((q, i) => (
                       <div key={q.id} className="prep-new-bank-item">
@@ -582,6 +603,12 @@ export default function CreateInterviewPage() {
                       </div>
                     ))}
                   </div>
+                  {singleProjectHint && (
+                    <p className="prep-new-bank-hint">
+                      所选题目都来自同一项目，AI 将补充简历中其他项目/经历的题目。
+                    </p>
+                  )}
+                  </>
                 ) : (
                   <p className="prep-new-bank-empty">暂无题目，请导入</p>
                 )}

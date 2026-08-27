@@ -98,6 +98,10 @@ func fakeQuestionsLLM(n int) llm.Client {
 			title.Title = "后端工程师"
 			return nil
 		}
+		if opening, ok := out.(*llm.OpeningOut); ok {
+			opening.Opening = "开场白"
+			return nil
+		}
 		gen, ok := out.(*llm.GenQuestionsOut)
 		if !ok {
 			return fmt.Errorf("unexpected out type")
@@ -120,6 +124,10 @@ func fakeAlwaysFollowUpLLM(n int) llm.Client {
 			title.Title = "后端工程师"
 			return nil
 		}
+		if opening, ok := out.(*llm.OpeningOut); ok {
+			opening.Opening = "开场白"
+			return nil
+		}
 		if gen, ok := out.(*llm.GenQuestionsOut); ok {
 			gen.Questions = make([]llm.GenQuestion, n)
 			for i := 0; i < n; i++ {
@@ -137,6 +145,54 @@ func fakeAlwaysFollowUpLLM(n int) llm.Client {
 			return nil
 		}
 		return fmt.Errorf("unexpected out type %T", out)
+	}}
+}
+
+func fakeFinishLLM(n int) llm.Client {
+	return fakeLLM{fn: func(system, user string, out any) error {
+		if title, ok := out.(*llm.JobTitleOut); ok {
+			title.Title = "后端工程师"
+			return nil
+		}
+		if opening, ok := out.(*llm.OpeningOut); ok {
+			opening.Opening = "开场白"
+			return nil
+		}
+		if gen, ok := out.(*llm.GenQuestionsOut); ok {
+			gen.Questions = make([]llm.GenQuestion, n)
+			for i := 0; i < n; i++ {
+				gen.Questions[i] = llm.GenQuestion{Seq: i + 1, Question: fmt.Sprintf("Question %d?", i+1), Intent: "assessment"}
+			}
+			return nil
+		}
+		if decide, ok := out.(*llm.DecideNextOut); ok {
+			decide.Action = "finish"
+			return nil
+		}
+		return fmt.Errorf("unexpected out type %T", out)
+	}}
+}
+
+func fakeFromBankLLM() llm.Client {
+	return fakeLLM{fn: func(system, user string, out any) error {
+		switch v := out.(type) {
+		case *llm.JobTitleOut:
+			v.Title = "后端工程师"
+		case *llm.OpeningOut:
+			v.Opening = "开场白"
+		case *llm.ResumeCompletionOut:
+			v.Questions = []struct {
+				Question string `json:"question"`
+			}{
+				{Question: "补全题-1"},
+				{Question: "补全题-2"},
+			}
+		case *llm.DecideNextOut:
+			v.Action = "finish"
+		default:
+			return fmt.Errorf("unexpected out type %T", out)
+		}
+		return nil
 	}}
 }
 
@@ -268,6 +324,7 @@ func TestStartPersistsQuestions(t *testing.T) {
 		Questions []struct {
 			Seq      int    `json:"seq"`
 			Question string `json:"question"`
+			Kind     string `json:"kind"`
 			Asked    bool   `json:"asked"`
 		} `json:"questions"`
 	}
@@ -277,12 +334,19 @@ func TestStartPersistsQuestions(t *testing.T) {
 	if resp.Status != "ready" {
 		t.Fatalf("status = %q, want ready", resp.Status)
 	}
-	if len(resp.Questions) != 6 {
-		t.Fatalf("len(questions) = %d, want 6", len(resp.Questions))
+	// 完整面试：seq1 为自我介绍开场题，其后是 6 道 AI 生成题。
+	if len(resp.Questions) != 7 {
+		t.Fatalf("len(questions) = %d, want 7", len(resp.Questions))
 	}
-	for _, q := range resp.Questions {
+	if resp.Questions[0].Seq != 1 || resp.Questions[0].Question != "开场白" || resp.Questions[0].Kind != "self_intro" {
+		t.Fatalf("first question = %+v, want self-intro opening", resp.Questions[0])
+	}
+	for i, q := range resp.Questions {
 		if q.Asked {
 			t.Fatalf("question seq %d should not be asked", q.Seq)
+		}
+		if i > 0 && q.Seq != i+1 {
+			t.Fatalf("question seq = %d, want %d", q.Seq, i+1)
 		}
 	}
 }
@@ -414,7 +478,16 @@ func TestHandleAnswerForcesNextAfterFollowUpCap(t *testing.T) {
 		t.Fatalf("BeginLive: %v", err)
 	}
 
-	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "first answer", nil)
+	// 第一题是自我介绍开场题：答完后直接进入第一道正式题（不追问）。
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "自我介绍", nil)
+	if err != nil {
+		t.Fatalf("HandleAnswer intro: %v", err)
+	}
+	if lastOutboundType(msgs) != "question" {
+		t.Fatalf("intro answer last type = %q, want question (advance to first real question)", lastOutboundType(msgs))
+	}
+
+	msgs, err = svc.HandleAnswer(ctx, userID, sessionID, "first answer", nil)
 	if err != nil {
 		t.Fatalf("HandleAnswer 1: %v", err)
 	}
@@ -528,8 +601,8 @@ func TestSkipQuestionEndsOnLastQuestion(t *testing.T) {
 		t.Fatalf("BeginLive: %v", err)
 	}
 
-	// Skip through the remaining 5 questions; the 6th skip ends the session.
-	for i := 0; i < 5; i++ {
+	// 会话含自我介绍开场题 + 6 道正式题共 7 题；跳过 6 次到达最后一道正式题，第 7 次跳过结束会话。
+	for i := 0; i < 6; i++ {
 		if _, err := svc.SkipQuestion(ctx, userID, sessionID); err != nil {
 			t.Fatalf("SkipQuestion %d: %v", i+1, err)
 		}
@@ -617,20 +690,37 @@ func TestCreateFromBankOrdersQuestions(t *testing.T) {
 		t.Fatalf("job_jd = %v, want 题库练习（3题）", resp["job_jd"])
 	}
 	questions, ok := resp["questions"].([]any)
-	if !ok || len(questions) != 3 {
-		t.Fatalf("questions = %v, want 3 items", resp["questions"])
+	if !ok || len(questions) != 4 {
+		t.Fatalf("questions = %v, want 4 items (self-intro + 3 bank)", resp["questions"])
 	}
-	wantTexts := []string{"text-c", "text-a", "text-b"}
-	for i, q := range questions {
-		qm, ok := q.(map[string]any)
+	// seq1 必须为自我介绍开场题（无 LLM 时回退固定文案）。
+	first, ok := questions[0].(map[string]any)
+	if !ok {
+		t.Fatalf("question 0: unexpected type %T", questions[0])
+	}
+	if int(first["seq"].(float64)) != 1 || first["question"] != llm.DefaultOpening || first["kind"] != "self_intro" {
+		t.Fatalf("question 0 = %v, want self-intro opening", first)
+	}
+	if first["asked"].(bool) {
+		t.Fatalf("question 0 should not be asked")
+	}
+	// 其余 3 道为打乱后的题库题（顺序随机，但必须全部出现且 kind=bank）。
+	want := map[string]bool{"text-a": false, "text-b": false, "text-c": false}
+	for i := 1; i < len(questions); i++ {
+		qm, ok := questions[i].(map[string]any)
 		if !ok {
-			t.Fatalf("question %d: unexpected type %T", i, q)
+			t.Fatalf("question %d: unexpected type %T", i, questions[i])
 		}
 		if int(qm["seq"].(float64)) != i+1 {
 			t.Fatalf("question %d seq = %v, want %d", i, qm["seq"], i+1)
 		}
-		if qm["question"] != wantTexts[i] {
-			t.Fatalf("question %d text = %v, want %q", i, qm["question"], wantTexts[i])
+		text, _ := qm["question"].(string)
+		if _, ok := want[text]; !ok || want[text] {
+			t.Fatalf("unexpected or duplicate bank question %q", text)
+		}
+		want[text] = true
+		if qm["kind"] != "bank" {
+			t.Fatalf("question %d kind = %v, want bank", i, qm["kind"])
 		}
 		if qm["asked"].(bool) {
 			t.Fatalf("question %d should not be asked", i)
@@ -755,6 +845,151 @@ func TestCreateFromBankBeginLiveWorks(t *testing.T) {
 	}
 	if lastOutboundType(msgs) != "question" {
 		t.Fatalf("BeginLive last type = %q, want question", lastOutboundType(msgs))
+	}
+}
+
+func TestNaturalFinishEmitsClosing(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeFinishLLM(5))
+	token := registerUser(t, sqlDB, "test-interview-closing@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/interviews/%d/start", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	svc := interview.NewService(sqlDB, fakeFinishLLM(5), store)
+	userID := userIDByEmail(t, sqlDB, "test-interview-closing@example.com")
+
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+	// 自我介绍开场题：答完进入第一道正式题。
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "我是候选人，下面开始正式作答。", nil); err != nil {
+		t.Fatalf("HandleAnswer intro: %v", err)
+	}
+	// 答第一道正式题：LLM 返回 finish → 自然完成 → 发 closing 结束语。
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "answer", nil)
+	if err != nil {
+		t.Fatalf("HandleAnswer: %v", err)
+	}
+	if got := lastOutboundType(msgs); got != "closing" {
+		t.Fatalf("natural finish last type = %q, want closing", got)
+	}
+
+	// 会话已 completed，且最后一个 interviewer turn 为 closing 结束语。
+	session, _, turns, err := svc.Get(ctx, userID, sessionID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if session.Status != interview.StatusCompleted {
+		t.Fatalf("status = %q, want completed", session.Status)
+	}
+	if len(turns) == 0 || turns[len(turns)-1].Kind != "closing" {
+		t.Fatalf("last turn = %+v, want closing kind", turns)
+	}
+	if turns[len(turns)-1].Content != llm.DefaultClosing {
+		t.Fatalf("closing content = %q, want %q", turns[len(turns)-1].Content, llm.DefaultClosing)
+	}
+}
+
+func TestCreateFromBankInterleavesGenerated(t *testing.T) {
+	sqlDB := testDB(t)
+	store := testStore(t)
+	ctx := context.Background()
+
+	r := testRouter(t, sqlDB, fakeFromBankLLM())
+	token := registerUser(t, sqlDB, "test-interview-frombank-gen@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-gen@example.com")
+
+	ids := make([]int64, 5)
+	for i := range ids {
+		ids[i] = insertBankQuestion(t, sqlDB, userID, fmt.Sprintf("bank-%d", i))
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"question_ids": ids,
+		"mode":         "mixed",
+		"job_jd":       "资深后端工程师岗位描述",
+		"resume_text":  "候选人简历文本：主导过电商中台项目与推荐系统",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("from-bank status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode from-bank: %v", err)
+	}
+	questions, _ := resp["questions"].([]any)
+	// 总题数 = 1 自我介绍 + 5 题库 + 2 补全 = 8
+	if len(questions) != 8 {
+		t.Fatalf("len(questions) = %d, want 8", len(questions))
+	}
+	first := questions[0].(map[string]any)
+	if int(first["seq"].(float64)) != 1 || first["question"] != "开场白" || first["kind"] != "self_intro" {
+		t.Fatalf("first question = %v, want self-intro opening", first)
+	}
+	// 其余为打乱后的题库题与补全题穿插（kind 正确、不重复、题库题全部出现）
+	var bank, gen []string
+	seen := map[string]bool{}
+	for i := 1; i < len(questions); i++ {
+		qm := questions[i].(map[string]any)
+		if int(qm["seq"].(float64)) != i+1 {
+			t.Fatalf("seq = %v at index %d, want %d", qm["seq"], i, i+1)
+		}
+		text, _ := qm["question"].(string)
+		if seen[text] {
+			t.Fatalf("duplicate question %q", text)
+		}
+		seen[text] = true
+		switch qm["kind"] {
+		case "bank":
+			bank = append(bank, text)
+		case "generated":
+			gen = append(gen, text)
+		default:
+			t.Fatalf("unexpected kind %v at index %d", qm["kind"], i)
+		}
+	}
+	if len(bank) != 5 {
+		t.Fatalf("bank count = %d, want 5", len(bank))
+	}
+	if len(gen) != 2 || gen[0] != "补全题-1" || gen[1] != "补全题-2" {
+		t.Fatalf("generated = %v, want the two resume-completion questions", gen)
+	}
+	for i := 0; i < 5; i++ {
+		if !seen[fmt.Sprintf("bank-%d", i)] {
+			t.Fatalf("bank question bank-%d missing", i)
+		}
+	}
+
+	// 直播完整流程：自我介绍 → 正式题 → 自然完成发 closing。
+	sessionID := int64(resp["id"].(float64))
+	svc := interview.NewService(sqlDB, fakeFromBankLLM(), store)
+	if _, err := svc.BeginLive(ctx, userID, sessionID); err != nil {
+		t.Fatalf("BeginLive: %v", err)
+	}
+	if _, err := svc.HandleAnswer(ctx, userID, sessionID, "我是候选人。", nil); err != nil {
+		t.Fatalf("HandleAnswer intro: %v", err)
+	}
+	msgs, err := svc.HandleAnswer(ctx, userID, sessionID, "answer", nil)
+	if err != nil {
+		t.Fatalf("HandleAnswer: %v", err)
+	}
+	if got := lastOutboundType(msgs); got != "closing" {
+		t.Fatalf("natural finish last type = %q, want closing", got)
 	}
 }
 
@@ -988,6 +1223,10 @@ func (c *capturingLLM) ChatJSON(ctx context.Context, system, user string, out an
 		return nil
 	}
 	c.userPrompts = append(c.userPrompts, user)
+	if opening, ok := out.(*llm.OpeningOut); ok {
+		opening.Opening = "开场白"
+		return nil
+	}
 	gen, ok := out.(*llm.GenQuestionsOut)
 	if !ok {
 		return fmt.Errorf("unexpected out type")
@@ -1027,8 +1266,9 @@ func TestStartInjectsWeakDimensions(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	if len(capLLM.userPrompts) != 1 {
-		t.Fatalf("captured %d user prompts, want 1", len(capLLM.userPrompts))
+	// 两个调用：正式题生成（先） + 开场白生成（后）；断言正式题提示词携带定向关注指令。
+	if len(capLLM.userPrompts) != 2 {
+		t.Fatalf("captured %d user prompts, want 2", len(capLLM.userPrompts))
 	}
 	prompt := capLLM.userPrompts[0]
 	if !strings.Contains(prompt, "Targeted focus") || !strings.Contains(prompt, "逻辑结构") {
@@ -1055,8 +1295,9 @@ func TestStartNoInjectionWithoutProvider(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	if len(capLLM.userPrompts) != 1 {
-		t.Fatalf("captured %d user prompts, want 1", len(capLLM.userPrompts))
+	// 两个调用：正式题生成（先） + 开场白生成（后）；断言正式题提示词不携带定向关注指令。
+	if len(capLLM.userPrompts) != 2 {
+		t.Fatalf("captured %d user prompts, want 2", len(capLLM.userPrompts))
 	}
 	if strings.Contains(capLLM.userPrompts[0], "Targeted focus") {
 		t.Fatalf("prompt should not contain targeted focus: %s", capLLM.userPrompts[0])
@@ -1131,8 +1372,9 @@ func TestStartUsesPersonaInPrompt(t *testing.T) {
 	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if len(capLLM.userPrompts) != 1 {
-		t.Fatalf("captured %d prompts, want 1", len(capLLM.userPrompts))
+	// 两个调用：正式题生成（先） + 开场白生成（后）；断言正式题提示词携带 persona 指令。
+	if len(capLLM.userPrompts) != 2 {
+		t.Fatalf("captured %d prompts, want 2", len(capLLM.userPrompts))
 	}
 	if !strings.Contains(capLLM.userPrompts[0], "warm and supportive HR interviewer") {
 		t.Fatalf("prompt missing persona directive: %s", capLLM.userPrompts[0])
@@ -1236,8 +1478,9 @@ func TestStartInjectsPrecheckGaps(t *testing.T) {
 	if _, _, err := svc.Start(ctx, userID, session.ID); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if len(capLLM.userPrompts) != 1 {
-		t.Fatalf("captured %d prompts, want 1", len(capLLM.userPrompts))
+	// 两个调用：正式题生成（先） + 开场白生成（后）；断言正式题提示词携带 precheck 指令。
+	if len(capLLM.userPrompts) != 2 {
+		t.Fatalf("captured %d prompts, want 2", len(capLLM.userPrompts))
 	}
 	if !strings.Contains(capLLM.userPrompts[0], "Targeted focus (pre-check):") || !strings.Contains(capLLM.userPrompts[0], "缺少K8s经验") {
 		t.Fatalf("prompt missing precheck directive: %s", capLLM.userPrompts[0])

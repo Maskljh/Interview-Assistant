@@ -4,8 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import CreateInterviewPage from './CreateInterviewPage';
 import { AuthProvider } from '../auth/AuthContext';
 import { recognizeImage } from '../api/ocr';
+import { listQuestions } from '../api/questions';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 vi.mock('../api/ocr', () => ({
   recognizeImage: vi.fn(async () => ({ text: '识别出的 JD 文本' })),
@@ -146,5 +146,97 @@ describe('CreateInterviewPage 面试间准备页', () => {
     const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
     fireEvent.click(bankItem!);
     expect(bankItem?.className).toContain('is-selected');
+  });
+
+  it('未填简历时开始面试被拦截并提示', () => {
+    renderPage();
+    // 先填 JD，否则先报「请填写岗位信息」
+    openJdModal();
+    const ta = screen.getByLabelText('岗位 JD') as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: '高级产品经理\n1. 负责增长方向...' } });
+    fireEvent.click(screen.getByRole('button', { name: '完成' }));
+    // 未填简历直接开始 → 提示上传简历
+    fireEvent.click(screen.getByRole('button', { name: /开始模拟面试/ }));
+    expect(screen.getByText('请上传或填写简历')).toBeTruthy();
+  });
+
+  it('题库勾选超过 10 题被阻止并提示', async () => {
+    vi.mocked(listQuestions).mockResolvedValueOnce(
+      Array.from({ length: 11 }, (_, i) => ({
+        id: i + 1,
+        question: `题目 ${i + 1}`,
+        answer: null,
+        user_answer: null,
+        source_session_id: null,
+        reference: null,
+        source: 'import',
+        starred: false,
+        usage_count: 0,
+        created_at: '2026-01-01',
+        job_tag: '电商项目',
+        dimension: 'logic',
+      })),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    await waitFor(() => expect(screen.getByText('题目 1')).toBeTruthy());
+    // 勾选前 10 题
+    for (let i = 1; i <= 10; i++) {
+      fireEvent.click(screen.getByText(`题目 ${i}`).closest('.bank-pick-item')!);
+    }
+    // 第 11 题被阻止并提示
+    fireEvent.click(screen.getByText('题目 11').closest('.bank-pick-item')!);
+    expect(screen.getByText(/最多选择 10 题/)).toBeTruthy();
+    expect(screen.getByText(/共 10 题/)).toBeTruthy();
+  });
+
+  it('已选列表显示推荐范围提示', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    await waitFor(() => expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy());
+    const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
+    fireEvent.click(bankItem!);
+    fireEvent.click(screen.getByRole('button', { name: '完成' }));
+    expect(screen.getByText(/建议 5~8 题/)).toBeTruthy();
+  });
+
+  it('所选题目来自同一项目时显示补全提示', async () => {
+    vi.mocked(listQuestions).mockResolvedValueOnce([
+      {
+        id: 1,
+        question: '电商项目A',
+        answer: null,
+        user_answer: null,
+        source_session_id: null,
+        reference: null,
+        source: 'import',
+        starred: false,
+        usage_count: 0,
+        created_at: '2026-01-01',
+        job_tag: '电商项目',
+        dimension: 'logic',
+      },
+      {
+        id: 2,
+        question: '电商项目B',
+        answer: null,
+        user_answer: null,
+        source_session_id: null,
+        reference: null,
+        source: 'import',
+        starred: false,
+        usage_count: 0,
+        created_at: '2026-01-01',
+        job_tag: '电商项目',
+        dimension: 'content',
+      },
+    ]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    await waitFor(() => expect(screen.getByText('电商项目A')).toBeTruthy());
+    fireEvent.click(screen.getByText('电商项目A').closest('.bank-pick-item')!);
+    fireEvent.click(screen.getByText('电商项目B').closest('.bank-pick-item')!);
+    fireEvent.click(screen.getByRole('button', { name: '完成' }));
+    expect(screen.getByText(/所选题目都来自同一项目/)).toBeTruthy();
   });
 });

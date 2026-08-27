@@ -118,8 +118,12 @@ func (s *Service) evaluate(ctx context.Context, sessionID int64) (*Feedback, err
 	for _, t := range turns {
 		turnCtx = append(turnCtx, llm.TurnContext{Role: t.Role, Kind: t.Kind, Content: t.Content})
 	}
+	// 自我介绍开场题不作为评分题目（回答仅作为对话上下文），避免拉低/干扰维度评分。
 	var qCtx []llm.QuestionContext
 	for _, q := range questions {
+		if q.Kind == interview.QuestionKindSelfIntro {
+			continue
+		}
 		intent := ""
 		if q.Intent != nil {
 			intent = *q.Intent

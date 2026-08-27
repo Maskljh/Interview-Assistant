@@ -82,6 +82,7 @@ type questionResponse struct {
 	ID       int64   `json:"id"`
 	Seq      int     `json:"seq"`
 	Question string  `json:"question"`
+	Kind     string  `json:"kind"`
 	Intent   *string `json:"intent"`
 	Asked    bool    `json:"asked"`
 }
@@ -302,6 +303,7 @@ func toSessionResponse(session *Session, questions []Question, turns []Turn) ses
 			ID:       q.ID,
 			Seq:      q.Seq,
 			Question: q.Question,
+			Kind:     q.Kind,
 			Intent:   q.Intent,
 			Asked:    q.Asked,
 		})

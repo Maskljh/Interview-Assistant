@@ -454,3 +454,92 @@ Rules:
 func ParseImportUser(text string) string {
 	return fmt.Sprintf("Extract the interview questions from this real interview transcript (面经).\n\nSource:\n%s", text)
 }
+
+type OpeningOut struct {
+	Opening string `json:"opening"`
+}
+
+// GenerateOpeningSystem instructs the model to write the customized opening
+// speech that greets the candidate, binds to the target role and resume, and
+// invites a ~2-minute self-introduction.
+func GenerateOpeningSystem() string {
+	return `You are a friendly professional interviewer starting a mock interview. Write the interviewer's opening speech.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"opening":"..."}
+
+Rules:
+- Must include: a greeting; a brief reference to the target role (position/direction from the job description); a brief reference to one highlight from the resume if one is provided; then a natural transition inviting the candidate to give a self-introduction of about 2 minutes covering education, work experience, and the most impressive project
+- Keep it concise and spoken in a natural, warm but professional tone (roughly 100 to 180 Chinese characters)
+- Do NOT ask any actual interview questions in the opening; only invite the self-introduction
+- The opening must be written in Chinese (Simplified). Do not use any other language`
+}
+
+// GenerateOpeningUser builds the user prompt for the opening speech.
+func GenerateOpeningUser(jobJD, resume string) string {
+	if strings.TrimSpace(resume) == "" {
+		return fmt.Sprintf(`Write the opening speech for this interview session.
+
+Job description:
+%s
+
+No resume was provided; omit any resume highlight reference.`, jobJD)
+	}
+	return fmt.Sprintf(`Write the opening speech for this interview session.
+
+Job description:
+%s
+
+Resume:
+%s`, jobJD, resume)
+}
+
+// DefaultOpening is the fixed fallback opening used when LLM generation fails
+// (e.g. no API key, transient error). It never blocks session creation.
+const DefaultOpening = "你好，欢迎参加本次模拟面试。请先做一个简单的自我介绍，时间大约两分钟，可以从教育背景、工作经历，以及你最想分享的一个项目亮点说起。"
+
+// DefaultClosing is the fixed short closing speech broadcast when an interview
+// completes naturally (all planned questions answered).
+const DefaultClosing = "今天的面试到这里就结束了，感谢你的参与和配合。面试报告稍后生成，请留意查看。"
+
+type ResumeCompletionOut struct {
+	Questions []struct {
+		Question string `json:"question"`
+	} `json:"questions"`
+}
+
+// GenerateResumeCompletionSystem instructs the model to generate a small number
+// of resume-completion questions that probe resume content NOT covered by the
+// selected bank questions.
+func GenerateResumeCompletionSystem() string {
+	return `You are an expert interviewer. Generate a few extra questions to complete a question set for a mock interview, focusing on the candidate's resume.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"questions":[{"question":"..."}]}
+
+Rules:
+- Generate 2 to 3 questions (prefer 2-3, at least 1, at most 3)
+- Focus on projects, experiences, or highlights in the resume that are NOT already covered by the selected bank questions — especially other projects or experiences the bank questions do not touch
+- Each question must be concrete and grounded in the resume content; do not invent experiences that are not in the resume
+- Avoid duplicating or overlapping the selected bank questions
+- All question text must be written in Chinese (Simplified). Do not use any other language`
+}
+
+// GenerateResumeCompletionUser builds the user prompt for resume-completion
+// question generation.
+func GenerateResumeCompletionUser(jobJD, resume string, selectedBankQuestions []string) string {
+	var bank strings.Builder
+	for i, q := range selectedBankQuestions {
+		fmt.Fprintf(&bank, "%d. %s\n", i+1, q)
+	}
+	return fmt.Sprintf(`Generate resume-completion interview questions for this session.
+
+Job description:
+%s
+
+Resume:
+%s
+
+Already selected bank questions (do not duplicate or overlap these):
+%s`, jobJD, resume, bank.String())
+}

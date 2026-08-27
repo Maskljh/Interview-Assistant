@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ type OutboundMessage struct {
 
 type SessionNotifier interface {
 	BroadcastDone(sessionID int64)
+	BroadcastClosing(sessionID int64, closing string)
 }
 
 type SessionEvaluator interface {
@@ -190,7 +192,17 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	if !isPlainPractice {
 		title = s.deriveJobTitle(ctx, jobJD, resume)
 	}
-	session, questions, err := s.repo.CreateReadyWithQuestions(userID, jobJD, title, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
+
+	// 完整面试编排：seq 1 为定制开场+自我介绍；题库题打乱后与 2~3 道简历补全
+	// 生成题均匀穿插；开场与补全题均为 best-effort，失败不阻塞建会话。
+	opening := llm.DefaultOpening
+	if !isPlainPractice {
+		opening = s.buildOpening(ctx, jobJD, resume)
+	}
+	generated := s.buildResumeCompletionQuestions(ctx, jobJD, resume, texts)
+	items := buildQuestionItems(opening, texts, generated, rand.New(rand.NewSource(time.Now().UnixNano())))
+
+	session, questions, err := s.repo.CreateReadyWithQuestions(userID, jobJD, title, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, items, cameraEnabled)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -198,6 +210,94 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 	// usage counts. Best-effort: never blocks session creation.
 	s.repo.RecordQuestionUsage(userID, questionIDs, session.ID)
 	return session, questions, nil
+}
+
+// buildOpening generates the customized opening speech (greeting + role binding
+// + resume highlight + self-introduction invitation of ~2 minutes). Any failure
+// falls back to a fixed generic opening; it never blocks session creation.
+func (s *Service) buildOpening(ctx context.Context, jobJD string, resume *string) string {
+	if s.llm == nil {
+		return llm.DefaultOpening
+	}
+	resumeText := ""
+	if resume != nil {
+		resumeText = *resume
+	}
+	var out llm.OpeningOut
+	if err := s.llm.ChatJSON(ctx, llm.GenerateOpeningSystem(), llm.GenerateOpeningUser(jobJD, resumeText), &out); err != nil {
+		return llm.DefaultOpening
+	}
+	if strings.TrimSpace(out.Opening) == "" {
+		return llm.DefaultOpening
+	}
+	return strings.TrimSpace(out.Opening)
+}
+
+// buildResumeCompletionQuestions generates 2~3 resume-completion questions that
+// probe resume content NOT covered by the selected bank questions. Any failure
+// returns nil (0 generated questions) and never blocks session creation.
+func (s *Service) buildResumeCompletionQuestions(ctx context.Context, jobJD string, resume *string, bankTexts []string) []string {
+	if s.llm == nil {
+		return nil
+	}
+	resumeText := ""
+	if resume != nil {
+		resumeText = *resume
+	}
+	if strings.TrimSpace(resumeText) == "" {
+		return nil
+	}
+	var out llm.ResumeCompletionOut
+	if err := s.llm.ChatJSON(ctx, llm.GenerateResumeCompletionSystem(), llm.GenerateResumeCompletionUser(jobJD, resumeText, bankTexts), &out); err != nil {
+		return nil
+	}
+	var qs []string
+	for _, q := range out.Questions {
+		if t := strings.TrimSpace(q.Question); t != "" {
+			qs = append(qs, t)
+		}
+	}
+	return qs
+}
+
+// buildQuestionItems assembles the full question sequence for a from-bank
+// session: seq 1 is the self-introduction opening, followed by the shuffled bank
+// questions interleaved with the resume-completion questions spread evenly.
+func buildQuestionItems(opening string, bankTexts, generatedTexts []string, rnd *rand.Rand) []QuestionInput {
+	// Fisher-Yates shuffle of the bank questions (rand nil = keep order, for tests).
+	shuffled := make([]string, len(bankTexts))
+	copy(shuffled, bankTexts)
+	if rnd != nil {
+		rnd.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+	}
+
+	items := make([]QuestionInput, 0, 1+len(shuffled)+len(generatedTexts))
+	seq := 1
+	items = append(items, QuestionInput{Seq: seq, Question: opening, Kind: QuestionKindSelfIntro})
+	seq++
+
+	if len(generatedTexts) == 0 {
+		for _, q := range shuffled {
+			items = append(items, QuestionInput{Seq: seq, Question: q, Kind: QuestionKindBank})
+			seq++
+		}
+		return items
+	}
+
+	// Spread generated questions evenly among the shuffled bank questions:
+	// the k-th generated question is inserted right after ceil((k+1)*len(bank)/(gen+1))-th bank question.
+	step := float64(len(shuffled)) / float64(len(generatedTexts)+1)
+	genIdx := 0
+	for i, q := range shuffled {
+		items = append(items, QuestionInput{Seq: seq, Question: q, Kind: QuestionKindBank})
+		seq++
+		for genIdx < len(generatedTexts) && float64(i+1) >= float64(genIdx+1)*step {
+			items = append(items, QuestionInput{Seq: seq, Question: generatedTexts[genIdx], Kind: QuestionKindGenerated})
+			seq++
+			genIdx++
+		}
+	}
+	return items
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]Session, error) {
@@ -274,17 +374,12 @@ func (s *Service) Start(ctx context.Context, userID, sessionID int64) (*Session,
 		return nil, nil, ErrLLMFailure
 	}
 
-	toInsert := make([]struct {
-		Seq      int
-		Question string
-		Intent   string
-	}, len(out.Questions))
+	// 完整面试编排：seq 1 为定制开场+自我介绍；其后为 AI 生成的正式题。
+	toInsert := make([]QuestionInput, 0, len(out.Questions)+1)
+	opening := s.buildOpening(ctx, session.JobJD, session.ResumeText)
+	toInsert = append(toInsert, QuestionInput{Seq: 1, Question: opening, Kind: QuestionKindSelfIntro})
 	for i, q := range out.Questions {
-		toInsert[i] = struct {
-			Seq      int
-			Question string
-			Intent   string
-		}{Seq: q.Seq, Question: q.Question, Intent: q.Intent}
+		toInsert = append(toInsert, QuestionInput{Seq: i + 2, Question: q.Question, Kind: QuestionKindGenerated, Intent: q.Intent})
 	}
 
 	questions, err := s.repo.StartSession(sessionID, toInsert)
@@ -427,7 +522,8 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 	case "next_question":
 		nextIndex := state.QuestionIndex + 1
 		if nextIndex >= total {
-			doneMsgs, err := s.finishSession(ctx, sessionID, state)
+			// 自然完成：播报简短结束语后进报告（ForceEnd/跳过仍走 finishSession 直接 done）。
+			doneMsgs, err := s.finishSessionWithClosing(ctx, sessionID, state)
 			if err != nil {
 				return nil, err
 			}
@@ -456,7 +552,8 @@ func (s *Service) HandleAnswer(ctx context.Context, userID, sessionID int64, con
 		return msgs, nil
 
 	case "finish":
-		doneMsgs, err := s.finishSession(ctx, sessionID, state)
+		// 自然完成：播报简短结束语后进报告。
+		doneMsgs, err := s.finishSessionWithClosing(ctx, sessionID, state)
 		if err != nil {
 			return nil, err
 		}
@@ -596,7 +693,31 @@ func (s *Service) finishSession(ctx context.Context, sessionID int64, state *ses
 	return []OutboundMessage{{Type: "done"}}, nil
 }
 
+// finishSessionWithClosing ends a naturally-completed session: it appends a
+// short closing speech as the final interviewer turn, completes the session
+// (starting background evaluation), and delivers the closing to the client so
+// the frontend can play it before navigating to the report. ForceEnd and
+// skip-on-last keep using finishSession (straight to done).
+func (s *Service) finishSessionWithClosing(ctx context.Context, sessionID int64, state *sessionredis.LiveState) ([]OutboundMessage, error) {
+	if _, err := s.repo.AppendTurn(sessionID, "interviewer", "closing", llm.DefaultClosing, nil); err != nil {
+		return nil, err
+	}
+	if err := s.Finish(ctx, sessionID); err != nil {
+		return nil, err
+	}
+	if s.notify != nil {
+		s.notify.BroadcastClosing(sessionID, llm.DefaultClosing)
+		return nil, nil
+	}
+	return []OutboundMessage{{Type: "closing", Content: llm.DefaultClosing}}, nil
+}
+
 func (s *Service) decideNext(ctx context.Context, session *Session, questions []Question, state *sessionredis.LiveState, answer string) (DecideResult, error) {
+	// 自我介绍开场题：不追问、不结束，答完直接进入第一道正式题（不调 LLM）。
+	if questions[state.QuestionIndex].Kind == QuestionKindSelfIntro {
+		return DecideResult{Action: "next_question", Reason: "self-introduction complete"}, nil
+	}
+
 	var modelAction DecideAction
 	var modelFollowUp string
 

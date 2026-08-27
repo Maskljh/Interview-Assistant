@@ -16,8 +16,8 @@ import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import CameraPreview from '../components/CameraPreview';
 
-// 面试总时长（固定 30 分钟；与创建页「面试时长 · 30 分钟」一致）。
-const SESSION_TOTAL_MS = 30 * 60 * 1000;
+// 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
+const ESTIMATED_MINUTES = 40;
 
 interface Turn {
   id: number;
@@ -26,8 +26,8 @@ interface Turn {
 }
 type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'sending';
 
-function formatRemaining(ms: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -69,7 +69,7 @@ export default function InterviewRoomPage() {
   const [reading, setReading] = useState(false);
   const [retryingASR, setRetryingASR] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [remainingMs, setRemainingMs] = useState(SESSION_TOTAL_MS);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
   const doneRef = useRef(false);
@@ -88,12 +88,11 @@ export default function InterviewRoomPage() {
   const voiceActiveRef = useRef(false);
   const mountedRef = useRef(true);
   const timerStartedRef = useRef(false);
-  const timerDeadlineRef = useRef<number | null>(null);
+  const timerStartedAtRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const pausedRef = useRef(false);
   const pausedAtRef = useRef<number | null>(null);
   const accumulatedPausedMsRef = useRef(0);
-  const endTriggeredRef = useRef(false);
   // 摄像头分析仅在「创建时勾选开启」时启用；面试全程为语音作答（input mode 恒为 voice）。
   const behaviorVoiceEnabled = cameraEnabled;
   const behavior = useBehaviorAnalysis({
@@ -174,32 +173,18 @@ export default function InterviewRoomPage() {
     }
   }, [playQuestion]);
 
-  // 倒计时到期的结束动作通过 ref 间接调用，避免 startTimer 与 handleForceEnd 的
-  // 定义顺序问题；handleForceEnd 每次渲染都会更新该 ref。
-  const forceEndRef = useRef<() => Promise<void>>(async () => {});
-
-  // 面试倒计时：首次连接成功（收到 session_started）开始；暂停时冻结，
-  // 恢复后基于原截止时间继续；归零自动结束本场。
+  // 已用时间计时器：首次连接成功（收到 session_started）开始；暂停时冻结，
+  // 恢复后继续累计。仅做展示参考，不设强制结束。
   const startTimer = useCallback(() => {
     if (timerStartedRef.current || doneRef.current) return;
     timerStartedRef.current = true;
+    timerStartedAtRef.current = Date.now();
     accumulatedPausedMsRef.current = 0;
-    timerDeadlineRef.current = Date.now() + SESSION_TOTAL_MS;
     timerIntervalRef.current = window.setInterval(() => {
-      if (pausedRef.current || timerDeadlineRef.current == null) return;
-      // 暂停期间的时间（accumulatedPausedMs）不计入消耗，恢复后剩余时间相应延长。
-      const remaining = timerDeadlineRef.current - Date.now() + accumulatedPausedMsRef.current;
-      setRemainingMs(remaining);
-      if (remaining <= 0) {
-        if (timerIntervalRef.current != null) {
-          window.clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
-        if (!endTriggeredRef.current) {
-          endTriggeredRef.current = true;
-          void forceEndRef.current();
-        }
-      }
+      if (pausedRef.current || timerStartedAtRef.current == null) return;
+      // 已用时间 = 从现在到开始时刻，扣除暂停累计时长。
+      const elapsed = Date.now() - timerStartedAtRef.current - accumulatedPausedMsRef.current;
+      setElapsedMs(Math.max(0, elapsed));
     }, 1000);
   }, []);
 
@@ -264,6 +249,25 @@ export default function InterviewRoomPage() {
               setStatusLine(msg.content);
             }
           }
+          break;
+        case 'closing':
+          // 自然完成：播报简短结束语，播完（或静音）后进入报告页。
+          doneRef.current = true;
+          setThinking(false);
+          setVoicePhase('idle');
+          if (msg.content) {
+            appendTurn('interviewer', msg.content);
+            if (!ttsMutedRef.current) {
+              setStatusLine('正在收尾…');
+              await playQuestion(msg.content);
+              setStatusLine('');
+            }
+          }
+          await Promise.race([
+            behaviorStopRef.current(),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+          navigate(`/interviews/${interviewId}/report`, { replace: true });
           break;
         case 'done':
           doneRef.current = true;
@@ -590,7 +594,7 @@ export default function InterviewRoomPage() {
       setEnding(false);
     }
   }
-  forceEndRef.current = handleForceEnd;
+
   return (
     <div className="interview-page interview-page--immersive">
       <AppNav tab="create" confirmLeave variant="topbar">
@@ -620,7 +624,7 @@ export default function InterviewRoomPage() {
             </span>
           )}
           <span className="room-topbar-timer">
-            剩余 {formatRemaining(remainingMs)}
+            预计 {ESTIMATED_MINUTES} 分钟 · 已用 {formatElapsed(elapsedMs)}
           </span>
           <span className="room-rec-ok">● 录音正常</span>
         </span>

@@ -63,3 +63,7 @@ func (h *Hub) Broadcast(sessionID int64, msg ServerMsg) {
 func (h *Hub) BroadcastDone(sessionID int64) {
 	h.Broadcast(sessionID, ServerMsg{Type: "done"})
 }
+
+func (h *Hub) BroadcastClosing(sessionID int64, closing string) {
+	h.Broadcast(sessionID, ServerMsg{Type: "closing", Content: closing})
+}

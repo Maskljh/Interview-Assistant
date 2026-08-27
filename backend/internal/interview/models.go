@@ -64,8 +64,25 @@ type Question struct {
 	SessionID int64
 	Seq       int
 	Question  string
+	Kind      string
 	Intent    *string
 	Asked     bool
+}
+
+// QuestionKind values for interview_questions.kind.
+const (
+	QuestionKindSelfIntro = "self_intro"
+	QuestionKindBank      = "bank"
+	QuestionKindGenerated = "generated"
+)
+
+// QuestionInput describes a question to be inserted into a session at creation
+// time (used by CreateFromBank and Start).
+type QuestionInput struct {
+	Seq      int
+	Question string
+	Kind     string
+	Intent   string
 }
 
 type Turn struct {

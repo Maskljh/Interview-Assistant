@@ -5,6 +5,15 @@
   grid-template-columns: 218px 1fr;
 }
 
+/* ─── 响应式：主区网格与侧栏宽度同步收缩 ─── */
+@media (max-width: 1080px) {
+  .interview-page { grid-template-columns: 196px 1fr; }
+}
+
+@media (max-width: 860px) {
+  .interview-page { grid-template-columns: 168px 1fr; }
+}
+
 /* 面试间准备页：锁定视口高度，内部弹性伸缩，任何窗口高度都一屏（方案 A） */
 .interview-page:has(.interview-prep-new) {
   height: 100svh;
@@ -1345,12 +1354,6 @@
   }
 }
 
-@media (max-width: 599px) {
-  .trends-figma-stats {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ─── Question bank groups ─── */
 .question-bank-groups {
   display: flex;
@@ -2199,6 +2202,7 @@
 
 .prep-start-btn {
   width: 292px;
+  max-width: 100%;
   height: 52px;
   font-family: Inter, system-ui, sans-serif;
   font-weight: 400;
@@ -2816,7 +2820,8 @@
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  width: 210px;
+  flex: 1 1 210px;
+  max-width: 100%;
   height: 88px;
   padding: 0 24px;
   box-sizing: border-box;
@@ -3520,6 +3525,19 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* 题库卡：所选题目集中在同一项目时的补全提示 */
+.prep-new-bank-hint {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  background: #fdf3e0;
+  border: 1px solid #f0d9a8;
+  border-radius: 10px;
+  color: #8a5a00;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .prep-new-bank-item {
