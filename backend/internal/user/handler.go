@@ -16,9 +16,12 @@ type Handler struct {
 }
 
 type userResponse struct {
-	ID       int64  `json:"id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
+	ID        int64  `json:"id"`
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	Nickname  string `json:"nickname,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	UserID    string `json:"user_id,omitempty"` // WPS 账号全局数字 ID
 }
 
 func NewHandler(db *sql.DB, secret string) *Handler {
@@ -48,5 +51,5 @@ func (h *Handler) Me(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-	c.JSON(http.StatusOK, userResponse{ID: u.ID, Email: u.Email, Username: u.Username})
+	c.JSON(http.StatusOK, userResponse{ID: u.ID, Email: u.Email, Username: u.Username, Nickname: u.Nickname, AvatarURL: u.AvatarURL, UserID: u.UserID})
 }

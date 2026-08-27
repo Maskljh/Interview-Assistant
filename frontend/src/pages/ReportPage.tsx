@@ -5,6 +5,7 @@ import {
   getInterview,
   getReport,
   retryReport,
+  sendReportToEmail,
   type InterviewFeedback,
 } from '../api/interviews';
 import { fetchExpression, type ExpressionResult } from '../api/expression';
@@ -95,6 +96,10 @@ export default function ReportPage() {
   const pollTimerRef = useRef<number | null>(null);
   const pollCountRef = useRef(0);
   const [pollFailed, setPollFailed] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current != null) {
@@ -200,6 +205,21 @@ export default function ReportPage() {
     };
   }, [interviewId, startPolling]);
 
+  async function handleSendEmail() {
+    setSendingEmail(true);
+    setEmailError('');
+    setEmailSent(false);
+    try {
+      const res = await sendReportToEmail(interviewId);
+      setEmailTo(res.to);
+      setEmailSent(true);
+    } catch (err) {
+      setEmailError(err instanceof ApiError ? err.message : '发送报告到邮箱失败');
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
   async function handleRetry() {
     setRetrying(true);
     setError('');
@@ -278,6 +298,22 @@ export default function ReportPage() {
           </div>
         ) : feedback ? (
           <>
+            <div className="report-actions">
+              <button
+                type="button"
+                className="report-email-btn"
+                onClick={() => void handleSendEmail()}
+                disabled={sendingEmail}
+              >
+                {sendingEmail ? '正在发送…' : '发送报告到我的邮箱'}
+              </button>
+              {emailSent && emailTo && (
+                <span className="report-email-success">
+                  已发送至 {emailTo}
+                </span>
+              )}
+              {emailError && <p className="interview-error">{emailError}</p>}
+            </div>
             {/* 2×2 布局：总评+优势与短板（上行）/ 能力维度+证据与建议（下行）（Figma 03 面试报告） */}
             <div className="report-grid">
               <div className="report-grid-row report-grid-row--top">

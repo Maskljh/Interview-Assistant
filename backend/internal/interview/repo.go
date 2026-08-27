@@ -236,7 +236,7 @@ func (r *Repo) GetBankQuestionText(userID, bankID int64) (string, error) {
 	return text, nil
 }
 
-func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, texts []string, cameraEnabled bool) (*Session, []Question, error) {
+func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD, jobTitle string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, texts []string, cameraEnabled bool) (*Session, []Question, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, nil, err
@@ -244,9 +244,9 @@ func (r *Repo) CreateReadyWithQuestions(userID int64, jobJD string, mode Mode, i
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO interview_sessions (user_id, job_jd, resume_text, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
-		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, jobJD, string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusReady),
+		`INSERT INTO interview_sessions (user_id, job_jd, job_title, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, jobJD, nullTitle(jobTitle), nullString(jdFileURL), nullString(resume), nullString(resumeFileURL), string(mode), string(inputMode), persona, difficulty, style, boolInt(cameraEnabled), nullGapsJSON(precheckGaps), string(StatusReady),
 	)
 	if err != nil {
 		return nil, nil, err

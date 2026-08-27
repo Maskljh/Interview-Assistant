@@ -4,6 +4,9 @@ export interface User {
   id: number;
   email: string;
   username?: string;
+  nickname?: string;
+  avatar_url?: string;
+  user_id?: string; // WPS 账号全局数字 ID
 }
 
 export interface AuthResponse {

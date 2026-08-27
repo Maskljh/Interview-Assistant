@@ -34,6 +34,12 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
   const [renameValue, setRenameValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  // 始终持有最新的 onClose，供 Escape 监听使用，避免内联回调导致 effect 反复重跑
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const load = useCallback(async () => {
     try {
@@ -50,17 +56,19 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void load();
     void refreshUser().catch(() => {});
+    // 仅在挂载时聚焦一次关闭按钮；onClose 变化不再触发重跑，输入不会抢焦点
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [load, onClose, refreshUser]);
+  }, [load, refreshUser]);
 
   const remaining = Math.max(0, MAX_RESUMES - resumes.length);
-  const displayName = user?.username || user?.email || '未登录';
+  const displayName = user?.nickname || user?.username || user?.email || '未登录';
   const avatarInitial = displayName.trim().charAt(0).toUpperCase() || '?';
+  const avatarUrl = user?.avatar_url || '';
 
   async function handleFile(file: File) {
     if (uploading) return;
@@ -136,12 +144,16 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
             <h4 className="user-info-title">用户信息</h4>
             <div className="user-avatar-wrap">
               <div className="user-avatar-ring">
-                <div className="user-avatar">{avatarInitial}</div>
+                {avatarUrl ? (
+                  <img className="user-avatar user-avatar-img" src={avatarUrl} alt="" />
+                ) : (
+                  <div className="user-avatar">{avatarInitial}</div>
+                )}
               </div>
             </div>
             <p className="user-name">{displayName}</p>
             <p className="user-id-label">用户 ID</p>
-            <p className="user-id">MZ-{String(user?.id ?? 0).padStart(8, '0')}</p>
+            <p className="user-id">{user?.user_id ? String(user.user_id) : `MZ-${String(user?.id ?? 0).padStart(8, '0')}`}</p>
             <button type="button" className="user-logout-btn" onClick={handleLogout}>
               退出登录
             </button>

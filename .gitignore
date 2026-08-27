@@ -27,3 +27,10 @@ figma_shots/
 *.log
 *.png
 server.exe~
+
+# Local tooling / temp / backup dirs (never commit)
+.figma-fix-backup/
+.rundata/
+.web_builder/
+clean_clone_check/
+frontend/.build-tmp/

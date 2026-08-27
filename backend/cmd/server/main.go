@@ -24,6 +24,7 @@ import (
 	"github.com/interview-assistant/backend/internal/speech"
 	"github.com/interview-assistant/backend/internal/upload"
 	"github.com/interview-assistant/backend/internal/user"
+	"github.com/interview-assistant/backend/internal/wps"
 	"github.com/interview-assistant/backend/internal/wpsoauth"
 	"github.com/interview-assistant/backend/internal/ws"
 	"github.com/redis/go-redis/v9"
@@ -136,7 +137,8 @@ func main() {
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	upload.RegisterRoutes(r, cfg.JWTSecret, uploadSvc)
 	resume.RegisterRoutes(r, sqlDB, cfg.JWTSecret, uploadSvc)
-	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel)
+	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel, wpsHandler)
+	wps.RegisterRoutes(r, cfg.JWTSecret, wpsHandler)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	behavior.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	ws.RegisterRoutes(r, svc, cfg.JWTSecret)

@@ -32,12 +32,12 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 
 | 服务 | 默认地址 | 用途 |
 |------|----------|------|
-| API（Go/Gin） | `http://127.0.0.1:8080` | REST + WebSocket（前端生产默认走 9090，见下） |
+| API（Go/Gin） | `http://127.0.0.1:18080` | REST + WebSocket（前端默认同端口 18080） |
 | 前端（Vite） | `http://localhost:5174` | React SPA（开发端口 5174） |
 | MySQL 8 | `127.0.0.1:3306` | 用户、会话、题目、轮次、行为信号 |
 | Redis 7 | `127.0.0.1:6379` | 面试直播态、暂存 |
 
-> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端生产运行常监听 `:9090`（见 `.env` 的 `HTTP_ADDR`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname（手机经局域网访问时自动用局域网 IP）。
+> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端监听端口由 `.env` 的 `HTTP_ADDR` 决定（默认 `:18080`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname（手机经局域网访问时自动用局域网 IP）。
 
 ## 1. 启动 MySQL 与 Redis
 
@@ -97,7 +97,7 @@ done
 | `WPS_CALLBACK_ADDR` | 否 | `:18365` | WPS 回调专用监听端口 |
 | `WPS_SCOPE` | 否 | `kso.user_base.read` | WPS 授权范围 |
 | `WPS_FRONTEND_REDIRECT` | 否 | `http://localhost:5174` | 授权成功后前端跳转地址 |
-| `HTTP_ADDR` | 否 | `:8080` | API 监听地址（生产常用 `:9090`） |
+| `HTTP_ADDR` | 否 | `:18080` | API 监听地址（默认 `:18080`） |
 | `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；本机密码 `123456` 时改为 `root:123456@...`） |
 | `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址 |
 | `DEEPSEEK_API_KEY` | 否* | — | DeepSeek Key，用于出题与报告 |
@@ -175,7 +175,7 @@ go run ./cmd/server
 验证：
 
 ```bash
-curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:18080/healthz
 # {"ok":true}
 ```
 
@@ -198,7 +198,7 @@ npm run dev            # 默认 http://localhost:5174
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `VITE_API_BASE` | 跟随当前页面 hostname（生产默认 `:9090`） | 后端 REST 基址（WS 源由此推导） |
+| `VITE_API_BASE` | 跟随当前页面 hostname（默认 `:18080`） | 后端 REST 基址（WS 源由此推导） |
 
 ## 功能总览
 

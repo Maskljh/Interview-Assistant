@@ -13,22 +13,17 @@ import {
   MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
-  formatDateZh,
 } from '../lib/labels';
 import './InterviewPages.css';
 import { isFromQuestions } from '../lib/detailSource';
+import { DEMO_TURNS } from '../lib/demoTurns';
 import AppNav from '../components/AppNav';
+import FollowUpTree from '../components/FollowUpTree';
 
 const INPUT_MODE_LABELS: Record<InputMode, string> = {
   text: '文本作答',
   voice: '语音作答',
 };
-
-function roleLabel(role: string): string {
-  if (role === 'interviewer') return '面试官';
-  if (role === 'candidate') return '我';
-  return role;
-}
 
 export default function InterviewDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -90,9 +85,11 @@ export default function InterviewDetailPage() {
     }
   }
 
+  const [showDemo, setShowDemo] = useState(false);
   const sortedTurns = interview
     ? [...interview.turns].sort((a, b) => a.seq - b.seq)
     : [];
+  const displayedTurns = showDemo ? DEMO_TURNS : sortedTurns;
 
   return (
     <div className="interview-page">
@@ -197,28 +194,30 @@ export default function InterviewDetailPage() {
 
             {/* 对话记录卡片 */}
             <section className="interview-detail-card">
-              <h2 className="interview-section-title">对话记录</h2>
-              {sortedTurns.length === 0 ? (
+              <div className="interview-section-head">
+                <h2 className="interview-section-title">对话记录</h2>
+                {!showDemo && (
+                  <button
+                    type="button"
+                    className="interview-demo-link"
+                    onClick={() => setShowDemo(true)}
+                  >
+                    查看追问链演示
+                  </button>
+                )}
+              </div>
+              {showDemo ? (
+                <>
+                  <p className="interview-subtitle">
+                    <span className="interview-demo-badge">演示数据</span>
+                    以下为追问链效果演示，非本场真实问答。
+                  </p>
+                  <FollowUpTree turns={DEMO_TURNS} />
+                </>
+              ) : sortedTurns.length === 0 ? (
                 <p className="interview-subtitle">暂无对话记录。</p>
               ) : (
-                <div className="interview-transcript">
-                  {sortedTurns.map((turn) => (
-                    <article
-                      key={turn.id}
-                      className={`transcript-turn${
-                        turn.role === 'interviewer' ? ' transcript-turn--interviewer' : ''
-                      }`}
-                    >
-                      <div className="transcript-turn-header">
-                        <span className="transcript-role">{roleLabel(turn.role)}</span>
-                        <time className="transcript-time" dateTime={turn.created_at}>
-                          {formatDateZh(turn.created_at)}
-                        </time>
-                      </div>
-                      <p className="transcript-content">{turn.content}</p>
-                    </article>
-                  ))}
-                </div>
+                <FollowUpTree turns={displayedTurns} />
               )}
             </section>
           </>

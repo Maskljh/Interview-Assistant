@@ -638,6 +638,57 @@ func TestCreateFromBankOrdersQuestions(t *testing.T) {
 	}
 }
 
+// TestCreateFromBankCarriesJDAndResume 验证题库模式携带岗位信息与简历时，
+// 这些定制字段会被真实写入会话（而非被静默丢弃）。
+func TestCreateFromBankCarriesJDAndResume(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, sqlDB, "test-interview-frombank-jd@example.com")
+	userID := userIDByEmail(t, sqlDB, "test-interview-frombank-jd@example.com")
+
+	idA := insertBankQuestion(t, sqlDB, userID, "text-a")
+	idB := insertBankQuestion(t, sqlDB, userID, "text-b")
+
+	jd := "资深后端工程师岗位描述"
+	resume := "候选人简历文本"
+	jdfile := "https://example.com/jd.pdf"
+	resumefile := "https://example.com/resume.docx"
+
+	body, _ := json.Marshal(map[string]any{
+		"question_ids":    []int64{idA, idB},
+		"mode":            "mixed",
+		"job_jd":          jd,
+		"resume_text":     resume,
+		"jd_file_url":     jdfile,
+		"resume_file_url": resumefile,
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/interviews/from-bank", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("from-bank status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode from-bank: %v", err)
+	}
+	if resp["job_jd"] != jd {
+		t.Fatalf("job_jd = %v, want %q", resp["job_jd"], jd)
+	}
+	if resp["resume_text"] != resume {
+		t.Fatalf("resume_text = %v, want %q", resp["resume_text"], resume)
+	}
+	if resp["jd_file_url"] != jdfile {
+		t.Fatalf("jd_file_url = %v, want %q", resp["jd_file_url"], jdfile)
+	}
+	if resp["resume_file_url"] != resumefile {
+		t.Fatalf("resume_file_url = %v, want %q", resp["resume_file_url"], resumefile)
+	}
+}
+
 func TestCreateFromBankEmptyIDs400(t *testing.T) {
 	sqlDB := testDB(t)
 	r := testRouter(t, sqlDB, nil)

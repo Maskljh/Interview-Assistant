@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -70,6 +71,7 @@ type userResponse struct {
 	ID       int64  `json:"id"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
+	UserID   string `json:"user_id,omitempty"` // WPS 账号全局数字 ID
 }
 
 type authResponse struct {
@@ -114,7 +116,7 @@ func (h *Handler) Callback(c *gin.Context) {
 		return
 	}
 
-	accessToken, _, err := h.client.ExchangeCode(ctx, code)
+	accessToken, refreshToken, expiresIn, err := h.client.ExchangeCode(ctx, code)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: ExchangeCode failed: %v", err)
 		h.redirectWithError(c, err.Error())
@@ -126,11 +128,16 @@ func (h *Handler) Callback(c *gin.Context) {
 		h.redirectWithError(c, err.Error())
 		return
 	}
-	u, err := h.repo.UpsertWPSUser(wpsUser.ID, wpsUser.Name, wpsUser.Avatar)
+	u, err := h.repo.UpsertWPSUser(wpsUser.OpenID, wpsUser.UserID, wpsUser.Name, wpsUser.Avatar)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: UpsertWPSUser failed: %v", err)
 		h.redirectWithError(c, "保存用户失败")
 		return
+	}
+
+	// 持久化 WPS 授权凭证，供云文档（简历）与邮箱（报告）能力使用。
+	if err := h.saveWPSToken(u.ID, accessToken, refreshToken, expiresIn); err != nil {
+		log.Printf("[wpsoauth] callback: save wps token failed: %v", err)
 	}
 
 	oauthCode, err := randomToken(24)
@@ -185,7 +192,7 @@ func (h *Handler) Exchange(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, authResponse{
 		Token: token,
-		User:  userResponse{ID: dbUser.ID, Email: dbUser.Email, Username: dbUser.Username},
+		User:  userResponse{ID: dbUser.ID, Email: dbUser.Email, Username: dbUser.Username, UserID: dbUser.UserID},
 	})
 }
 
@@ -215,4 +222,43 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// saveWPSToken 把授权下发的凭证写入数据库（过期时间由 expiresIn 秒推算）。
+func (h *Handler) saveWPSToken(userID int64, accessToken, refreshToken string, expiresIn int64) error {
+	tok := WPSToken{AccessToken: accessToken, RefreshToken: refreshToken, Scope: h.cfg.Scope}
+	if expiresIn > 0 {
+		tok.ExpiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
+	}
+	return h.repo.SaveWPSToken(userID, tok)
+}
+
+// ErrNoWPSToken 表示用户尚未完成可用的 WPS 授权（未登录或 token 已失效且无法刷新）。
+var ErrNoWPSToken = errors.New("wps token unavailable")
+
+// TokenForUser 返回用户当前可用的 WPS access_token；若过期则用 refresh_token 刷新并落库。
+// 供云文档/邮箱等业务模块调用。无可用凭证时返回 ErrNoWPSToken。
+func (h *Handler) TokenForUser(ctx context.Context, userID int64) (string, error) {
+	tok, err := h.repo.GetWPSToken(userID)
+	if err != nil {
+		return "", ErrNoWPSToken
+	}
+	if !tok.HasToken() {
+		return "", ErrNoWPSToken
+	}
+	if !tok.Expired() {
+		return tok.AccessToken, nil
+	}
+	// access_token 过期：尝试用 refresh_token 刷新。
+	if tok.RefreshToken == "" {
+		return "", ErrNoWPSToken
+	}
+	at, rt, expiresIn, err := h.client.RefreshToken(ctx, tok.RefreshToken)
+	if err != nil {
+		return "", ErrNoWPSToken
+	}
+	if err := h.saveWPSToken(userID, at, rt, expiresIn); err != nil {
+		log.Printf("[wpsoauth] refresh save failed: %v", err)
+	}
+	return at, nil
 }

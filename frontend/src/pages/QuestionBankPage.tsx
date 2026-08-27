@@ -130,7 +130,7 @@ export default function QuestionBankPage() {
       <main className="interview-main interview-main--wide">
         <div className="question-bank-head">
           <div>
-            <h1>题库管理</h1>
+            <h1>面试信息管理</h1>
             <p className="interview-subtitle">
               导入、维护你的专属问题；也可以在面试中让 AI 自主动态提问。
             </p>

@@ -23,16 +23,23 @@ export default function Dialog({
   width = 480,
 }: DialogProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  // 始终持有最新的 onClose，供 Escape 监听使用，避免内联回调导致 effect 反复重跑
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
+    // 仅在打开时聚焦一次关闭按钮；不再依赖 onClose，输入框打字引起的重渲染不会抢焦点
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

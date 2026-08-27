@@ -25,8 +25,10 @@ type Config struct {
 }
 
 // WPSUser 是 WPS 开放平台用户基础信息（从 v7/users/current 解析，兼容多种字段名）。
+// OpenID 是应用级唯一标识（登录匹配用），UserID 是 WPS 账号全局数字 ID（个人中心可见，展示用）。
 type WPSUser struct {
-	ID     string
+	UserID string
+	OpenID string
 	Name   string
 	Avatar string
 }
@@ -53,7 +55,8 @@ func (c *Client) BuildAuthURL(state string) string {
 }
 
 // ExchangeCode 用授权码换取 access_token（WPS 要求 Basic Auth 携带 client 凭证）。
-func (c *Client) ExchangeCode(ctx context.Context, code string) (accessToken, refreshToken string, err error) {
+// 返回 access_token、refresh_token 及有效时长（秒）；expiresIn<=0 表示未知。
+func (c *Client) ExchangeCode(ctx context.Context, code string) (accessToken, refreshToken string, expiresIn int64, err error) {
 	body := url.Values{}
 	body.Set("grant_type", "authorization_code")
 	body.Set("code", code)
@@ -61,28 +64,29 @@ func (c *Client) ExchangeCode(ctx context.Context, code string) (accessToken, re
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.TokenEndpoint, strings.NewReader(body.Encode()))
 	if err != nil {
-		return "", "", err
+		return "", "", 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "Basic "+basicAuth(c.cfg.ClientID, c.cfg.ClientSecret))
 
 	resp, err := c.httpDo(req)
 	if err != nil {
-		return "", "", fmt.Errorf("wps token request: %w", err)
+		return "", "", 0, fmt.Errorf("wps token request: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", 0, err
 	}
 	var data struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int64  `json:"expires_in"`
 		Error        string `json:"error"`
 		Msg          string `json:"msg"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return "", "", fmt.Errorf("wps token response: %s", truncate(string(raw), 200))
+		return "", "", 0, fmt.Errorf("wps token response: %s", truncate(string(raw), 200))
 	}
 	if data.AccessToken == "" {
 		detail := data.Error
@@ -92,9 +96,9 @@ func (c *Client) ExchangeCode(ctx context.Context, code string) (accessToken, re
 		if detail == "" {
 			detail = truncate(string(raw), 200)
 		}
-		return "", "", fmt.Errorf("换取 token 失败: %s", detail)
+		return "", "", 0, fmt.Errorf("换取 token 失败: %s", detail)
 	}
-	return data.AccessToken, data.RefreshToken, nil
+	return data.AccessToken, data.RefreshToken, data.ExpiresIn, nil
 }
 
 // FetchUser 用 access_token 拉取当前用户信息，兼容不同返回结构。
@@ -138,12 +142,18 @@ func (c *Client) FetchUser(ctx context.Context, accessToken string) (*WPSUser, e
 		return nil, fmt.Errorf("用户信息解析失败: %s", truncate(string(raw), 200))
 	}
 
+	// user_id / ex_user_id 是 WPS 账号全局数字 ID（个人中心可见）；openid 是应用级标识。
 	user := &WPSUser{
-		ID:     firstString(u, "id", "user_id", "userId", "ex_user_id", "openid"),
+		UserID: firstString(u, "user_id", "ex_user_id", "id"),
+		OpenID: firstString(u, "openid"),
 		Name:   firstString(u, "name", "username", "nickname", "nickName", "user_name"),
 		Avatar: firstString(u, "avatar", "avatar_url", "avatarUrl"),
 	}
-	if user.ID == "" {
+	if user.OpenID == "" {
+		// 旧接口可能只有 id 而没有独立 openid 字段：此时用 id 兜底作 openid
+		user.OpenID = firstString(u, "id")
+	}
+	if user.OpenID == "" {
 		return nil, errors.New("用户信息缺少 id")
 	}
 	if user.Name == "" {
@@ -152,39 +162,49 @@ func (c *Client) FetchUser(ctx context.Context, accessToken string) (*WPSUser, e
 	return user, nil
 }
 
-// RefreshToken 用 refresh_token 换取新的 access_token（保留备用，当前未启用自动刷新）。
-func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (string, error) {
+// RefreshToken 用 refresh_token 换取新的 access_token，同时返回新的 refresh_token 与有效时长。
+func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (accessToken, newRefreshToken string, expiresIn int64, err error) {
 	body := url.Values{}
 	body.Set("grant_type", "refresh_token")
 	body.Set("refresh_token", refreshToken)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.TokenEndpoint, strings.NewReader(body.Encode()))
 	if err != nil {
-		return "", err
+		return "", "", 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "Basic "+basicAuth(c.cfg.ClientID, c.cfg.ClientSecret))
 
 	resp, err := c.httpDo(req)
 	if err != nil {
-		return "", err
+		return "", "", 0, err
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", "", 0, err
 	}
 	var data struct {
-		AccessToken string `json:"access_token"`
-		Error       string `json:"error"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int64  `json:"expires_in"`
+		Error        string `json:"error"`
+		Msg          string `json:"msg"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return "", fmt.Errorf("wps refresh response: %s", truncate(string(raw), 200))
+		return "", "", 0, fmt.Errorf("wps refresh response: %s", truncate(string(raw), 200))
 	}
 	if data.AccessToken == "" {
-		return "", fmt.Errorf("刷新 token 失败: %s", data.Error)
+		detail := data.Error
+		if detail == "" {
+			detail = data.Msg
+		}
+		if detail == "" {
+			detail = truncate(string(raw), 200)
+		}
+		return "", "", 0, fmt.Errorf("刷新 token 失败: %s", detail)
 	}
-	return data.AccessToken, nil
+	return data.AccessToken, data.RefreshToken, data.ExpiresIn, nil
 }
 
 func basicAuth(clientID, clientSecret string) string {

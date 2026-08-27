@@ -21,7 +21,7 @@ try {
 }
 
 # 2. 启动后端 (固定路径 server.exe，避免 go run 临时路径被防火墙拦截)
-Write-Host "[2/3] 启动后端 API (:8080)..." -ForegroundColor Yellow
+Write-Host "[2/3] 启动后端 API (:18080)..." -ForegroundColor Yellow
 $backend = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "C:\Users\l\Desktop\Interview Assistant\server.exe" }
 if ($backend) {
     Write-Host "      后端已在运行 (PID $($backend.Id))" -ForegroundColor Green
@@ -54,8 +54,8 @@ Write-Host ""
 Write-Host "=== 启动完成 ===" -ForegroundColor Cyan
 Write-Host "电脑访问:   http://localhost:5174"
 Write-Host "手机访问:   http://$ip` :5174" -ForegroundColor Green
-Write-Host "后端健康:   http://$ip` :8080/healthz" -ForegroundColor Green
+Write-Host "后端健康:   http://$ip` :18080/healthz" -ForegroundColor Green
 Write-Host ""
-Write-Host "若手机打不开 8080，请检查:"
-Write-Host "  1. 防火墙/安全软件放行 server.exe 与 8080 端口"
+Write-Host "若手机打不开 18080，请检查:"
+Write-Host "  1. 防火墙/安全软件放行 server.exe 与 18080 端口"
 Write-Host "  2. 手机与电脑在同一 Wi-Fi"

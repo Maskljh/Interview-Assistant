@@ -23,16 +23,23 @@ export default function ConfirmModal({
   onCancel,
 }: ConfirmModalProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const onCancelRef = useRef(onCancel);
+
+  // 始终持有最新的 onCancel，供 Escape 监听使用，避免内联回调导致 effect 反复重跑
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
 
   useEffect(() => {
     if (!open) return;
+    // 仅在打开时聚焦一次取消按钮；不再依赖 onCancel，输入引起的重渲染不会抢焦点
     cancelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Escape') onCancelRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 

@@ -2,7 +2,13 @@
   min-height: 100svh;
   background: var(--color-canvas);
   display: grid;
-  grid-template-columns: 228px 1fr;
+  grid-template-columns: 218px 1fr;
+}
+
+/* 面试间准备页：锁定视口高度，内部弹性伸缩，任何窗口高度都一屏（方案 A） */
+.interview-page:has(.interview-prep-new) {
+  height: 100svh;
+  overflow: hidden;
 }
 
 /* 实时面试页等无侧边导航页面：单栏 */
@@ -518,12 +524,11 @@
 
 /* ─── Detail page ─── */
 .interview-detail-card {
-  padding: 24px 28px;
-  margin-bottom: 24px;
+  padding: 30px 32px;
+  margin-bottom: 28px;
   background: #fffdf7;
-  border: 1px solid #d1d9e3;
+  border: 1px solid #e9e2d8;
   border-radius: 16px;
-  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
 }
 
 .interview-detail-card h1 {
@@ -532,6 +537,8 @@
 
 .interview-detail-card .interview-section-title {
   margin-bottom: 16px;
+  font-size: 20px;
+  line-height: 28px;
 }
 
 .interview-detail-meta {
@@ -944,6 +951,56 @@
   font: var(--text-caption);
   color: var(--color-mute);
 }
+.report-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.report-email-btn {
+  padding: 10px 22px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: #ffffff;
+  background: #2b508e;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(19, 30, 43, 0.18);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.report-email-btn:hover:not(:disabled) {
+  background: #1a3f74;
+  box-shadow: 0 3px 8px rgba(19, 30, 43, 0.22);
+  transform: translateY(-1px);
+}
+
+.report-email-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(19, 30, 43, 0.18);
+}
+
+.report-email-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.report-email-success {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  color: #148c57;
+}
+
+.report-actions .interview-error {
+  flex-basis: 100%;
+  margin: 0;
+}
 
 /* ─── Question bank ─── */
 .question-bank-filters {
@@ -1167,7 +1224,7 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 10px;
 }
 
 .trends-figma-stat {
@@ -1615,7 +1672,7 @@
   font-family: Inter, system-ui, sans-serif;
   font-size: 12px;
   line-height: 18px;
-  color: #5f6b79;
+  color: #5f6b7a;
 }
 
 .resume-pick-list {
@@ -1629,20 +1686,49 @@
 .resume-pick-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 8px 10px;
   background: #fffdf7;
   border: 1px solid #d1d9e3;
   border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .resume-pick-item:hover {
   border-color: #2b508e;
   background: #f3f7fd;
+}
+
+.resume-pick-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.resume-pick-preview {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #2b508e;
+  background: #fff;
+  color: #2b508e;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.resume-pick-preview:hover {
+  background: #2b508e;
+  color: #fff;
 }
 
 .resume-pick-name {
@@ -1661,7 +1747,63 @@
   font-family: Inter, system-ui, sans-serif;
   font-size: 12px;
   line-height: 18px;
-  color: #5f6b79;
+  color: #5f6b7a;
+}
+.resume-pick-body:disabled,
+.resume-pick-preview:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ─── 从 WPS 云文档选择 ─── */
+.wps-cloud-search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wps-cloud-search input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 9px 14px;
+  border: 1px solid #d1d9e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #131e2b;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.wps-cloud-search input[type='text']:focus {
+  border-color: #4879b8;
+  box-shadow: 0 0 0 3px rgba(72, 121, 184, 0.18);
+}
+
+.wps-cloud-search-btn {
+  flex-shrink: 0;
+  padding: 0 18px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: #ffffff;
+  background: #2b508e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.wps-cloud-search-btn:hover:not(:disabled) {
+  background: #1a3f74;
+}
+
+.wps-cloud-search-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ─── Create page · 按 Figma「01 准备配置」像素级还原 ───
@@ -2222,7 +2364,7 @@
 
 .room-card {
   padding: 30px 32px;
-  background: #fffcf7;
+  background: #fffdf7;
   border: 1px solid #e9e2d8;
   border-radius: 16px;
 }
@@ -2397,7 +2539,7 @@
 
 .report-card {
   padding: 30px 32px;
-  background: #fffcf7;
+  background: #fffdf7;
   border: 1px solid #e9e2d8;
   border-radius: 16px;
 }
@@ -2583,7 +2725,7 @@
 }
 
 .report-extra .report-card {
-  background: #fffcf7;
+  background: #fffdf7;
   border-color: #e9e2d8;
 }
 
@@ -2678,7 +2820,7 @@
   height: 88px;
   padding: 0 24px;
   box-sizing: border-box;
-  background: #fffcf7;
+  background: #fffdf7;
   border: 1px solid #d1d9e3;
   border-radius: 14px;
   box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
@@ -2709,7 +2851,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 10px;
 }
 
 .question-bank-tags {
@@ -2957,7 +3099,7 @@
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  background: #fffcf7;
+  background: #fffdf7;
   border: 1px solid #d1d9e3;
   border-radius: 14px;
   box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
@@ -3049,4 +3191,731 @@
   .history-row {
     flex-wrap: wrap;
   }
+}
+
+
+
+
+
+/* ─── 开始面试（面试间准备）· Figma「01 开始面试-初始化状态」 ─── */
+/* 与其他页面一致：正常流式布局，无缩放、无绝对定位 */
+
+.interview-main.interview-prep-new {
+  max-width: none;
+  margin: 0;
+  padding: 16px 48px 40px;
+  height: 100svh;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部品牌区：左 logo + 右 slogan */
+.prep-new-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 0;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+/* 紫色氛围底：Figma「P2 · 紫色氛围底」径向渐变 + 图层模糊 */
+.prep-new-brand::before {
+  content: '';
+  position: absolute;
+  left: -38px;
+  top: -44px;
+  width: 315px;
+  height: 315px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(168, 143, 247, 0.46) 0%,
+    rgba(143, 122, 250, 0.26) 48%,
+    rgba(245, 242, 236, 0) 100%
+  );
+  filter: blur(72px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.prep-new-brand > * {
+  position: relative;
+  z-index: 1;
+}
+
+.prep-new-logo {
+  width: 195px;
+  height: 195px;
+  object-fit: contain;
+}
+
+.prep-new-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prep-new-slogan {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 38px;
+  letter-spacing: -1.4px;
+  color: #000000;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.prep-new-slogan-sub {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 400;
+  font-size: 19px;
+  line-height: 30px;
+  color: #606870;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* 标题区 */
+.prep-new-title {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 28px;
+  color: #131e2b;
+  margin: 0;
+}
+
+.prep-new-accent {
+  width: 120px;
+  height: 4px;
+  margin: 0 0 11px;
+  border-radius: 2px;
+  background: #4879b8;
+}
+
+.prep-new-subtitle {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  margin: 0 0 25px;
+}
+
+/* 容器：米色底 + 边框 + 圆角（Figma 带柔和投影） */
+.prep-new-panel {
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 16px;
+  padding: 28px 32px 23px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.1);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 面板内除两列外的固定块：窗口变矮时不被压缩，把空间让给两列 */
+.prep-new-panel > *:not(.prep-new-cols) {
+  flex-shrink: 0;
+}
+
+/* 面试岗位行 */
+.prep-new-job {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 535px;
+  margin-bottom: 21px;
+}
+
+.prep-new-job-title {
+  flex-shrink: 0;
+}
+
+.prep-new-job-field {
+  width: 431px;
+  height: 35px;
+  background: #f5f2ec;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 16px;
+  box-sizing: border-box;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+
+.prep-new-job-text {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 两列布局 */
+.prep-new-cols {
+  display: flex;
+  gap: 65px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+.prep-new-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 27px;
+  width: 535px;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* 卡片通用：米色底 + 边框 + 圆角（Figma 带柔和投影） */
+.prep-new-card {
+  background: #fffdf7;
+  border: 1px solid #d1d9e3;
+  border-radius: 10px;
+  box-sizing: border-box;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.1);
+}
+
+.prep-new-card-title {
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: #131e2b;
+  margin: 0;
+}
+
+/* 个人简历卡 */
+.prep-new-card--resume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 27px;
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+/* 简历卡右侧：已上传文件名 + 上传/替换按钮 */
+.prep-new-resume-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.prep-new-resume-file {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #131e2b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* 岗位信息卡 */
+.prep-new-card--jd {
+  padding: 20px 27px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.prep-new-card--jd .prep-new-card-title {
+  margin-bottom: 16px;
+}
+
+.prep-new-jd-area {
+  background: #f5f2ec;
+  padding: 12px 14px;
+  flex: 1;
+  min-height: 120px;
+  box-sizing: border-box;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.prep-new-jd-text,
+.prep-new-jd-empty {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.prep-new-jd-empty {
+  margin: auto;
+  text-align: center;
+}
+
+/* 选择题库卡 */
+.prep-new-card--bank {
+  width: 447px;
+  max-width: 100%;
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 20px 27px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.prep-new-card--bank .prep-new-card-title {
+  margin-bottom: 16px;
+}
+
+.prep-new-bank-area {
+  flex: 1;
+  background: #f5f2ec;
+  padding: 12px 14px;
+  min-height: 120px;
+  box-sizing: border-box;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.prep-new-bank-text,
+.prep-new-bank-empty {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  margin: 0;
+}
+
+.prep-new-bank-empty {
+  margin: auto;
+  text-align: center;
+}
+
+/* 题库卡：已导入题目列表（Figma「选择题库卡-导入后」） */
+.prep-new-bank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prep-new-bank-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 49px;
+  padding: 9px 12px;
+  box-sizing: border-box;
+  background: #f5f2ec;
+  border-radius: 10px;
+}
+
+.prep-new-bank-no {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+  background: #d5d5d5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 14.5px;
+  color: #131e2b;
+}
+
+.prep-new-bank-q {
+  flex: 1;
+  min-width: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prep-new-bank-del {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 14.5px;
+  color: #b8454a;
+  cursor: pointer;
+}
+
+.prep-new-bank-del:hover {
+  text-decoration: underline;
+}
+
+/* 头部右侧：共 N 题（按钮左侧，右对齐） */
+.prep-new-bank-count {
+  align-self: center;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #5f6b7a;
+  white-space: nowrap;
+}
+
+/* 卡片头部：标题 + 右上角按钮 */
+.prep-new-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.prep-new-card-head .prep-new-card-title {
+  margin: 0;
+}
+
+/* 卡片内按钮行 */
+.prep-new-card-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* 按钮 */
+.prep-new-btn {
+  height: 33px;
+  min-width: 93px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 10px;
+  background: #303945;
+  color: #ffffff;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 33px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+
+.prep-new-btn--upload {
+  min-width: 109px;
+}
+
+.prep-new-btn:hover {
+  opacity: 0.88;
+}
+
+.prep-new-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 开始模拟面试 */
+.prep-new-form {
+  margin-top: 23px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.prep-new-start {
+  height: 64px;
+  min-width: 197px;
+  padding: 0 40px;
+  border: none;
+  border-radius: 10px;
+  background: #303945;
+  color: #ffffff;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 64px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.prep-new-start:hover {
+  opacity: 0.88;
+}
+
+.prep-new-start:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 题库选择列表 */
+.bank-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.bank-pick-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e3e0d8;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.bank-pick-item.is-selected {
+  border-color: #4879b8;
+  background: rgba(71, 121, 184, 0.08);
+}
+
+.bank-pick-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1px solid #c9c4ba;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #ffffff;
+  background: transparent;
+}
+
+.bank-pick-item.is-selected .bank-pick-check {
+  background: #4879b8;
+  border-color: #4879b8;
+}
+
+.bank-pick-question {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #131e2b;
+}
+
+@media (max-width: 1100px) {
+  .prep-new-cols {
+    flex-direction: column;
+  }
+  .prep-new-col-left,
+  .prep-new-card--bank {
+    width: 100%;
+    max-width: none;
+  }
+  .prep-new-job {
+    flex-wrap: wrap;
+  }
+}
+
+/* ─── 方案 C：整体缩放壳（临时验证，可整体撤回）───
+   固定 1440×900 设计稿尺寸，transform: scale() 等比缩放后居中。
+   视口比例 ≠ 16:10 时上下/左右留白，内容永不溢出。 */
+.prep-scale-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.prep-scale-stage {
+  flex-shrink: 0;
+  transform-origin: center center;
+  /* transform 由 JS 内联设置：scale 等比缩放；flex 居中在布局阶段完成，不受缩放影响 */
+}
+
+/* 缩放壳内的面试间准备页锁死 1440×900，不再随视口弹性伸缩 */
+.prep-scale-stage .interview-main.interview-prep-new {
+  height: 900px;
+}
+
+/* 缩放壳内的面试间准备页锁死 1440×900，不再随视口弹性伸缩 */
+.prep-scale-shell .interview-main.interview-prep-new {
+  height: 900px;
+}
+
+/* ─── 追问链树形（FollowUpTree） ─── */
+.followup-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.followup-branch {
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--rounded-lg);
+  background: var(--color-canvas);
+}
+
+.followup-branch--follow {
+  background: var(--color-canvas-soft);
+}
+
+.followup-branch--answer {
+  background: var(--color-canvas-soft);
+  border-style: dashed;
+}
+
+.followup-branch.is-collapsed .followup-children {
+  display: none;
+}
+
+.followup-branch-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 6px;
+}
+
+.followup-role {
+  font: var(--text-body-sm-strong);
+  color: var(--color-ink);
+}
+
+.followup-time {
+  margin-left: auto;
+  font: var(--text-caption);
+  color: var(--color-mute);
+}
+
+.followup-toggle {
+  font: var(--text-caption);
+  color: var(--color-link);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.followup-toggle:hover {
+  color: var(--color-link-deep);
+  text-decoration: underline;
+}
+
+.followup-content {
+  margin: 0;
+  font: var(--text-body-md);
+  color: var(--color-body);
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
+
+.followup-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.interview-detail-card .followup-branch {
+  padding: 16px 20px;
+  border: 1px solid #e9e2d8;
+  border-radius: 12px;
+  background: #fffdf7;
+}
+
+/* 面试官提问（主问题 / 追问）：浅蓝底 + 左侧品牌蓝竖条 + 蓝色角色名 */
+.interview-detail-card .followup-branch--main,
+.interview-detail-card .followup-branch--follow {
+  background: #eef4fb;
+  border-color: #d3e1f4;
+  border-left: 3px solid #1951c6;
+  padding-left: 17px;
+}
+
+.interview-detail-card .followup-branch--main .followup-role,
+.interview-detail-card .followup-branch--follow .followup-role {
+  color: #1951c6;
+}
+
+/* 我的回答：暖白底 + 实线细边框 + 绿色角色标识，与面试官提问形成对比 */
+.interview-detail-card .followup-branch--answer {
+  background: #fffdf7;
+  border-style: solid;
+}
+
+.interview-detail-card .followup-branch--answer .followup-role {
+  color: #148c57;
+}
+
+/* ─── 追问链演示入口 ─── */
+.interview-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.interview-section-head .interview-section-title {
+  margin-bottom: 0;
+}
+
+.interview-demo-link {
+  display: inline-block;
+  margin-left: var(--space-sm);
+  font: var(--text-body-sm);
+  color: var(--color-link);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.interview-demo-link:hover {
+  color: var(--color-link-deep);
+}
+
+.interview-demo-badge {
+  display: inline-block;
+  font: var(--text-caption);
+  font-weight: 500;
+  color: var(--color-warning, #b26a00);
+  background: var(--color-warning-bg, #fff4e5);
+  padding: 1px 8px;
+  border-radius: var(--rounded-pill);
+  margin-right: 6px;
 }

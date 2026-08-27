@@ -134,7 +134,7 @@ func (s *Service) deriveJobTitle(ctx context.Context, jobJD string, resume *stri
 	return strings.TrimSpace(out.Title)
 }
 
-func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, []Question, error) {
+func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs []int64, jobJD string, resume *string, resumeFileURL, jdFileURL *string, mode Mode, inputMode InputMode, persona, difficulty, style string, precheckGaps []string, cameraEnabled bool) (*Session, []Question, error) {
 	if len(questionIDs) == 0 {
 		return nil, nil, ErrInvalidInput
 	}
@@ -179,8 +179,18 @@ func (s *Service) CreateFromBank(ctx context.Context, userID int64, questionIDs 
 		texts = append(texts, text)
 	}
 
-	jobJD := fmt.Sprintf("题库练习（%d题）", len(texts))
-	session, questions, err := s.repo.CreateReadyWithQuestions(userID, jobJD, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
+	// 用户未填岗位信息时保留题库练习占位；已填 JD/简历则一并参与定制。
+	jobJD = strings.TrimSpace(jobJD)
+	isPlainPractice := jobJD == ""
+	if isPlainPractice {
+		jobJD = fmt.Sprintf("题库练习（%d题）", len(texts))
+	}
+	// 仅对真实 JD 派生标题，避免对占位文本浪费 LLM 调用。
+	var title string
+	if !isPlainPractice {
+		title = s.deriveJobTitle(ctx, jobJD, resume)
+	}
+	session, questions, err := s.repo.CreateReadyWithQuestions(userID, jobJD, title, resume, resumeFileURL, jdFileURL, mode, inputMode, persona, difficulty, style, precheckGaps, texts, cameraEnabled)
 	if err != nil {
 		return nil, nil, err
 	}

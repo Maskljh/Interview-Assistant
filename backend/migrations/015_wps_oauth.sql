@@ -1,5 +1,5 @@
 -- 015：WPS OAuth 登录 + 补齐 username 列
--- users 表已具备 wps_openid/nickname/avatar_url（D 盘迁移 013 已应用），
+-- wps_openid/nickname/avatar_url/user_id 由 017 迁移幂等补齐（原依赖的 D 盘迁移 013 未纳入仓库，干净环境缺失）。
 -- 此处幂等补齐：username 列（desktop 013 的 username 部分因编号冲突未生效）。
 
 SET @has_username := (

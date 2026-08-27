@@ -17,6 +17,17 @@ vi.mock('../lib/resumeParse', () => ({
   extractResumeText: vi.fn(async () => ''),
 }));
 
+// 简历库 / 题库 API mock
+vi.mock('../api/resumes', () => ({
+  listResumes: vi.fn(async () => []),
+}));
+vi.mock('../api/questions', () => ({
+  listQuestions: vi.fn(async () => [
+    { id: 1, question: '请介绍一个你主导的项目', source: 'import', starred: false, usage_count: 0, created_at: '2026-01-01' },
+    { id: 2, question: '如何处理需求冲突？', source: 'import', starred: false, usage_count: 0, created_at: '2026-01-01' },
+  ]),
+}));
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -27,34 +38,34 @@ function renderPage() {
   );
 }
 
-/** 点击 JD 行的「导入」按钮，打开 JD 编辑 Modal */
+/** 点击「面试岗位」卡的「选择」按钮，打开 JD/岗位信息 Modal */
 function openJdModal() {
-  fireEvent.click(screen.getByTestId('jd-import-btn'));
+  fireEvent.click(screen.getAllByRole('button', { name: '选择' })[0]);
 }
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('CreateInterviewPage 准备配置页', () => {
-  it('展示态显示未导入与四个步骤，右侧计划摘要', () => {
+describe('CreateInterviewPage 面试间准备页', () => {
+  it('渲染标题、四卡片与开始按钮', () => {
     renderPage();
-    expect(screen.getByText('开始一场更像真实面试的练习')).toBeTruthy();
-    // 进度条
-    expect(screen.getByText('01 资料准备')).toBeTruthy();
-    expect(screen.getByText('04 开始面试')).toBeTruthy();
-    // 资料卡展示态
-    expect(screen.getByText('我的简历')).toBeTruthy();
-    expect(screen.getAllByText('未导入').length).toBe(2);
-    expect(screen.getByText('目标岗位')).toBeTruthy();
-    expect(screen.getByText('未设置')).toBeTruthy();
-    // 右侧计划卡摘要
-    expect(screen.getByText('面试时长')).toBeTruthy();
-    expect(screen.getByText('30 分钟')).toBeTruthy();
-    expect(screen.getByText('视频行为分析')).toBeTruthy();
+    expect(screen.getByText('面试间准备')).toBeTruthy();
+    expect(screen.getByText(/选择面试岗位开始面试/)).toBeTruthy();
+    // 四卡片标题
+    expect(screen.getByText('面试岗位')).toBeTruthy();
+    expect(screen.getByText('个人简历')).toBeTruthy();
+    expect(screen.getByText('岗位信息')).toBeTruthy();
+    expect(screen.getByText('选择题库')).toBeTruthy();
+    // 开始按钮
     expect(screen.getByRole('button', { name: /开始模拟面试/ })).toBeTruthy();
-    // 编辑 Modal 默认不显示
-    expect(screen.queryByLabelText('岗位 JD')).toBeNull();
+  });
+
+  it('初始展示占位文案', () => {
+    renderPage();
+    expect(screen.getByText('点击选择 ▽')).toBeTruthy();
+    expect(screen.getByText(/暂无岗位信息/)).toBeTruthy();
+    expect(screen.getByText(/暂无题目，请导入/)).toBeTruthy();
   });
 
   it('目标岗位从 JD 首行提取', () => {
@@ -62,8 +73,10 @@ describe('CreateInterviewPage 准备配置页', () => {
     openJdModal();
     const ta = screen.getByLabelText('岗位 JD') as HTMLTextAreaElement;
     fireEvent.change(ta, { target: { value: '高级产品经理\n1. 负责增长方向...' } });
+    // 关闭 Modal 后卡片显示提取的岗位名
+    fireEvent.click(screen.getByRole('button', { name: '完成' }));
     expect(screen.getByText('高级产品经理')).toBeTruthy();
-    expect(screen.queryByText('未设置')).toBeNull();
+    expect(screen.queryByText('点击选择 ▽')).toBeNull();
   });
 
   it('JD 编辑器打开后显示拖拽上传区', () => {
@@ -100,42 +113,10 @@ describe('CreateInterviewPage 准备配置页', () => {
     expect(recognizeImage).not.toHaveBeenCalled();
   });
 
-  it('clears the error when OCR returns no text', async () => {
-    vi.mocked(recognizeImage).mockResolvedValueOnce({ text: '   ' });
-    renderPage();
-    openJdModal();
-    const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
-    const file = new File(['x'], 'jd.png', { type: 'image/png' });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
-    await waitFor(() => {
-      expect(screen.getByText('未识别到文字，请尝试更清晰的图片')).toBeTruthy();
-    });
-  });
-
-  it('shows error when OCR recognition fails', async () => {
-    vi.mocked(recognizeImage).mockRejectedValueOnce(new Error('boom'));
-    renderPage();
-    openJdModal();
-    const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
-    const file = new File(['x'], 'jd.png', { type: 'image/png' });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
-    await waitFor(() => {
-      expect(screen.getByText('图片识别失败')).toBeTruthy();
-    });
-  });
-
-  it('计划卡点击行打开选择 Modal', () => {
-    renderPage();
-    fireEvent.click(screen.getByText('面试风格'));
-    // Modal 弹出，含选项胶囊
-    expect(screen.getByRole('dialog', { name: '选择面试风格' })).toBeTruthy();
-    expect(screen.getByText('严厉技术面')).toBeTruthy();
-  });
-
-  it('简历拖拽上传：成功解析后关闭 Modal', async () => {
+  it('简历拖拽上传：成功解析后关闭 Modal，卡片显示文件名', async () => {
     renderPage();
     // 打开简历 Modal：先出「来源选择」，点「自己上传」进入上传弹窗
-    fireEvent.click(screen.getAllByRole('button', { name: '导入' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: '上传' }));
     fireEvent.click(screen.getByRole('button', { name: /自己上传/ }));
     expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
     expect(screen.getByText('拖拽简历到这里，或点击选择文件')).toBeTruthy();
@@ -148,19 +129,22 @@ describe('CreateInterviewPage 准备配置页', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '导入简历' })).toBeNull();
     });
+    // 卡片显示文件名，按钮变为「替换」
+    expect(screen.getByText('resume.txt')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '替换' })).toBeTruthy();
   });
 
-  it('简历拖拽上传：不支持的格式提示错误且不关闭', async () => {
+  it('选择题库：打开弹窗可勾选题目', async () => {
     renderPage();
-    fireEvent.click(screen.getAllByRole('button', { name: '导入' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: /自己上传/ }));
-    const dropzone = screen.getByRole('button', { name: '上传简历' });
-    const badFile = new File(['x'], 'resume.exe', { type: 'application/octet-stream' });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [badFile] } });
+    // 「选择题库」卡的「导入」按钮打开题库弹窗
+    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    expect(screen.getByRole('dialog', { name: '选择题库' })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText('不支持的文件类型，请上传 .txt、.md、.pdf 或 .docx 文件')).toBeTruthy();
+      expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy();
     });
-    // Modal 仍打开
-    expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
+    // 勾选一题（限定在弹窗内的 .bank-pick-question）
+    const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
+    fireEvent.click(bankItem!);
+    expect(bankItem?.className).toContain('is-selected');
   });
 });

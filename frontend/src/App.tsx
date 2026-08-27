@@ -18,14 +18,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <WelcomePage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/" element={<WelcomePage />} />
           <Route
             path="/history"
             element={

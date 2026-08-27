@@ -164,6 +164,11 @@ export async function retryReport(id: number): Promise<ReportResult> {
 
 export interface CreateFromBankInput {
   question_ids: number[];
+  // 携带岗位信息与简历参与定制；全部省略时后端退回纯题库练习。
+  job_jd?: string;
+  resume_text?: string;
+  resume_file_url?: string;
+  jd_file_url?: string;
   precheck_gaps?: string[];
   mode: InterviewMode;
   input_mode?: InputMode;
@@ -179,5 +184,19 @@ export async function createInterviewFromBank(
   return fetchJSON<Interview>('/api/interviews/from-bank', {
     method: 'POST',
     body: JSON.stringify(input),
+  });
+}
+
+export interface SendReportEmailResult {
+  status: string;
+  to: string;
+}
+
+/** 把面试报告摘要发送到当前用户的 WPS 邮箱，返回收件地址。 */
+export async function sendReportToEmail(
+  id: number,
+): Promise<SendReportEmailResult> {
+  return fetchJSON<SendReportEmailResult>(`/api/interviews/${id}/report/email`, {
+    method: 'POST',
   });
 }

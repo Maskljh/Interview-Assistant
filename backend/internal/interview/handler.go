@@ -29,14 +29,18 @@ type createRequest struct {
 }
 
 type fromBankRequest struct {
-	QuestionIDs  []int64   `json:"question_ids"`
-	Mode         Mode      `json:"mode"`
-	InputMode    InputMode `json:"input_mode"`
-	Persona      string    `json:"persona"`
-	Difficulty   string    `json:"difficulty"`
-	CompanyStyle string    `json:"company_style"`
-	CameraEnabled bool     `json:"camera_enabled"`
-	PrecheckGaps []string  `json:"precheck_gaps"`
+	QuestionIDs   []int64   `json:"question_ids"`
+	JobJD         string    `json:"job_jd"`
+	ResumeText    *string   `json:"resume_text"`
+	ResumeFileURL *string   `json:"resume_file_url"`
+	JDFileURL     *string   `json:"jd_file_url"`
+	Mode          Mode      `json:"mode"`
+	InputMode     InputMode `json:"input_mode"`
+	Persona       string    `json:"persona"`
+	Difficulty    string    `json:"difficulty"`
+	CompanyStyle  string    `json:"company_style"`
+	CameraEnabled bool      `json:"camera_enabled"`
+	PrecheckGaps  []string  `json:"precheck_gaps"`
 }
 
 type listItemResponse struct {
@@ -142,7 +146,7 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

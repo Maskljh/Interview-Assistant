@@ -1,17 +1,15 @@
-import type { MouseEvent, ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import './AppNav.css';
 import UserModal from './UserModal';
+import './AppNav.css';
 
-export type NavTab = 'home' | 'create' | 'questions' | 'history' | 'trends';
+export type NavTab = 'create' | 'questions' | 'history' | 'trends';
 
 const NAV_ITEMS: { tab: NavTab; to: string; label: string }[] = [
-  { tab: 'home', to: '/', label: '首页' },
-  { tab: 'create', to: '/interviews/new', label: '开始练习' },
-  { tab: 'questions', to: '/questions', label: '题库' },
-  { tab: 'history', to: '/history', label: '历史记录' },
+  { tab: 'create', to: '/interviews/new', label: '开始面试' },
+  { tab: 'questions', to: '/questions', label: '面试信息管理' },
+  { tab: 'history', to: '/history', label: '面试记录' },
   { tab: 'trends', to: '/trends', label: '成长看板' },
 ];
 
@@ -32,8 +30,13 @@ export default function AppNav({
   variant = 'sidebar',
   children,
 }: AppNavProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [userModalOpen, setUserModalOpen] = useState(false);
+
+  // 页面加载时拉取最新用户资料（昵称/头像可能已在 WPS 侧更新）
+  useEffect(() => {
+    void refreshUser().catch(() => {});
+  }, [refreshUser]);
 
   function guard(): boolean {
     if (!confirmLeave) return true;
@@ -49,7 +52,14 @@ export default function AppNav({
     logout();
   }
 
-  const displayName = user?.username || user?.email || '未登录';
+  const displayName = user?.nickname || user?.username || user?.email || '未登录';
+  // 优先显示 WPS 账号全局 ID（个人中心可见的数字），无则回退系统内 MZ- 编号
+  const displayId = user?.user_id
+    ? String(user.user_id)
+    : user?.id
+      ? `MZ-${String(user.id).padStart(8, '0')}`
+      : '';
+  const avatarUrl = user?.avatar_url || '';
 
   function avatarInitial(name: string): string {
     const trimmed = name.trim();
@@ -131,22 +141,41 @@ export default function AppNav({
             ),
           )}
         </nav>
-        <button
-          type="button"
-          className="app-sidebar-user-btn"
-          onClick={() => setUserModalOpen(true)}
-        >
-          <span className="app-sidebar-avatar" aria-hidden>
-            {avatarInitial(displayName)}
-          </span>
-          <span className="app-sidebar-user" title={displayName}>
-            {displayName}
-          </span>
-        </button>
+        <div className="app-sidebar-user-area">
+          <button
+            type="button"
+            className="app-sidebar-user-info"
+            onClick={() => setUserModalOpen(true)}
+            aria-label="打开用户管理"
+          >
+            <span className="app-sidebar-avatar" aria-hidden>
+              {avatarUrl ? (
+                <img className="app-sidebar-avatar-img" src={avatarUrl} alt="" />
+              ) : (
+                avatarInitial(displayName)
+              )}
+            </span>
+            <span className="app-sidebar-user-text">
+              <span className="app-sidebar-username" title={displayName}>
+                {displayName}
+              </span>
+              {displayId && (
+                <span className="app-sidebar-useid" title={displayId}>
+                  {displayId}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="app-sidebar-logout"
+            onClick={() => setUserModalOpen(true)}
+          >
+            退出
+          </button>
+        </div>
       </aside>
-      {userModalOpen && (
-        <UserModal onClose={() => setUserModalOpen(false)} />
-      )}
+      {userModalOpen && <UserModal onClose={() => setUserModalOpen(false)} />}
       {mobileTabbar}
     </>
   );
