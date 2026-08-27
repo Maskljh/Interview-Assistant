@@ -61,10 +61,11 @@ Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自
 
 ## 2. 应用数据库迁移
 
-按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `015_wps_oauth.sql`）：
+按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `017_wps_oauth_columns.sql`）：
 
 - **全新数据库**：每个文件执行一次。
 - **已有数据库**：只应用当前 schema 之后新增的文件（例如 `013_resume_files.sql` 新增 `users.username` 列与 `resume_files` 表；`014_job_title.sql` 新增 `interview_sessions.job_title` 列与 `question_usage` 表）。
+- **016/017（WPS 能力）**：`016_wps_tokens.sql` 持久化 WPS access/refresh token（云文档选简历、报告发邮箱）；`017_wps_oauth_columns.sql` 幂等补齐 `users` 的 `wps_openid` / `user_id` / `nickname` / `avatar_url` 列并给 `wps_openid` 加唯一索引。这两列组原先依赖一份未纳入仓库的迁移，017 使其在干净环境也能完整建表。
 
 从仓库根目录（Docker MySQL）：
 
@@ -289,7 +290,7 @@ backend/                  Go API（Gin）、迁移、内部包
     expression/           表达分析（语速/口头禅/句长）
     upload/               OSS 服务端代理上传/读取（HMAC-SHA1 签名）
     ws/                   WebSocket 直播
-  migrations/             001..015 数据库迁移（015 = WPS OAuth + username 补齐）
+  migrations/             001..017 数据库迁移（015 = WPS OAuth + username 补齐；016 = WPS token 持久化；017 = WPS OAuth 用户列补齐）
 frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis
