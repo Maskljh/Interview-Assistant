@@ -16,7 +16,7 @@
 | `kso.mail.readwrite` | 创建并发送邮件 | 报告发送到邮箱 |
 | `kso.mailbox.read` | 获取邮箱列表 | 报告发送到邮箱 |
 
-> 最终 `WPS_SCOPE=kso.user_base.read,kso.drive.readwrite,kso.file.read,kso.file_search.readwrite,kso.mail.readwrite,kso.mailbox.read`（当前 .env 已按此配置，功能已全部测试通过）
+> 启用云文档与邮箱能力时，`WPS_SCOPE` 应配置为：`kso.user_base.read,kso.drive.readwrite,kso.file.read,kso.file_search.readwrite,kso.mail.readwrite,kso.mailbox.read`
 
 > 说明：这是**用户授权**（User Authorization）类权限，用户登录应用时会看到授权确认页，同意后应用获得该用户自己的云文档与邮箱操作能力，不会越权访问他人数据。
 
@@ -32,8 +32,9 @@
 
 ### 3. 申请权限 Scope
 进入应用的**权限管理**页面，依次搜索并申请以下用户授权权限：
+- `kso.drive.readwrite`
 - `kso.file.read`
-- `kso.file.search`
+- `kso.file_search.readwrite`
 - `kso.mail.readwrite`
 - `kso.mailbox.read`
 
@@ -47,7 +48,7 @@
 审批通过后，将项目根目录 `.env` 中的 `WPS_SCOPE` 更新为完整权限列表：
 
 ```dotenv
-WPS_SCOPE=kso.user_base.read,kso.file.read,kso.file.search,kso.mail.readwrite,kso.mailbox.read
+WPS_SCOPE=kso.user_base.read,kso.drive.readwrite,kso.file.read,kso.file_search.readwrite,kso.mail.readwrite,kso.mailbox.read
 ```
 
 > 当前项目的 `.env` 已按此配置。若应用因其他原因被重置，请按上面格式重新填写。
@@ -58,7 +59,7 @@ WPS_SCOPE=kso.user_base.read,kso.file.read,kso.file.search,kso.mail.readwrite,ks
 
 ---
 
-## 四、生效与验证
+## 三、生效与验证
 
 1. **重新登录生效**：权限变更后，用户需要**退出并重新登录**一次，授权页会新增云文档/邮箱权限的授权确认。
 2. **验证云文档选简历**：创建面试 → 简历「上传」→「从 WPS 云文档选择」→ 应能看到云文档中的简历文件（.pdf/.docx/.txt/.md）。

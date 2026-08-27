@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { recognizeImage } from './ocr';
 import { ApiError } from './client';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 vi.mock('./client', async (importOriginal) => {
   const actual = (await importOriginal()) as object;

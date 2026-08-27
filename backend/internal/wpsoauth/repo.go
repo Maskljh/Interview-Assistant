@@ -51,6 +51,20 @@ func (t WPSToken) Expired() bool {
 	return time.Now().Add(5 * time.Minute).After(t.ExpiresAt)
 }
 
+// refreshed applies a refresh-token response while preserving the previous
+// refresh token when the provider omits it. WPS may rotate only access tokens.
+func (t WPSToken) refreshed(accessToken, refreshToken string, expiresAt time.Time) WPSToken {
+	next := t
+	next.AccessToken = accessToken
+	if refreshToken != "" {
+		next.RefreshToken = refreshToken
+	}
+	if !expiresAt.IsZero() {
+		next.ExpiresAt = expiresAt
+	}
+	return next
+}
+
 var ErrNoUser = errors.New("user not found")
 
 const tokenColumns = "wps_access_token, wps_refresh_token, wps_token_expires_at, wps_token_scope"
@@ -90,7 +104,34 @@ func (r *Repo) GetByID(id int64) (*User, error) {
 // UpsertWPSUser 按 openid 插入或更新用户：首次登录创建，之后刷新昵称/头像。
 // email 用占位地址（users.email NOT NULL UNIQUE），password_hash 填随机值使其无法用密码登录；
 // username 写入 WPS 昵称，供侧边栏/用户弹窗展示。user_id 存 WPS 账号全局数字 ID。
-func (r *Repo) UpsertWPSUser(openid, userID, nickname, avatarURL string) (*User, error) {
+// legacyOpenID 是旧版登录逻辑写入 wps_openid 的复合 ID；发现旧记录时原地迁移到新 openid。
+func (r *Repo) UpsertWPSUser(openid, legacyOpenID, userID, nickname, avatarURL string) (*User, error) {
+	if existing, err := r.GetByWPSOpenID(openid); err == nil {
+		if _, err := r.db.Exec(
+			"UPDATE users SET user_id = ?, username = ?, nickname = ?, avatar_url = ? WHERE id = ?",
+			userID, nickname, nickname, avatarURL, existing.ID,
+		); err != nil {
+			return nil, err
+		}
+		return r.GetByID(existing.ID)
+	} else if !errors.Is(err, ErrNoUser) {
+		return nil, err
+	}
+
+	if legacyOpenID != "" && legacyOpenID != openid {
+		if existing, err := r.GetByWPSOpenID(legacyOpenID); err == nil {
+			if _, err := r.db.Exec(
+				"UPDATE users SET wps_openid = ?, user_id = ?, username = ?, nickname = ?, avatar_url = ? WHERE id = ?",
+				openid, userID, nickname, nickname, avatarURL, existing.ID,
+			); err != nil {
+				return nil, err
+			}
+			return r.GetByID(existing.ID)
+		} else if !errors.Is(err, ErrNoUser) {
+			return nil, err
+		}
+	}
+
 	email := "wps_" + sanitizeOpenID(openid) + "@wps.local"
 	passwordHash, err := randomHash()
 	if err != nil {

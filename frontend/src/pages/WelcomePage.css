@@ -166,13 +166,29 @@
   }
 }
 
-@media (max-width: 599px) {
+/* ─── 响应式：大标题与按钮逐档缩放 ─── */
+@media (max-width: 900px) {
   .welcome-hero-content h1 {
-    font-size: 36px;
-    line-height: 46px;
+    font-size: 44px;
+    line-height: 52px;
   }
+}
 
-  .welcome-footer {
-    justify-content: center;
+@media (max-width: 640px) {
+  .welcome-hero-content h1 {
+    font-size: 34px;
+    line-height: 42px;
   }
+  .welcome-hero-logo {
+    width: 176px;
+    height: 176px;
+    margin-bottom: 24px;
+  }
+  .welcome-start {
+    width: 100%;
+    max-width: 280px;
+  }
+  .welcome-glow { width: 480px; height: 480px; }
+  .welcome-header,
+  .welcome-footer { padding: 0 16px; }
 }

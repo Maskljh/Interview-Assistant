@@ -4,7 +4,6 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import AppNav, { type NavTab } from './AppNav';
 import { AuthProvider } from '../auth/AuthContext';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 // pdfjs-dist requires DOMMatrix at import time in Node; mock the resume parser
 vi.mock('../lib/resumeParse', () => ({
@@ -64,14 +63,6 @@ describe('AppNav 侧边导航', () => {
     expect(sidebar.querySelector('a[href="/questions"]')).toBeNull();
   });
 
-  it('移动端 tabbar 渲染全部四个项，active 来自 tab prop', () => {
-    const { container } = renderNav({ tab: 'history' });
-    const tabbar = container.querySelector('nav.mobile-tabbar')!;
-    expect(tabbar.querySelectorAll('a').length).toBe(4);
-    const active = tabbar.querySelector('.is-active');
-    expect(active?.textContent).toBe('面试记录');
-  });
-
   it('confirmLeave 且用户取消时阻止侧边导航跳转', () => {
     const confirmSpy = mockConfirm(false);
     const { container } = renderNav({ tab: 'create', confirmLeave: true });
@@ -103,8 +94,6 @@ describe('AppNav 侧边导航', () => {
     const header = container.querySelector('.interview-header')!;
     expect(header.querySelector('.interview-brand')?.textContent).toBe('面知');
     expect(container.querySelector('.app-sidebar')).toBeNull();
-    // 移动端 tabbar 仍渲染
-    expect(container.querySelector('nav.mobile-tabbar')).toBeTruthy();
   });
 
   it('侧边导航底部显示用户名与用户ID，并渲染退出按钮', () => {

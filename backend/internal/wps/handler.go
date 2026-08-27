@@ -71,7 +71,7 @@ type cloudFile struct {
 }
 
 // ListCloudFiles 列出用户云文档中的简历候选文件。
-// 优先列出各盘根目录文件；传 keyword 时再叠加文件搜索（需要 kso.file.search 权限）。
+// 优先列出各盘根目录文件；传 keyword 时再叠加文件搜索（需要 kso.file_search.readwrite 权限）。
 func (h *Handler) ListCloudFiles(c *gin.Context) {
 	token, ok := h.wpsToken(c)
 	if !ok {

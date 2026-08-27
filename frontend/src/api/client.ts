@@ -1,19 +1,10 @@
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
-// 后端 API 地址解析：
-// 1. 显式设置 VITE_API_BASE 时优先（打包 APK 时注入电脑局域网 IP）
-// 2. Capacitor 原生 App 内：window.location.hostname 是 localhost（手机自己），
-//    必须用注入的地址，否则回退到当前 hostname
-// 3. 浏览器环境：跟随当前页面的 hostname（桌面 localhost、手机经局域网访问时自动用局域网 IP）
-import { Capacitor } from '@capacitor/core';
-
-const isNative = Capacitor.isNativePlatform();
+// 后端 API 地址解析：显式设置 VITE_API_BASE 时优先，否则跟随当前页面的 hostname
 const API_BASE = import.meta.env.VITE_API_BASE
   ? import.meta.env.VITE_API_BASE
-  : isNative
-    ? 'http://10.213.211.101:18080' // App 内默认指向开发机局域网 IP（打包时按需改）
-    : `${window.location.protocol}//${window.location.hostname}:18080`;
+  : `${window.location.protocol}//${window.location.hostname}:18080`;
 
 export function getApiBase(): string {
   return API_BASE;

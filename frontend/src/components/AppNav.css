@@ -167,3 +167,17 @@
     transition: none;
   }
 }
+
+/* ─── 响应式：侧栏随窗口收缩 ─── */
+@media (max-width: 1080px) {
+  .app-sidebar { width: 196px; }
+}
+
+@media (max-width: 860px) {
+  .app-sidebar { width: 168px; }
+  .app-sidebar-brand { padding: 0 24px 32px; font-size: 24px; }
+  .app-sidebar-nav { padding: 0 12px; }
+  .app-sidebar-item { padding: 10px 12px; }
+  .app-sidebar-user-area { padding: 12px; }
+  .app-sidebar-user-text { display: none; }
+}

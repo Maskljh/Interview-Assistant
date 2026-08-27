@@ -66,22 +66,6 @@ export default function AppNav({
     return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
   }
 
-  const mobileTabbar = (
-    <nav className="mobile-tabbar" aria-label="主导航">
-      {NAV_ITEMS.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          className={`mobile-tabbar-item${item.tab === tab ? ' is-active' : ''}`}
-          aria-current={item.tab === tab ? 'page' : undefined}
-          onClick={(e) => handleClick(e)}
-        >
-          {item.label}
-        </Link>
-      ))}
-    </nav>
-  );
-
   if (variant === 'topbar') {
     return (
       <>
@@ -104,7 +88,6 @@ export default function AppNav({
             </button>
           </div>
         </header>
-        {mobileTabbar}
       </>
     );
   }
@@ -176,7 +159,6 @@ export default function AppNav({
         </div>
       </aside>
       {userModalOpen && <UserModal onClose={() => setUserModalOpen(false)} />}
-      {mobileTabbar}
     </>
   );
 }

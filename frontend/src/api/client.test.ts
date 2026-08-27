@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // client.ts 顶层引用 window.location / localStorage / import.meta.env；
-// 测试里只关心 toUserMessage 纯函数；Capacitor 在 jsdom 下按非原生平台处理。
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 import { toUserMessage } from './client';
 

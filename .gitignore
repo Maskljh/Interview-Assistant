@@ -26,6 +26,7 @@ figma_shots/
 .playwright-cli/
 *.log
 *.png
+!frontend/public/logo.png
 server.exe~
 
 # Local tooling / temp / backup dirs (never commit)

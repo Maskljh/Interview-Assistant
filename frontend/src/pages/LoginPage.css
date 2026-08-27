@@ -212,3 +212,29 @@
     transform: none !important;
   }
 }
+
+/* ─── 响应式：≤900px 品牌区收为顶部条；≤640px 卡片满宽 ─── */
+@media (max-width: 900px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+  .login-brand {
+    padding: 40px 32px;
+  }
+  .login-brand-title {
+    margin-top: 28px;
+  }
+  .login-card-wrap {
+    padding: 32px 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 470px;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-brand { padding: 24px; }
+  .login-brand-deco { width: 160px; height: 160px; }
+  .login-card { padding: 32px 24px; }
+}

@@ -5,7 +5,6 @@ import WelcomePage from './WelcomePage';
 import { AuthProvider } from '../auth/AuthContext';
 import * as client from '../api/client';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();

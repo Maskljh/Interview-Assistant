@@ -4,7 +4,6 @@ import { MemoryRouter } from 'react-router-dom';
 import CreateInterviewPage from './CreateInterviewPage';
 import { AuthProvider } from '../auth/AuthContext';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 vi.mock('../api/ocr', () => ({ recognizeImage: vi.fn(async () => ({ text: 'x' })) }));
 vi.mock('../lib/resumeParse', () => ({ extractResumeText: vi.fn(async () => '') }));
 vi.mock('../api/resumes', () => ({ listResumes: vi.fn(async () => []) }));

@@ -5,7 +5,6 @@ import type { ImportItem } from '../api/questions';
 import { parseImportImage, parseImportText } from '../api/questions';
 import { ApiError } from '../api/client';
 
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 // 组件内解析文档文件会用到 pdfjs（需要 DOMMatrix）；测试里 mock 掉文本解析器
 vi.mock('../lib/resumeParse', () => ({

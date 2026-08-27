@@ -27,10 +27,11 @@ type Config struct {
 // WPSUser 是 WPS 开放平台用户基础信息（从 v7/users/current 解析，兼容多种字段名）。
 // OpenID 是应用级唯一标识（登录匹配用），UserID 是 WPS 账号全局数字 ID（个人中心可见，展示用）。
 type WPSUser struct {
-	UserID string
-	OpenID string
-	Name   string
-	Avatar string
+	UserID   string
+	OpenID   string
+	LegacyID string
+	Name     string
+	Avatar   string
 }
 
 // Client 封装对 WPS 开放平台的 HTTP 调用。
@@ -144,10 +145,11 @@ func (c *Client) FetchUser(ctx context.Context, accessToken string) (*WPSUser, e
 
 	// user_id / ex_user_id 是 WPS 账号全局数字 ID（个人中心可见）；openid 是应用级标识。
 	user := &WPSUser{
-		UserID: firstString(u, "user_id", "ex_user_id", "id"),
-		OpenID: firstString(u, "openid"),
-		Name:   firstString(u, "name", "username", "nickname", "nickName", "user_name"),
-		Avatar: firstString(u, "avatar", "avatar_url", "avatarUrl"),
+		UserID:   firstString(u, "user_id", "ex_user_id", "id"),
+		OpenID:   firstString(u, "openid"),
+		LegacyID: firstString(u, "id", "user_id", "userId", "ex_user_id", "openid"),
+		Name:     firstString(u, "name", "username", "nickname", "nickName", "user_name"),
+		Avatar:   firstString(u, "avatar", "avatar_url", "avatarUrl"),
 	}
 	if user.OpenID == "" {
 		// 旧接口可能只有 id 而没有独立 openid 字段：此时用 id 兜底作 openid

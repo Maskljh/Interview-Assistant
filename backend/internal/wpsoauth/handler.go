@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,11 +34,12 @@ const (
 
 // Handler 处理 WPS OAuth 三个端点。
 type Handler struct {
-	cfg    Config
-	client *Client
-	repo   *Repo
-	rdb    *redis.Client
-	secret string
+	cfg       Config
+	client    *Client
+	repo      *Repo
+	rdb       *redis.Client
+	secret    string
+	refreshMu sync.Mutex
 }
 
 func NewHandler(cfg Config, db *sql.DB, rdb *redis.Client, secret string) *Handler {
@@ -128,7 +130,7 @@ func (h *Handler) Callback(c *gin.Context) {
 		h.redirectWithError(c, err.Error())
 		return
 	}
-	u, err := h.repo.UpsertWPSUser(wpsUser.OpenID, wpsUser.UserID, wpsUser.Name, wpsUser.Avatar)
+	u, err := h.repo.UpsertWPSUser(wpsUser.OpenID, wpsUser.LegacyID, wpsUser.UserID, wpsUser.Name, wpsUser.Avatar)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: UpsertWPSUser failed: %v", err)
 		h.redirectWithError(c, "保存用户失败")
@@ -249,6 +251,21 @@ func (h *Handler) TokenForUser(ctx context.Context, userID int64) (string, error
 	if !tok.Expired() {
 		return tok.AccessToken, nil
 	}
+
+	// Rotating refresh tokens can be invalidated by a second concurrent refresh.
+	// Re-read the row after acquiring the lock so followers reuse the winner's token.
+	h.refreshMu.Lock()
+	defer h.refreshMu.Unlock()
+	tok, err = h.repo.GetWPSToken(userID)
+	if err != nil {
+		return "", ErrNoWPSToken
+	}
+	if !tok.HasToken() {
+		return "", ErrNoWPSToken
+	}
+	if !tok.Expired() {
+		return tok.AccessToken, nil
+	}
 	// access_token 过期：尝试用 refresh_token 刷新。
 	if tok.RefreshToken == "" {
 		return "", ErrNoWPSToken
@@ -257,7 +274,12 @@ func (h *Handler) TokenForUser(ctx context.Context, userID int64) (string, error
 	if err != nil {
 		return "", ErrNoWPSToken
 	}
-	if err := h.saveWPSToken(userID, at, rt, expiresIn); err != nil {
+	expiresAt := time.Time{}
+	if expiresIn > 0 {
+		expiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
+	}
+	next := tok.refreshed(at, rt, expiresAt)
+	if err := h.repo.SaveWPSToken(userID, next); err != nil {
 		log.Printf("[wpsoauth] refresh save failed: %v", err)
 	}
 	return at, nil

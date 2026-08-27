@@ -37,7 +37,7 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 | MySQL 8 | `127.0.0.1:3306` | 用户、会话、题目、轮次、行为信号 |
 | Redis 7 | `127.0.0.1:6379` | 面试直播态、暂存 |
 
-> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端监听端口由 `.env` 的 `HTTP_ADDR` 决定（默认 `:18080`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname（手机经局域网访问时自动用局域网 IP）。
+> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端监听端口由 `.env` 的 `HTTP_ADDR` 决定（默认 `:18080`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname。
 
 ## 1. 启动 MySQL 与 Redis
 
@@ -184,7 +184,7 @@ Windows PowerShell 下 `curl` 若被 `Invoke-WebRequest` 别名占用，请用 `
 
 ### CORS
 
-REST 响应允许来源 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://localhost:5174`、`http://127.0.0.1:5174`（带 `Authorization`/`Content-Type` 头）。WebSocket 通过 `?token=` 携带 JWT（无 CORS 预检）。手机经局域网 IP（端口 5174）访问时后端同样放行。
+REST 响应允许来源 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://localhost:5174`、`http://127.0.0.1:5174`（带 `Authorization`/`Content-Type` 头）。WebSocket 通过 `?token=` 携带 JWT（无 CORS 预检）。
 
 ## 5. 运行前端
 
@@ -214,7 +214,7 @@ npm run dev            # 默认 http://localhost:5174
 
 ## Demo 流程
 
-1. **注册/登录**：`/register`（密码 ≥ 8 位）或 `/login`。
+1. **登录**：打开 `/login`，点击 WPS 授权入口完成 OAuth 登录。
 2. **创建面试**：粘贴 JD，选类型/人格/难度/企业风格，可选上传简历、跑预检；**可选勾选「开启摄像头分析」**。
 3. **开始**：从面试详情页开始（需服务端 `DEEPSEEK_API_KEY`）。
 4. **面试间**：WebSocket 逐题送达，TTS 朗读题目；按住说话（语音）作答；断线自动重连并补发暂存回答。
