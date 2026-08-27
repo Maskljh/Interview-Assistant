@@ -103,26 +103,17 @@ export default function AppNav({
           面知
         </Link>
         <nav className="app-sidebar-nav" aria-label="主导航">
-          {NAV_ITEMS.map((item) =>
-            item.tab === tab ? (
-              <span
-                key={item.to}
-                className="app-sidebar-item is-active"
-                aria-current="page"
-              >
-                {item.label}
-              </span>
-            ) : (
-              <Link
-                key={item.to}
-                className="app-sidebar-item"
-                to={item.to}
-                onClick={(e) => handleClick(e)}
-              >
-                {item.label}
-              </Link>
-            ),
-          )}
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.to}
+              className={`app-sidebar-item${item.tab === tab ? ' is-active' : ''}`}
+              to={item.to}
+              aria-current={item.tab === tab ? 'page' : undefined}
+              onClick={(e) => handleClick(e)}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
         <div className="app-sidebar-user-area">
           <button

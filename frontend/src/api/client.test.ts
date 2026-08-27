@@ -13,6 +13,7 @@ describe('toUserMessage', () => {
     expect(toUserMessage(409, 'report not available')).toBe('报告尚未生成');
     expect(toUserMessage(503, 'speech service unavailable')).toBe('语音服务暂不可用');
     expect(toUserMessage(400, 'invalid email')).toBe('邮箱格式不正确');
+    expect(toUserMessage(400, 'session has no questions')).toBe('该场面试暂无题目可存入题库');
   });
 
   it('normalizes whitespace and case before mapping', () => {

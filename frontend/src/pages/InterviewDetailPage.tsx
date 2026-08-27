@@ -4,26 +4,18 @@ import { ApiError } from '../api/client';
 import {
   getInterview,
   type Interview,
-  type InputMode,
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
 import {
   COMPANY_STYLE_LABELS,
   DIFFICULTY_LABELS,
-  MODE_LABELS,
   PERSONA_LABELS,
   STATUS_LABELS,
 } from '../lib/labels';
 import './InterviewPages.css';
 import { isFromQuestions } from '../lib/detailSource';
-import { DEMO_TURNS } from '../lib/demoTurns';
 import AppNav from '../components/AppNav';
 import FollowUpTree from '../components/FollowUpTree';
-
-const INPUT_MODE_LABELS: Record<InputMode, string> = {
-  text: '文本作答',
-  voice: '语音作答',
-};
 
 export default function InterviewDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,23 +77,17 @@ export default function InterviewDetailPage() {
     }
   }
 
-  const [showDemo, setShowDemo] = useState(false);
   const sortedTurns = interview
     ? [...interview.turns].sort((a, b) => a.seq - b.seq)
     : [];
-  const displayedTurns = showDemo ? DEMO_TURNS : sortedTurns;
 
   return (
     <div className="interview-page">
       <AppNav tab={fromQuestions ? 'questions' : 'history'} />
-      <main className="interview-main">
-        {fromQuestions ? (
+      <main className="interview-main interview-main--wide">
+        {fromQuestions && (
           <Link className="interview-back-link" to="/questions">
             ← 返回题库页
-          </Link>
-        ) : (
-          <Link className="interview-back-link" to="/history">
-            ← 全部面试
           </Link>
         )}
 
@@ -117,10 +103,6 @@ export default function InterviewDetailPage() {
               <div className="interview-detail-meta">
                 <span className={`status-pill status-pill--${interview.status}`}>
                   {STATUS_LABELS[interview.status]}
-                </span>
-                <span className="mode-pill">{MODE_LABELS[interview.mode]}</span>
-                <span className="mode-pill">
-                  {INPUT_MODE_LABELS[interview.input_mode]}
                 </span>
                 {interview.persona !== 'standard' && (
                   <span className="mode-pill">
@@ -164,28 +146,16 @@ export default function InterviewDetailPage() {
                 )}
               </div>
 
-              {(interview.resume_file_url || interview.jd_file_url) && (
+              {interview.resume_file_url && (
                 <div className="interview-detail-files">
-                  {interview.resume_file_url && (
-                    <a
-                      className="interview-inline-link"
-                      href={interview.resume_file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      查看简历原文件
-                    </a>
-                  )}
-                  {interview.jd_file_url && (
-                    <a
-                      className="interview-inline-link"
-                      href={interview.jd_file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      查看 JD 原文件
-                    </a>
-                  )}
+                  <a
+                    className="interview-inline-link"
+                    href={interview.resume_file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    查看简历原文件
+                  </a>
                 </div>
               )}
               {bankMessage && <p className="interview-success">{bankMessage}</p>}
@@ -196,28 +166,11 @@ export default function InterviewDetailPage() {
             <section className="interview-detail-card">
               <div className="interview-section-head">
                 <h2 className="interview-section-title">对话记录</h2>
-                {!showDemo && (
-                  <button
-                    type="button"
-                    className="interview-demo-link"
-                    onClick={() => setShowDemo(true)}
-                  >
-                    查看追问链演示
-                  </button>
-                )}
               </div>
-              {showDemo ? (
-                <>
-                  <p className="interview-subtitle">
-                    <span className="interview-demo-badge">演示数据</span>
-                    以下为追问链效果演示，非本场真实问答。
-                  </p>
-                  <FollowUpTree turns={DEMO_TURNS} />
-                </>
-              ) : sortedTurns.length === 0 ? (
+              {sortedTurns.length === 0 ? (
                 <p className="interview-subtitle">暂无对话记录。</p>
               ) : (
-                <FollowUpTree turns={displayedTurns} />
+                <FollowUpTree turns={sortedTurns} />
               )}
             </section>
           </>

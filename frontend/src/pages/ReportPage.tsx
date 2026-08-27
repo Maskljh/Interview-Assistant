@@ -247,13 +247,9 @@ export default function ReportPage() {
     <div className="interview-page">
       <AppNav tab={fromTrends ? 'trends' : 'history'} />
       <main className="interview-main">
-        {fromTrends ? (
+        {fromTrends && (
           <Link className="interview-back-link" to="/trends">
             ← 返回成长分析
-          </Link>
-        ) : (
-          <Link className="interview-back-link" to="/history">
-            ← 全部面试
           </Link>
         )}
 
@@ -484,7 +480,6 @@ export default function ReportPage() {
             )}
             </div>
 
-            <p className="report-model-version">模型：{feedback.model_version}</p>
           </>
         ) : null}
       </main>

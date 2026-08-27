@@ -533,11 +533,12 @@
 
 /* ─── Detail page ─── */
 .interview-detail-card {
-  padding: 30px 32px;
-  margin-bottom: 28px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
   background: #fffdf7;
-  border: 1px solid #e9e2d8;
-  border-radius: 16px;
+  border: 1px solid #d1d9e3;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(19, 30, 43, 0.08);
 }
 
 .interview-detail-card h1 {
@@ -3312,12 +3313,12 @@
   margin: 0 0 25px;
 }
 
-/* 容器：米色底 + 边框 + 圆角（Figma 带柔和投影） */
+/* 容器：米色底 + 边框 + 圆角（Figma 带柔和投影）；内边距按设计稿 34/42/32/46 */
 .prep-new-panel {
   background: #fffdf7;
   border: 1px solid #d1d9e3;
   border-radius: 16px;
-  padding: 28px 32px 23px;
+  padding: 46px 42px 32px 34px;
   box-shadow: 0 8px 20px rgba(19, 30, 43, 0.1);
   flex: 1;
   min-height: 0;
@@ -3670,7 +3671,7 @@
 }
 
 .prep-new-start {
-  height: 64px;
+  height: 46px;
   min-width: 197px;
   padding: 0 40px;
   border: none;
@@ -3680,7 +3681,7 @@
   font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
   font-size: 20px;
   font-weight: 600;
-  line-height: 64px;
+  line-height: 46px;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
@@ -3749,26 +3750,19 @@
   color: #131e2b;
 }
 
-@media (max-width: 1100px) {
-  .prep-new-cols {
-    flex-direction: column;
-  }
-  .prep-new-col-left,
-  .prep-new-card--bank {
-    width: 100%;
-    max-width: none;
-  }
-  .prep-new-job {
-    flex-wrap: wrap;
-  }
-}
+/* 窄屏堆叠已移除：页面改为整体缩放壳（下方方案 C），任何视口都按设计稿 1440×900
+   内容区等比缩放，不再依赖响应式重排，避免窄屏在固定画布内错乱。 */
 
-/* ─── 方案 C：整体缩放壳（临时验证，可整体撤回）───
-   固定 1440×900 设计稿尺寸，transform: scale() 等比缩放后居中。
-   视口比例 ≠ 16:10 时上下/左右留白，内容永不溢出。 */
+/* ─── 方案 C：整体缩放壳 ───
+   固定设计稿内容区（1222×900，=1440 总宽 − 左侧 218 侧边栏）尺寸，transform: scale()
+   等比缩放后居中。视口比例 ≠ 16:10 时上下/左右留白，内容永不溢出，比例恒与原型一致。
+   侧边栏不参与缩放，保持 218px 固定。 */
 .prep-scale-shell {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 218px;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3778,18 +3772,19 @@
 
 .prep-scale-stage {
   flex-shrink: 0;
+  width: 1222px;
+  height: 900px;
   transform-origin: center center;
   /* transform 由 JS 内联设置：scale 等比缩放；flex 居中在布局阶段完成，不受缩放影响 */
 }
 
-/* 缩放壳内的面试间准备页锁死 1440×900，不再随视口弹性伸缩 */
-.prep-scale-stage .interview-main.interview-prep-new {
-  height: 900px;
-}
-
-/* 缩放壳内的面试间准备页锁死 1440×900，不再随视口弹性伸缩 */
+/* 缩放壳内的面试间准备页锁死 1222×900，不再随视口弹性伸缩。
+   上下内边距对齐设计稿（品牌区 28..223，卡片 223..898），使面板高度≈设计 668px。 */
+.prep-scale-stage .interview-main.interview-prep-new,
 .prep-scale-shell .interview-main.interview-prep-new {
-  height: 900px;
+  width: 100%;
+  height: 100%;
+  padding: 28px 48px 8px;
 }
 
 /* ─── 追问链树形（FollowUpTree） ─── */

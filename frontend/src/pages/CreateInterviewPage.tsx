@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -122,6 +122,28 @@ export default function CreateInterviewPage() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // ── 整体缩放壳：固定 1440 设计稿内容区（1222×900）等比缩放，任何分辨率下比例与原型一致 ──
+  // 设计稿为 1440×900，去掉左侧 218 侧边栏后内容区 1222×900；等比缩放到可用区域并居中。
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const compute = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setScale(Math.min(w / 1222, h / 900));
+    };
+    compute();
+    // jsdom 等非浏览器环境没有 ResizeObserver，做存在性守卫以便测试可运行
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(compute) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', compute);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', compute);
+    };
+  }, []);
 
   /** 解析并上传简历；成功返回 true，失败返回 false（错误信息写入 resumeError）。 */
   async function handleResumeFile(file: File): Promise<boolean> {
@@ -473,7 +495,9 @@ export default function CreateInterviewPage() {
   return (
     <div className="interview-page">
       <AppNav tab="create" />
-      <main className="interview-main interview-main--wide interview-prep-new">
+      <div className="prep-scale-shell" ref={shellRef}>
+        <div className="prep-scale-stage" style={{ transform: `scale(${scale})` }}>
+          <main className="interview-main interview-main--wide interview-prep-new">
         {/* 顶部品牌区：左 logo + 右两行 slogan */}
         <div className="prep-new-brand">
           <img className="prep-new-logo" src="/logo.png" alt="面知" />
@@ -1066,7 +1090,9 @@ export default function CreateInterviewPage() {
           fileUrl={previewFileUrl}
           onClose={() => setPreviewOpen(false)}
         />
-      </main>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

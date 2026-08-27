@@ -42,25 +42,26 @@ const spy = vi.fn(() => value);
 }
 
 describe('AppNav 侧边导航', () => {
-  it('渲染品牌和全部四个导航项，当前项为 span', () => {
+  it('渲染品牌和全部四个导航项，当前项为可点击链接', () => {
     const { container } = renderNav({ tab: 'create' });
     const sidebar = container.querySelector('.app-sidebar')!;
     expect(sidebar.querySelector('.app-sidebar-brand')?.textContent).toBe('面知');
     const links = [...sidebar.querySelectorAll('a.app-sidebar-item')].map(
       (a) => a.textContent,
     );
-    // 当前页「开始面试」为 span，其余三项为链接
-    expect(links).toEqual(['面试信息管理', '面试记录', '成长看板']);
-    const current = sidebar.querySelector('span.app-sidebar-item[aria-current="page"]');
+    // 全部四项均为链接，当前页「开始面试」高亮
+    expect(links).toEqual(['开始面试', '面试信息管理', '面试记录', '成长看板']);
+    const current = sidebar.querySelector('a.app-sidebar-item.is-active[aria-current="page"]');
     expect(current?.textContent).toBe('开始面试');
+    expect(current?.getAttribute('href')).toBe('/interviews/new');
   });
 
-  it('显示当前导航项为 aria-current span 而非链接', () => {
+  it('当前导航项为高亮链接且可点击', () => {
     const { container } = renderNav({ tab: 'questions' });
     const sidebar = container.querySelector('.app-sidebar')!;
-    const current = sidebar.querySelector('span.app-sidebar-item[aria-current="page"]');
+    const current = sidebar.querySelector('a.app-sidebar-item.is-active[aria-current="page"]');
     expect(current?.textContent).toBe('面试信息管理');
-    expect(sidebar.querySelector('a[href="/questions"]')).toBeNull();
+    expect(current?.getAttribute('href')).toBe('/questions');
   });
 
   it('confirmLeave 且用户取消时阻止侧边导航跳转', () => {
@@ -128,7 +129,7 @@ describe('AppNav 侧边导航', () => {
   it('导航项链接指向正确路由', () => {
     const { container } = renderNav({ tab: 'create' });
     const sidebar = container.querySelector('.app-sidebar')!;
-    expect(sidebar.querySelector('a[href="/interviews/new"]')).toBeNull(); // 当前项是 span
+    expect(sidebar.querySelector('a[href="/interviews/new"]')?.textContent).toBe('开始面试');
     expect(sidebar.querySelector('a[href="/questions"]')?.textContent).toBe('面试信息管理');
     expect(sidebar.querySelector('a[href="/history"]')?.textContent).toBe('面试记录');
     expect(sidebar.querySelector('a[href="/trends"]')?.textContent).toBe('成长看板');

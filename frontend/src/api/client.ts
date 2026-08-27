@@ -37,6 +37,7 @@ export class ApiError extends Error {
 const MESSAGE_MAP: Record<string, string> = {
   'invalid email': '邮箱格式不正确',
   'question generation failed': '题目生成失败，请检查服务器 AI 配置后重试',
+  'session has no questions': '该场面试暂无题目可存入题库',
   'not found': '未找到相关内容',
   'report not available': '报告尚未生成',
   'speech service unavailable': '语音服务暂不可用',
