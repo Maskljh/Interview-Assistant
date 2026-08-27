@@ -213,6 +213,26 @@ func basicAuth(clientID, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString([]byte(clientID + ":" + clientSecret))
 }
 
+// ParseAidFromToken 从 WPS access_token（JWT）中解析 aid——WPS 账号全局数字 ID，
+// 即用户在个人中心可见的账号 ID。解析失败返回空字符串，由调用方决定是否回退。
+func ParseAidFromToken(accessToken string) string {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		Aid json.Number `json:"aid"`
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		return ""
+	}
+	return claims.Aid.String()
+}
+
 func firstString(m map[string]any, keys ...string) string {
 	for _, k := range keys {
 		if v, ok := m[k].(string); ok && v != "" {

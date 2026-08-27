@@ -130,7 +130,13 @@ func (h *Handler) Callback(c *gin.Context) {
 		h.redirectWithError(c, err.Error())
 		return
 	}
-	u, err := h.repo.UpsertWPSUser(wpsUser.OpenID, wpsUser.LegacyID, wpsUser.UserID, wpsUser.Name, wpsUser.Avatar)
+	// WPS 账号全局数字 ID（个人中心可见）藏在 access_token 的 aid 字段；
+	// 解析成功则作为 user_id 存入，否则回退用户信息接口返回的 ex_user_id。
+	userID := wpsUser.UserID
+	if aid := ParseAidFromToken(accessToken); aid != "" {
+		userID = aid
+	}
+	u, err := h.repo.UpsertWPSUser(wpsUser.OpenID, wpsUser.LegacyID, userID, wpsUser.Name, wpsUser.Avatar)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: UpsertWPSUser failed: %v", err)
 		h.redirectWithError(c, "保存用户失败")

@@ -69,6 +69,12 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
   const displayName = user?.nickname || user?.username || user?.email || '未登录';
   const avatarInitial = displayName.trim().charAt(0).toUpperCase() || '?';
   const avatarUrl = user?.avatar_url || '';
+  // 与侧边栏一致：WPS user_id 可能是账号名，仅当纯数字时才展示，否则用系统内 MZ- 编号
+  const wpsUserId = user?.user_id ? String(user.user_id).trim() : '';
+  const isNumericId = wpsUserId !== '' && /^\d+$/.test(wpsUserId);
+  const userId = isNumericId
+    ? wpsUserId
+    : `MZ-${String(user?.id ?? 0).padStart(8, '0')}`;
 
   async function handleFile(file: File) {
     if (uploading) return;
@@ -153,7 +159,7 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
             </div>
             <p className="user-name">{displayName}</p>
             <p className="user-id-label">用户 ID</p>
-            <p className="user-id">{user?.user_id ? String(user.user_id) : `MZ-${String(user?.id ?? 0).padStart(8, '0')}`}</p>
+            <p className="user-id">{userId}</p>
             <button type="button" className="user-logout-btn" onClick={handleLogout}>
               退出登录
             </button>

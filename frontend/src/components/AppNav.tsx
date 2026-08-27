@@ -53,9 +53,12 @@ export default function AppNav({
   }
 
   const displayName = user?.nickname || user?.username || user?.email || '未登录';
-  // 优先显示 WPS 账号全局 ID（个人中心可见的数字），无则回退系统内 MZ- 编号
-  const displayId = user?.user_id
-    ? String(user.user_id)
+  // WPS 用户信息接口返回的 user_id 实际可能是账号名（如 luojiehao）而非数字 ID：
+  // 仅当它是纯数字时才当作 ID 展示，否则回退到系统内 MZ- 编号，避免名字下方重复显示用户名。
+  const wpsUserId = user?.user_id ? String(user.user_id).trim() : '';
+  const isNumericId = wpsUserId !== '' && /^\d+$/.test(wpsUserId);
+  const displayId = isNumericId
+    ? wpsUserId
     : user?.id
       ? `MZ-${String(user.id).padStart(8, '0')}`
       : '';
@@ -143,7 +146,7 @@ export default function AppNav({
           <button
             type="button"
             className="app-sidebar-logout"
-            onClick={() => setUserModalOpen(true)}
+            onClick={handleLogout}
           >
             退出
           </button>
