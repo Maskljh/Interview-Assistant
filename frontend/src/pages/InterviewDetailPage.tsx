@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   getInterview,
+  startInterview,
   type Interview,
 } from '../api/interviews';
 import { importQuestionsFromSession } from '../api/questions';
@@ -18,6 +19,7 @@ import AppNav from '../components/AppNav';
 import FollowUpTree from '../components/FollowUpTree';
 
 export default function InterviewDetailPage() {
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const fromQuestions = isFromQuestions(searchParams.get('from'));
@@ -77,6 +79,26 @@ export default function InterviewDetailPage() {
     }
   }
 
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
+
+  // 僵尸会话（draft/ready）从未开始：draft 需先生成题目，ready 已有题目可直接进面试室。
+  async function handleStart() {
+    if (interview?.status === 'ready') {
+      navigate(`/interviews/${interview.id}/room`);
+      return;
+    }
+    setStarting(true);
+    setStartError('');
+    try {
+      await startInterview(interviewId);
+      navigate(`/interviews/${interviewId}/room`);
+    } catch (err) {
+      setStartError(err instanceof ApiError ? err.message : '开始面试失败');
+      setStarting(false);
+    }
+  }
+
   const sortedTurns = interview
     ? [...interview.turns].sort((a, b) => a.seq - b.seq)
     : [];
@@ -99,7 +121,11 @@ export default function InterviewDetailPage() {
           <>
             {/* 标题区卡片 */}
             <section className="interview-detail-card">
-              <h1>面试 #{interview.id}</h1>
+              <h1>
+                {interview.job_title
+                  ? `${interview.job_title} · 面试 #${interview.id}`
+                  : `面试 #${interview.id}`}
+              </h1>
               <div className="interview-detail-meta">
                 <span className={`status-pill status-pill--${interview.status}`}>
                   {STATUS_LABELS[interview.status]}
@@ -126,6 +152,16 @@ export default function InterviewDetailPage() {
 
               {/* 操作区 */}
               <div className="interview-detail-actions">
+                {(interview.status === 'draft' || interview.status === 'ready') && (
+                  <button
+                    type="button"
+                    className="interview-submit"
+                    onClick={() => void handleStart()}
+                    disabled={starting}
+                  >
+                    {starting ? '准备题目中…' : '开始面试'}
+                  </button>
+                )}
                 {interview.status === 'in_progress' && (
                   <Link
                     className="interview-submit"
@@ -160,6 +196,7 @@ export default function InterviewDetailPage() {
               )}
               {bankMessage && <p className="interview-success">{bankMessage}</p>}
               {bankError && <p className="interview-error">{bankError}</p>}
+              {startError && <p className="interview-error">{startError}</p>}
             </section>
 
             {/* 对话记录卡片 */}

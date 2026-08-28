@@ -20,7 +20,7 @@ function InterviewRow({ item, index }: { item: InterviewListItem; index: number 
       <span className="history-no">{String(index + 1).padStart(2, '0')}</span>
       <div className="history-row-main">
         <Link className="history-row-title" to={`/interviews/${item.id}`}>
-          面试 #{item.id}
+          {item.job_title ? `${item.job_title} · 面试 #${item.id}` : `面试 #${item.id}`}
         </Link>
         <span className="history-row-date">{formatDateZh(item.created_at)}</span>
         <div className="history-row-badges">

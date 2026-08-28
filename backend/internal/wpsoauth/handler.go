@@ -22,7 +22,8 @@ const (
 	// stateTTL 是授权 state 的有效期；超过后回调被拒绝，需要重新发起登录。
 	stateTTL = 10 * time.Minute
 	// codeTTL 是一次性 oauth_code 的有效期，前端必须在窗口内换取应用 token。
-	codeTTL = 60 * time.Second
+	// 60s 偏短：用户在 WPS 授权页停留稍久（阅读权限说明等）回来即失效，需重新走一遍授权。
+	codeTTL = 5 * time.Minute
 	// tokenTTL 与应用签发 JWT 的过期时间保持一致（现有账号登录同为 24h）。
 	tokenTTL = 24 * time.Hour
 )
@@ -121,13 +122,13 @@ func (h *Handler) Callback(c *gin.Context) {
 	accessToken, refreshToken, expiresIn, err := h.client.ExchangeCode(ctx, code)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: ExchangeCode failed: %v", err)
-		h.redirectWithError(c, err.Error())
+		h.redirectWithError(c, "WPS 授权失败，请重试")
 		return
 	}
 	wpsUser, err := h.client.FetchUser(ctx, accessToken)
 	if err != nil {
 		log.Printf("[wpsoauth] callback: FetchUser failed: %v", err)
-		h.redirectWithError(c, err.Error())
+		h.redirectWithError(c, "WPS 登录失败，请重试")
 		return
 	}
 	// WPS 账号全局数字 ID（个人中心可见）藏在 access_token 的 aid 字段；
@@ -178,7 +179,7 @@ func (h *Handler) Exchange(c *gin.Context) {
 		return
 	}
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "登录凭证无效或已过期"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "登录凭证无效或已过期，请重新登录授权"})
 		return
 	}
 	userID, err := strconv.ParseInt(raw, 10, 64)

@@ -15,6 +15,8 @@ import {
   type Emotion,
 } from '../api/behavior';
 import './InterviewPages.css';
+import ConfirmModal from '../components/ConfirmModal';
+import { getPrimaryEmail } from '../api/wps';
 import { isFromTrends } from '../lib/detailSource';
 import AppNav from '../components/AppNav';
 
@@ -42,7 +44,9 @@ function formatDuration(startedAt: string | null, endedAt: string | null): strin
   if (!startedAt || !endedAt) return '进行中';
   const start = new Date(startedAt).getTime();
   const end = new Date(endedAt).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '进行中';
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return '进行中';
+  // 数据异常（结束时间早于开始时间）：不误报“进行中”，显示“时长未知”。
+  if (end < start) return '时长未知';
   const mins = Math.max(1, Math.round((end - start) / 60000));
   return `${mins} 分钟`;
 }
@@ -86,6 +90,8 @@ export default function ReportPage() {
   const [error, setError] = useState('');
   const [expression, setExpression] = useState<ExpressionResult | null>(null);
   const [behavior, setBehavior] = useState<BehaviorResult | null>(null);
+  const [expressionError, setExpressionError] = useState(false);
+  const [behaviorError, setBehaviorError] = useState(false);
   const [interviewMeta, setInterviewMeta] = useState<{
     job_title: string | null;
     job_jd: string;
@@ -100,6 +106,10 @@ export default function ReportPage() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [emailConfirmOpen, setEmailConfirmOpen] = useState(false);
+  const [emailTarget, setEmailTarget] = useState('');
+  const [emailTargetLoading, setEmailTargetLoading] = useState(false);
+  const [emailTargetError, setEmailTargetError] = useState('');
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current != null) {
@@ -120,7 +130,7 @@ export default function ReportPage() {
           setFeedback(result.feedback);
           setAvailable(true);
           stopPolling();
-        } else if (pollCountRef.current >= 12) {
+        } else if (pollCountRef.current >= 30) {
           stopPolling();
           setPollFailed(true);
         }
@@ -185,18 +195,26 @@ export default function ReportPage() {
 
     fetchExpression(interviewId)
       .then((res) => {
-        if (!cancelled) setExpression(res);
+        if (!cancelled) {
+          setExpression(res);
+          setExpressionError(false);
+        }
       })
       .catch(() => {
-        /* silent: hide expression section on error */
+        /* 弱提示：表达分析加载失败时不整段消失，展示可重试的空态卡 */
+        if (!cancelled) setExpressionError(true);
       });
 
     fetchBehavior(interviewId)
       .then((res) => {
-        if (!cancelled) setBehavior(res);
+        if (!cancelled) {
+          setBehavior(res);
+          setBehaviorError(false);
+        }
       })
       .catch(() => {
-        /* silent: hide behavior section on error */
+        /* 弱提示：行为信号加载失败时不整段消失，展示可重试的空态卡 */
+        if (!cancelled) setBehaviorError(true);
       });
 
     return () => {
@@ -205,7 +223,26 @@ export default function ReportPage() {
     };
   }, [interviewId, startPolling]);
 
-  async function handleSendEmail() {
+  /** 打开确认弹窗并拉取收件人（WPS 主邮箱），用户确认后再真正发送。 */
+  async function openEmailConfirm() {
+    setEmailConfirmOpen(true);
+    setEmailTarget('');
+    setEmailTargetError('');
+    setEmailTargetLoading(true);
+    try {
+      const res = await getPrimaryEmail();
+      setEmailTarget(res.email);
+    } catch (err) {
+      setEmailTargetError(
+        err instanceof ApiError ? err.message : '无法获取收件人邮箱，请检查 WPS 授权',
+      );
+    } finally {
+      setEmailTargetLoading(false);
+    }
+  }
+
+  async function confirmSendEmail() {
+    if (!emailTarget) return; // 未获取到收件人时不发送
     setSendingEmail(true);
     setEmailError('');
     setEmailSent(false);
@@ -213,6 +250,7 @@ export default function ReportPage() {
       const res = await sendReportToEmail(interviewId);
       setEmailTo(res.to);
       setEmailSent(true);
+      setEmailConfirmOpen(false);
     } catch (err) {
       setEmailError(err instanceof ApiError ? err.message : '发送报告到邮箱失败');
     } finally {
@@ -279,7 +317,7 @@ export default function ReportPage() {
           <div className="interview-stub">
             <p>
               {pollFailed
-                ? '报告生成失败，可点击下方按钮重新生成。'
+                ? '报告仍在生成中，可稍后刷新查看，或点击下方按钮重新生成。'
                 : '报告正在生成中，请稍候…（自动刷新中）'}
             </p>
             {error && <p className="interview-error">{error}</p>}
@@ -298,7 +336,7 @@ export default function ReportPage() {
               <button
                 type="button"
                 className="report-email-btn"
-                onClick={() => void handleSendEmail()}
+                onClick={() => void openEmailConfirm()}
                 disabled={sendingEmail}
               >
                 {sendingEmail ? '正在发送…' : '发送报告到我的邮箱'}
@@ -391,6 +429,18 @@ export default function ReportPage() {
 
             {/* 附加区：表达分析 / 行为信号（2×2 网格下方） */}
             <div className="report-extra">
+            {!expression && expressionError && (
+              <div className="report-card report-extra-muted">
+                <h2 className="report-card-title">表达分析</h2>
+                <p className="behavior-note">表达分析暂不可用，可稍后刷新重试。</p>
+              </div>
+            )}
+            {!behavior && behaviorError && (
+              <div className="report-card report-extra-muted">
+                <h2 className="report-card-title">行为信号（辅助参考）</h2>
+                <p className="behavior-note">行为信号暂不可用，可稍后刷新重试。</p>
+              </div>
+            )}
             {expression && (
               <div className="report-card">
                 <h2 className="report-card-title">表达分析</h2>
@@ -483,6 +533,22 @@ export default function ReportPage() {
           </>
         ) : null}
       </main>
+      <ConfirmModal
+        open={emailConfirmOpen}
+        title="发送报告到我的邮箱"
+        description={
+          emailTargetLoading
+            ? '正在获取收件人邮箱…'
+            : emailTargetError
+              ? emailTargetError
+              : `报告摘要将发送到你的 WPS 邮箱：${emailTarget}`
+        }
+        confirmLabel="确认发送"
+        cancelLabel="取消"
+        loading={sendingEmail}
+        onConfirm={() => void confirmSendEmail()}
+        onCancel={() => setEmailConfirmOpen(false)}
+      />
     </div>
   );
 }

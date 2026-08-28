@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,12 @@ import (
 
 // 简历候选文件的扩展名过滤（WPS 云文档选简历时列出这些类型）。
 const resumeFilterExts = "pdf,docx,txt,md"
+
+// rootParentID 是 WPS 云盘根目录的 parent_id 约定。
+const rootParentID = "root"
+
+// maxBrowseFiles 默认浏览模式最多返回的文件数。
+const maxBrowseFiles = 50
 
 // 从云文档导入的简历大小上限（20MB），避免 base64 传输过大。
 const maxImportBytes = 20 * 1024 * 1024
@@ -36,6 +43,7 @@ func RegisterRoutes(r *gin.Engine, secret string, tokens TokenProvider) {
 	g.Use(auth.Middleware(secret))
 	g.GET("/cloud-files", h.ListCloudFiles)
 	g.POST("/cloud-files/import", h.ImportCloudFile)
+	g.GET("/primary-email", h.PrimaryEmail)
 }
 
 func userID(c *gin.Context) (int64, bool) {
@@ -55,7 +63,8 @@ func (h *Handler) wpsToken(c *gin.Context) (string, bool) {
 	}
 	token, err := h.tokens.TokenForUser(c.Request.Context(), uid)
 	if err != nil || token == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "WPS 账号未授权或登录已过期，请重新登录"})
+		// 403：应用登录本身有效，仅 WPS 授权缺失/失效；返回 401 会被前端误判为"应用登录过期"而整体登出。
+		c.JSON(http.StatusForbidden, gin.H{"error": "WPS 账号未授权或登录已过期，请重新登录"})
 		return "", false
 	}
 	return token, true
@@ -68,6 +77,7 @@ type cloudFile struct {
 	DriveID string `json:"drive_id"`
 	LinkURL string `json:"link_url"`
 	Mtime   int64  `json:"mtime"`
+	Size    int64  `json:"size"`
 }
 
 // ListCloudFiles 列出用户云文档中的简历候选文件。
@@ -107,8 +117,43 @@ func (h *Handler) ListCloudFiles(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"items": []cloudFile{}, "error": "云文档搜索失败：" + msg})
 			return
 		}
+	} else {
+		// 默认浏览模式：列出各盘根目录的简历文件（按修改时间倒序），让用户直接挑选，无需先搜索。
+		drives, driveErr := h.client.ListDrives(ctx, token)
+		if driveErr != nil {
+			log.Printf("[wps] list drives: %v", driveErr)
+			msg := driveErr.Error()
+			if len(msg) > 200 {
+				msg = msg[:200]
+			}
+			c.JSON(http.StatusOK, gin.H{"items": []cloudFile{}, "error": "云文档加载失败：" + msg})
+			return
+		}
+		seen := map[string]bool{}
+		for _, d := range drives {
+			items, listErr := h.client.ListFolderFiles(ctx, token, d.ID, rootParentID, resumeFilterExts, 30)
+			if listErr != nil {
+				// 单个盘列出失败不阻断其他盘（个别盘可能无权限）。
+				log.Printf("[wps] list folder files drive=%s: %v", d.ID, listErr)
+				continue
+			}
+			for _, f := range items {
+				if f.Type != "" && f.Type != "file" {
+					continue
+				}
+				if seen[f.ID] {
+					continue
+				}
+				seen[f.ID] = true
+				result = append(result, f)
+			}
+		}
+		// 按修改时间倒序，限制总量，避免列表过长。
+		sort.Slice(result, func(i, j int) bool { return result[i].Mtime > result[j].Mtime })
+		if len(result) > maxBrowseFiles {
+			result = result[:maxBrowseFiles]
+		}
 	}
-	// 默认模式（无关键词）：不预取文件，返回空列表，由前端提示输入关键词搜索。
 
 	out := make([]cloudFile, 0, len(result))
 	for _, f := range result {
@@ -118,9 +163,40 @@ func (h *Handler) ListCloudFiles(c *gin.Context) {
 			DriveID: f.DriveID,
 			LinkURL: f.LinkURL,
 			Mtime:   f.Mtime,
+			Size:    f.Size,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"items": out})
+}
+
+// PrimaryEmail 返回当前用户的 WPS 主邮箱地址，供前端发送报告前弹窗确认收件人。
+func (h *Handler) PrimaryEmail(c *gin.Context) {
+	token, ok := h.wpsToken(c)
+	if !ok {
+		return
+	}
+	ctx := c.Request.Context()
+	mailboxes, err := h.client.ListMailboxes(ctx, token)
+	if err != nil {
+		h.writeWpsError(c, err, "获取邮箱列表失败")
+		return
+	}
+	if len(mailboxes) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "未找到可用的 WPS 邮箱"})
+		return
+	}
+	target := mailboxes[0]
+	for _, mb := range mailboxes {
+		if mb.IsPrimary {
+			target = mb
+			break
+		}
+	}
+	if target.EmailAddress == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "WPS 邮箱地址为空"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"email": target.EmailAddress})
 }
 
 // importCloudFileReq 是导入云文档简历的请求体。
@@ -152,13 +228,13 @@ func (h *Handler) ImportCloudFile(c *gin.Context) {
 		h.writeWpsError(c, err, "获取云文档下载地址失败")
 		return
 	}
-	data, err := h.client.DownloadFile(ctx, downloadURL, token)
+	data, err := h.client.DownloadFile(ctx, downloadURL, token, maxImportBytes)
 	if err != nil {
+		if strings.Contains(err.Error(), "too large") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "云文档文件过大，无法导入（上限 20MB）"})
+			return
+		}
 		h.writeWpsError(c, err, "下载云文档失败")
-		return
-	}
-	if len(data) > maxImportBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "云文档文件过大，无法导入（上限 20MB）"})
 		return
 	}
 

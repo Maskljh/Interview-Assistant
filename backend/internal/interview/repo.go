@@ -330,9 +330,11 @@ func (r *Repo) StartSession(sessionID int64, questions []QuestionInput) ([]Quest
 }
 
 func (r *Repo) BeginSession(sessionID int64) (bool, error) {
+	// started_at 与 CompleteSession 的 ended_at 都用 Go time.Now() 写入，配合 DSN 的 loc=Local，
+	// 保证两列以同一时区存储，避免出现 ended_at < started_at 的错乱（此前 NOW() 与 time.Now() 混用相差 8 小时）。
 	res, err := r.db.Exec(
-		`UPDATE interview_sessions SET status = ?, started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = ?`,
-		string(StatusInProgress), sessionID, string(StatusReady),
+		`UPDATE interview_sessions SET status = ?, started_at = COALESCE(started_at, ?) WHERE id = ? AND status = ?`,
+		string(StatusInProgress), time.Now(), sessionID, string(StatusReady),
 	)
 	if err != nil {
 		return false, err

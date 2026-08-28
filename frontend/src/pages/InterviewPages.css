@@ -3932,3 +3932,17 @@
   border-radius: var(--rounded-pill);
   margin-right: 6px;
 }
+
+
+/* 录音状态色：待命灰 / 录音绿 / 识别琥珀 / 发送蓝（覆盖 immersive 顶栏默认绿） */
+.room-rec-ok.room-rec-ok--is-idle { color: #8a8f98; }
+.room-rec-ok.room-rec-ok--is-recording { color: #148c57; }
+.room-rec-ok.room-rec-ok--is-transcribing { color: #b7791f; }
+.room-rec-ok.room-rec-ok--is-sending { color: #2563eb; }
+
+
+/* 报告页附加数据（表达/行为）加载失败的空态卡：弱化底色与边框，不打断整体布局 */
+.report-extra-muted {
+  background: #faf7f0;
+  border-color: #ece5d9;
+}

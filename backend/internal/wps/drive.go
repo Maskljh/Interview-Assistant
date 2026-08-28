@@ -25,6 +25,7 @@ type File struct {
 	LinkURL  string `json:"link_url"`
 	Ctime    int64  `json:"ctime"`
 	Mtime    int64  `json:"mtime"`
+	Size     int64  `json:"size"` // 文件大小（字节）；部分接口不返回时为 0
 }
 
 type driveList struct {
@@ -121,7 +122,10 @@ func (c *Client) GetFileDownload(ctx context.Context, token, driveID, fileID str
 
 // DownloadFile 下载文件内容（下载地址由 GetFileDownload 返回）。
 // WPS 的下载地址仍需携带用户 token 鉴权，否则返回 403 userNotLogin。
-func (c *Client) DownloadFile(ctx context.Context, downloadURL, token string) ([]byte, error) {
+// DownloadFile 下载文件内容（下载地址由 GetFileDownload 返回）。
+// maxBytes > 0 时，通过响应头 Content-Length 在读取正文前预检大小，超限立即报错，
+// 避免把超大文件整个下载下来（20MB 上限的前端预检兜底）。
+func (c *Client) DownloadFile(ctx context.Context, downloadURL, token string, maxBytes int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
 		return nil, err
@@ -135,5 +139,15 @@ func (c *Client) DownloadFile(ctx context.Context, downloadURL, token string) ([
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download failed: http %d", resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	if maxBytes > 0 && resp.ContentLength > maxBytes {
+		return nil, fmt.Errorf("file too large: %d bytes exceeds limit %d", resp.ContentLength, maxBytes)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if maxBytes > 0 && int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("file too large: exceeds limit %d", maxBytes)
+	}
+	return data, nil
 }

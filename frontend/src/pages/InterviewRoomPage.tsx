@@ -19,12 +19,56 @@ import CameraPreview from '../components/CameraPreview';
 // 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
 const ESTIMATED_MINUTES = 40;
 
+// TTS 单次合成长度上限（后端 maxTTSTextRunes=300）。超长问题拆成多段顺序朗读。
+const TTS_MAX_RUNES = 300;
+
+/** 把超长文本按句切成不超过 max 字符的段，尽量在断句处切，避免朗读被截断。 */
+function splitTextForTTS(text: string, max = TTS_MAX_RUNES): string[] {
+  const sentences = text.split(/(?<=[。！？；\n])/);
+  const segments: string[] = [];
+  let current = '';
+  const runes = (s: string) => Array.from(s).length;
+  for (const s of sentences) {
+    const chunk = s.trim();
+    if (!chunk) continue;
+    if (runes(current + chunk) <= max) {
+      current += chunk;
+      continue;
+    }
+    if (current) segments.push(current);
+    if (runes(chunk) > max) {
+      // 单个句子仍超长：硬切
+      let rest = chunk;
+      while (runes(rest) > max) {
+        const arr = Array.from(rest);
+        segments.push(arr.slice(0, max).join(''));
+        rest = arr.slice(max).join('');
+      }
+      current = rest;
+    } else {
+      current = chunk;
+    }
+  }
+  if (current) segments.push(current);
+  return segments.length > 0 ? segments : [text];
+}
+
 interface Turn {
   id: number;
   role: 'interviewer' | 'candidate';
   content: string;
 }
 type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'sending';
+
+// 录音状态文案与配色：顶栏状态随语音链路实时变化，替代原来的静态"录音正常"。
+const VOICE_PHASE_META: Record<VoicePhase, { label: string; cls: string }> = {
+  // idle 并非"系统未工作"：语音链路空闲、系统正常运行、等待语音输入（如 AI 播报时）。
+  // 文案用"就绪"而非"待命"，避免与进行中的面试/摄像头分析状态矛盾。
+  idle: { label: '就绪', cls: 'is-idle' },
+  recording: { label: '录音中', cls: 'is-recording' },
+  transcribing: { label: '识别中', cls: 'is-transcribing' },
+  sending: { label: '发送中', cls: 'is-sending' },
+};
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -135,13 +179,17 @@ export default function InterviewRoomPage() {
     const version = ++speechVersionRef.current;
     setStatusLine('正在朗读问题...');
     try {
-      const blob = await synthesizeSpeech(content);
-      if (version !== speechVersionRef.current) return;
       if (!voicePlayerRef.current) {
         voicePlayerRef.current = createVoicePlayer();
       }
       setReading(true);
-      await voicePlayerRef.current.play(blob);
+      // 超长文本分段合成并顺序播放，保证整段都能被朗读。
+      for (const seg of splitTextForTTS(content)) {
+        if (version !== speechVersionRef.current) return;
+        const blob = await synthesizeSpeech(seg);
+        if (version !== speechVersionRef.current) return;
+        await voicePlayerRef.current.play(blob);
+      }
       if (version === speechVersionRef.current) {
         setStatusLine('');
         setReading(false);
@@ -626,7 +674,9 @@ export default function InterviewRoomPage() {
           <span className="room-topbar-timer">
             预计 {ESTIMATED_MINUTES} 分钟 · 已用 {formatElapsed(elapsedMs)}
           </span>
-          <span className="room-rec-ok">● 录音正常</span>
+          <span className={`room-rec-ok room-rec-ok--${VOICE_PHASE_META[voicePhase].cls}`}>
+            ● {VOICE_PHASE_META[voicePhase].label}
+          </span>
         </span>
       </AppNav>
       <main className="interview-main interview-room">
@@ -634,7 +684,7 @@ export default function InterviewRoomPage() {
           <p className="interview-loading">加载面试中…</p>
         ) : (
           <>
-            {/* 左右两栏：摄像头预览 + 右侧双卡片 */}
+            {/* 左右两栏：开启摄像头分析时展示摄像头预览，否则单栏双卡片 */}
             <div className="room-grid">
               <CameraPreview />
               <div className="room-grid-right">

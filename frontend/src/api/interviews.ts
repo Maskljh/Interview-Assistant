@@ -28,6 +28,7 @@ export interface InterviewListItem {
   persona: Persona;
   difficulty: Difficulty;
   company_style: CompanyStyle;
+  job_title: string | null;
   status: InterviewStatus;
   created_at: string;
   score: number | null;

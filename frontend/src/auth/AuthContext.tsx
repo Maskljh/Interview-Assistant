@@ -2,12 +2,18 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as authApi from '../api/auth';
-import { getToken, setToken } from '../api/client';
+import {
+  getToken,
+  setToken,
+  AUTH_UNAUTHORIZED_EVENT,
+} from '../api/client';
 
 const USER_KEY = 'auth_user';
 
@@ -51,6 +57,7 @@ function storeUser(user: User | null): void {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(() => readStoredUser());
 
   const loginWithWPS = useCallback(async (code: string) => {
@@ -73,6 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  // 应用登录失效（401）：清空登录态并路由级跳转登录页（SPA，不整页刷新）。
+  useEffect(() => {
+    function onUnauthorized() {
+      logout();
+      navigate('/login', { replace: true });
+    }
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [logout, navigate]);
 
   const value = useMemo(
     () => ({ user, logout, loginWithWPS, refreshUser }),

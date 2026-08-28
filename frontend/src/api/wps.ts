@@ -7,6 +7,8 @@ export interface WpsCloudFile {
   drive_id: string;
   link_url: string | null;
   mtime: number;
+  /** 文件大小（字节）。部分接口/权限下可能不返回，导入时以后端预检为准。 */
+  size?: number;
 }
 
 export interface WpsCloudFileListResponse {
@@ -23,7 +25,14 @@ export async function listCloudFiles(
   const path = q
     ? `/api/wps/cloud-files?keyword=${encodeURIComponent(q)}`
     : '/api/wps/cloud-files';
-  return fetchJSON<WpsCloudFileListResponse>(path);
+  return fetchJSON<WpsCloudFileListResponse>(path, { skipAuthClear: true });
+}
+
+/** 获取当前用户 WPS 主邮箱地址，用于发送报告前确认收件人。 */
+export async function getPrimaryEmail(): Promise<{ email: string }> {
+  return fetchJSON<{ email: string }>('/api/wps/primary-email', {
+    skipAuthClear: true,
+  });
 }
 
 export interface WpsCloudImportResult {
@@ -44,5 +53,6 @@ export async function importCloudFile(
       drive_id: file.drive_id,
       name: file.name,
     }),
+    skipAuthClear: true,
   });
 }

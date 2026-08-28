@@ -46,8 +46,9 @@ type fromBankRequest struct {
 type listItemResponse struct {
 	ID        int64     `json:"id"`
 	Mode      Mode      `json:"mode"`
-	Status       Status    `json:"status"`
-	Persona      string    `json:"persona"`
+	Status    Status    `json:"status"`
+	Persona   string    `json:"persona"`
+	JobTitle  *string   `json:"job_title"`
 	Difficulty   string    `json:"difficulty"`
 	CompanyStyle string    `json:"company_style"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -124,7 +125,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
+	session, err := h.svc.Create(c.Request.Context(), userID.(int64), req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, true) // 摄像头行为分析为必开功能
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -147,7 +148,7 @@ func (h *Handler) CreateFromBank(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, req.CameraEnabled)
+	session, questions, err := h.svc.CreateFromBank(c.Request.Context(), userID.(int64), req.QuestionIDs, req.JobJD, req.ResumeText, req.ResumeFileURL, req.JDFileURL, req.Mode, req.InputMode, req.Persona, req.Difficulty, req.CompanyStyle, req.PrecheckGaps, true) // 摄像头行为分析为必开功能
 	if errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrInvalidMode) || errors.Is(err, ErrInvalidPersona) || errors.Is(err, ErrInvalidDifficulty) || errors.Is(err, ErrInvalidCompanyStyle) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -181,6 +182,7 @@ func (h *Handler) List(c *gin.Context) {
 			Mode:         s.Mode,
 			Status:       s.Status,
 			Persona:      s.Persona,
+			JobTitle:     s.JobTitle,
 			Difficulty:   s.Difficulty,
 			CompanyStyle: s.CompanyStyle,
 			CreatedAt:    s.CreatedAt,

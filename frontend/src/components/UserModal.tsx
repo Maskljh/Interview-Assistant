@@ -31,6 +31,7 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [renaming, setRenaming] = useState<ResumeFile | null>(null);
   const [deleting, setDeleting] = useState<ResumeFile | null>(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -122,6 +123,12 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
   }
 
   function handleLogout() {
+    // 先确认再退出，避免误触直接清空登录态。
+    setConfirmLogout(true);
+  }
+
+  function handleLogoutConfirm() {
+    setConfirmLogout(false);
     logout();
     onClose();
   }
@@ -187,7 +194,7 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.doc,.txt,.md,.text,.csv"
+                accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 hidden
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -305,6 +312,17 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
           cancelLabel="取消"
           onConfirm={() => void handleDeleteConfirm()}
           onCancel={() => setDeleting(null)}
+        />
+      )}
+      {confirmLogout && (
+        <ConfirmModal
+          open
+          title="退出登录"
+          description="退出后需要重新登录才能继续使用面试助手，确定退出吗？"
+          confirmLabel="退出登录"
+          cancelLabel="取消"
+          onConfirm={() => void handleLogoutConfirm()}
+          onCancel={() => setConfirmLogout(false)}
         />
       )}
     </div>

@@ -17,6 +17,14 @@ import AppNav from '../components/AppNav';
 import Dialog from '../components/Dialog';
 import ResumePreviewModal from '../components/ResumePreviewModal';
 
+/** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
+const MAX_CLOUD_IMPORT_BYTES = 20 * 1024 * 1024;
+
+/** 列表已带 size 且超过上限时，前端直接拦截，避免无谓下载。 */
+function cloudFileTooLarge(item: WpsCloudFile): boolean {
+  return typeof item.size === 'number' && item.size > MAX_CLOUD_IMPORT_BYTES;
+}
+
 /** 从 JD 文本提取岗位名：取第一个非空行，截断到 12 字。 */
 function jobTitleFromJd(jd: string): string {
   const firstLine = jd
@@ -125,6 +133,7 @@ export default function CreateInterviewPage() {
   // ── 整体缩放壳：固定 1440 设计稿内容区（1222×900）等比缩放，任何分辨率下比例与原型一致 ──
   // 设计稿为 1440×900，去掉左侧 218 侧边栏后内容区 1222×900；等比缩放到可用区域并居中。
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const cloudSearchTimerRef = useRef<number | null>(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const el = shellRef.current;
@@ -225,21 +234,37 @@ export default function CreateInterviewPage() {
     setResumeError('');
   }
 
-  /** 打开「从 WPS 云文档选择」弹窗：不预取文件，提示用户输入关键词搜索。 */
-  function openWpsCloud() {
+  /** 打开「从 WPS 云文档选择」弹窗：默认浏览各盘根目录的简历文件，也可输入关键词搜索。 */
+  async function openWpsCloud() {
     setModal('wpsCloud');
     setCloudError('');
     setCloudKeyword('');
-    setCloudLoading(false);
+    setCloudLoading(true);
     setCloudFiles([]);
+    try {
+      const data = await listCloudFiles('');
+      if (data.error) {
+        setCloudFiles([]);
+        setCloudError(data.error);
+      } else {
+        setCloudFiles(data.items);
+        setCloudError('');
+      }
+    } catch (err) {
+      setCloudError(
+        err instanceof ApiError ? err.message : '云文档加载失败，请稍后重试',
+      );
+    } finally {
+      setCloudLoading(false);
+    }
   }
 
-  /** 按关键词搜索云文档简历候选文件。 */
-  async function searchCloudFiles() {
+  /** 按关键词搜索云文档简历候选文件；keyword 缺省时用当前输入框值。 */
+  async function searchCloudFiles(keyword: string = cloudKeyword) {
     setCloudError('');
     setCloudLoading(true);
     try {
-      const data = await listCloudFiles(cloudKeyword);
+      const data = await listCloudFiles(keyword);
       if (data.error) {
         // 搜索失败（权限未开通等）：展示真实原因，避免误判为「未找到匹配」。
         setCloudFiles([]);
@@ -248,8 +273,10 @@ export default function CreateInterviewPage() {
         setCloudFiles(data.items);
         setCloudError('');
       }
-    } catch {
-      setCloudError('云文档搜索失败，请稍后重试');
+    } catch (err) {
+      setCloudError(
+        err instanceof ApiError ? err.message : '云文档加载失败，请稍后重试',
+      );
     } finally {
       setCloudLoading(false);
     }
@@ -266,6 +293,10 @@ export default function CreateInterviewPage() {
 
   /** 预览云文档简历：先导入拿文件内容，PDF 渲染页面，其他解析文本展示。 */
   async function previewCloudFile(item: WpsCloudFile) {
+    if (cloudFileTooLarge(item)) {
+      setCloudError(`「${item.name}」超过 20MB，无法预览`);
+      return;
+    }
     setCloudError('');
     setCloudImporting(true);
     try {
@@ -300,6 +331,10 @@ export default function CreateInterviewPage() {
 
   /** 选中云文档文件：后端下载转 base64，前端复用解析逻辑提取简历文本。 */
   async function pickCloudFile(item: WpsCloudFile) {
+    if (cloudFileTooLarge(item)) {
+      setCloudError(`「${item.name}」超过 20MB，无法导入`);
+      return;
+    }
     setCloudImporting(true);
     setCloudError('');
     try {
@@ -310,7 +345,13 @@ export default function CreateInterviewPage() {
       const text = await extractResumeText(file);
       setResumeText(text);
       setResumeFileName(result.name);
-      setResumeFileUrl('');
+      // 上传原文件到 OSS，让详情页「查看简历原文件」可用；失败不阻断（文本已可用）。
+      try {
+        const upload = await uploadFile('resume', file);
+        setResumeFileUrl(upload.url);
+      } catch (uploadErr) {
+        console.warn('[wps] upload cloud resume failed', uploadErr);
+      }
       setModal(null);
     } catch (err) {
       setCloudError(
@@ -556,6 +597,7 @@ export default function CreateInterviewPage() {
                 </div>
               </section>
 
+
               {/* 岗位信息 */}
               <section className="prep-new-card prep-new-card--jd">
                 <div className="prep-new-card-head">
@@ -749,6 +791,10 @@ export default function CreateInterviewPage() {
           onClose={() => {
             setModal(null);
             setCloudError('');
+            if (cloudSearchTimerRef.current != null) {
+              window.clearTimeout(cloudSearchTimerRef.current);
+              cloudSearchTimerRef.current = null;
+            }
           }}
           width={560}
         >
@@ -756,9 +802,24 @@ export default function CreateInterviewPage() {
             <input
               type="text"
               value={cloudKeyword}
-              onChange={(e) => setCloudKeyword(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCloudKeyword(v);
+                if (cloudSearchTimerRef.current != null) {
+                  window.clearTimeout(cloudSearchTimerRef.current);
+                  cloudSearchTimerRef.current = null;
+                }
+                cloudSearchTimerRef.current = window.setTimeout(() => {
+                  cloudSearchTimerRef.current = null;
+                  void searchCloudFiles(v);
+                }, 300);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !cloudLoading && !cloudImporting) {
+                  if (cloudSearchTimerRef.current != null) {
+                    window.clearTimeout(cloudSearchTimerRef.current);
+                    cloudSearchTimerRef.current = null;
+                  }
                   void searchCloudFiles();
                 }
               }}
@@ -783,34 +844,42 @@ export default function CreateInterviewPage() {
               <p className="interview-loading">
                 {cloudKeyword.trim()
                   ? '未找到匹配的简历文件，可换个关键词试试。'
-                  : '输入关键词搜索云文档中的简历文件，例如：罗杰豪、简历'}
+                  : '云文档根目录暂无简历文件，可输入关键词搜索。'}
               </p>
             ) : (
-              cloudFiles.map((item) => (
-                <div key={item.id} className="resume-pick-item">
-                  <button
-                    type="button"
-                    className="resume-pick-body"
-                    onClick={() => void pickCloudFile(item)}
-                    disabled={cloudImporting}
-                  >
-                    <span className="resume-pick-name">{item.name}</span>
-                    <span className="resume-pick-meta">
-                      {cloudImporting ? '导入中…' : formatCloudMtime(item.mtime)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="resume-pick-preview"
-                    onClick={() => void previewCloudFile(item)}
-                    disabled={cloudImporting}
-                    aria-label="预览文件"
-                    title="预览文件"
-                  >
-                    预览
-                  </button>
-                </div>
-              ))
+              cloudFiles.map((item) => {
+                const tooLarge = cloudFileTooLarge(item);
+                return (
+                  <div key={item.id} className="resume-pick-item">
+                    <button
+                      type="button"
+                      className="resume-pick-body"
+                      onClick={() => void pickCloudFile(item)}
+                      disabled={cloudImporting || tooLarge}
+                      title={tooLarge ? '文件超过 20MB，无法导入' : undefined}
+                    >
+                      <span className="resume-pick-name">{item.name}</span>
+                      <span className="resume-pick-meta">
+                        {tooLarge
+                          ? '超过 20MB，无法导入'
+                          : cloudImporting
+                            ? '导入中…'
+                            : formatCloudMtime(item.mtime)}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="resume-pick-preview"
+                      onClick={() => void previewCloudFile(item)}
+                      disabled={cloudImporting || tooLarge}
+                      aria-label="预览文件"
+                      title={tooLarge ? '文件超过 20MB，无法预览' : '预览文件'}
+                    >
+                      预览
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </Dialog>

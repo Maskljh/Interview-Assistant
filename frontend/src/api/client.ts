@@ -1,6 +1,9 @@
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
+// 应用登录失效（401）时派发的事件：由 AuthProvider 监听并做路由级跳转，避免整页刷新。
+export const AUTH_UNAUTHORIZED_EVENT = 'app:unauthorized';
+
 // 后端 API 地址解析：显式设置 VITE_API_BASE 时优先，否则跟随当前页面的 hostname
 const API_BASE = import.meta.env.VITE_API_BASE
   ? import.meta.env.VITE_API_BASE
@@ -40,6 +43,7 @@ const MESSAGE_MAP: Record<string, string> = {
   'session has no questions': '该场面试暂无题目可存入题库',
   'not found': '未找到相关内容',
   'report not available': '报告尚未生成',
+  'wps 账号未授权或登录已过期，请重新登录': 'WPS 账号未授权或已过期，请重新登录授权',
   'speech service unavailable': '语音服务暂不可用',
 };
 
@@ -71,7 +75,10 @@ function parseBody(text: string): unknown {
 }
 
 export type FetchJSONOptions = RequestInit & {
+  /** 401 时不跳转登录页（登录流程等场景）。 */
   skipAuthRedirect?: boolean;
+  /** 401 时既不清理登录态也不跳转（如 WPS 子授权失效，不应把用户整体登出）。 */
+  skipAuthClear?: boolean;
 };
 
 export async function fetchJSON<T>(
@@ -81,7 +88,7 @@ export async function fetchJSON<T>(
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
-  const { skipAuthRedirect, ...fetchOpts } = opts;
+  const { skipAuthRedirect, skipAuthClear, ...fetchOpts } = opts;
   const headers = new Headers(fetchOpts.headers);
   // FormData 由 fetch 自动生成 multipart Content-Type（含 boundary），
   // 不能覆盖为 JSON；否则后端解析不到 multipart 文件。
@@ -112,18 +119,22 @@ export async function fetchJSON<T>(
   }
 
   if (res.status === 401) {
-    setToken(null);
-    localStorage.removeItem(USER_KEY);
     const data = parseBody(await res.text());
     const rawMessage =
       data && typeof data === 'object' && 'error' in data
         ? String((data as { error: unknown }).error)
         : 'Unauthorized';
-    if (
-      !skipAuthRedirect &&
-      !window.location.pathname.startsWith('/login')
-    ) {
-      window.location.href = '/login';
+    // 子授权类 401（如 WPS 授权失效）：应用登录仍有效，不清理登录态、不跳登录页。
+    if (!skipAuthClear) {
+      setToken(null);
+      localStorage.removeItem(USER_KEY);
+      if (
+        !skipAuthRedirect &&
+        !window.location.pathname.startsWith('/login')
+      ) {
+        // 路由级跳转（SPA）而非整页刷新：保留应用现场，避免闪白与状态丢失。
+        window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+      }
     }
     throw new ApiError(401, toUserMessage(401, rawMessage), rawMessage);
   }
