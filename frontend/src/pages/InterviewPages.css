@@ -730,6 +730,13 @@
   background: var(--color-error-soft);
 }
 
+.interview-room-disconnect-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
 .interview-room-disconnect p {
   margin: 0;
   flex: 1;
@@ -3179,6 +3186,18 @@
   gap: 16px;
 }
 
+.history-link--danger {
+  color: #c0392b;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.history-link--danger:hover {
+  text-decoration: underline;
+}
+
 .history-link {
   font-family: Inter, system-ui, sans-serif;
   font-weight: 600;
@@ -3945,4 +3964,24 @@
 .report-extra-muted {
   background: #faf7f0;
   border-color: #ece5d9;
+}
+
+.report-extra-retry {
+  margin-top: 4px;
+  padding: 4px 14px;
+  border: 1px solid #d8cfc0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.report-extra-retry:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #f0f5ff;
+}
+.report-extra-retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }

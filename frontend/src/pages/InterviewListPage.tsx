@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
+  deleteInterview,
   listInterviews,
+  startInterview,
   type InterviewListItem,
 } from '../api/interviews';
 import {
@@ -13,8 +15,21 @@ import {
 import './InterviewPages.css';
 import { entryLinksFor, type EntryStatus } from '../lib/listEntries';
 import AppNav from '../components/AppNav';
+import ConfirmModal from '../components/ConfirmModal';
 
-function InterviewRow({ item, index }: { item: InterviewListItem; index: number }) {
+function InterviewRow({
+  item,
+  index,
+  starting,
+  onDelete,
+  onStart,
+}: {
+  item: InterviewListItem;
+  index: number;
+  starting: boolean;
+  onDelete: (item: InterviewListItem) => void;
+  onStart: (item: InterviewListItem) => void;
+}) {
   return (
     <li className="history-row">
       <span className="history-no">{String(index + 1).padStart(2, '0')}</span>
@@ -34,7 +49,7 @@ function InterviewRow({ item, index }: { item: InterviewListItem; index: number 
         </div>
       </div>
       <div className="history-row-links">
-        {entryLinksFor((item.status === 'completed' || item.status === 'in_progress' ? item.status : 'other') as EntryStatus).map((link) => (
+        {entryLinksFor((item.status === 'failed' ? 'other' : item.status) as EntryStatus).map((link) => (
           <Link
             key={link.label}
             className="history-link"
@@ -47,6 +62,24 @@ function InterviewRow({ item, index }: { item: InterviewListItem; index: number 
             {link.label}
           </Link>
         ))}
+        {item.status === 'draft' && (
+          <button
+            type="button"
+            className="history-link"
+            onClick={() => onStart(item)}
+            disabled={starting}
+          >
+            {starting ? '准备题目中…' : '开始面试'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="history-link history-link--danger"
+          onClick={() => onDelete(item)}
+          aria-label={`删除面试 #${item.id}`}
+        >
+          删除
+        </button>
       </div>
     </li>
   );
@@ -56,6 +89,10 @@ export default function InterviewListPage() {
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<InterviewListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [startingId, setStartingId] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +121,34 @@ export default function InterviewListPage() {
       cancelled = true;
     };
   }, []);
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteInterview(deleteTarget.id);
+      setInterviews((prev) => prev.filter((i) => i.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '删除失败');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // draft 会话题目未生成：先调 startInterview 生成题目，再进入面试室
+  async function handleStart(item: InterviewListItem) {
+    setStartingId(item.id);
+    setError('');
+    try {
+      await startInterview(item.id);
+      navigate(`/interviews/${item.id}/room`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '开始面试失败');
+      setStartingId(null);
+    }
+  }
 
   // 概览：总数 / 已完成 / 平均分
   const totalCount = interviews.length;
@@ -143,11 +208,32 @@ export default function InterviewListPage() {
         ) : (
           <ul className="history-list">
             {interviews.map((item, index) => (
-              <InterviewRow key={item.id} item={item} index={index} />
+              <InterviewRow
+                key={item.id}
+                item={item}
+                index={index}
+                starting={startingId === item.id}
+                onDelete={setDeleteTarget}
+                onStart={(it) => void handleStart(it)}
+              />
             ))}
           </ul>
         )}
       </main>
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="删除面试记录"
+        description={
+          deleteTarget
+            ? `确定删除「${deleteTarget.job_title || `面试 #${deleteTarget.id}`}」吗？删除后该场面试的对话、报告与行为数据将一并清除，且不可恢复。`
+            : ''
+        }
+        confirmLabel="删除该场面试"
+        loading={deleting}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

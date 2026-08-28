@@ -12,11 +12,19 @@ import ConfirmModal from './ConfirmModal';
 import './UserModal.css';
 
 const MAX_RESUMES = 5;
+const MAX_RESUME_BYTES = 10 * 1024 * 1024; // 10MB，与创建页简历/文案一致
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 简历卡片角标：按文件名后缀显示格式（PDF/DOCX/TXT…），无扩展名回退为「文件」。 */
+function resumeBadgeLabel(fileName: string): string {
+  const idx = fileName.lastIndexOf('.');
+  if (idx <= 0 || idx === fileName.length - 1) return '文件';
+  return fileName.slice(idx + 1).toUpperCase();
 }
 
 /**
@@ -79,6 +87,11 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
 
   async function handleFile(file: File) {
     if (uploading) return;
+    // 与提示文案一致：单文件不超过 10MB，超限前端先拦截，避免无谓解析与上传。
+    if (file.size > MAX_RESUME_BYTES) {
+      setError('文件不能超过 10MB');
+      return;
+    }
     setUploading(true);
     setError('');
     try {
@@ -216,7 +229,7 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
               <ul className="resume-list">
                 {resumes.map((item) => (
                   <li key={item.id} className="resume-row">
-                    <span className="resume-file-badge">PDF</span>
+                    <span className="resume-file-badge">{resumeBadgeLabel(item.name)}</span>
                     {renaming?.id === item.id ? (
                       <div className="resume-row-main">
                         <input
@@ -292,17 +305,6 @@ export default function UserModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {renaming && (
-        <ConfirmModal
-          open
-          title="重命名简历"
-          description="请输入新的文件名。"
-          confirmLabel="保存"
-          cancelLabel="取消"
-          onConfirm={() => void handleRenameConfirm()}
-          onCancel={() => setRenaming(null)}
-        />
-      )}
       {deleting && (
         <ConfirmModal
           open

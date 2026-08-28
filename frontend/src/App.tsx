@@ -8,6 +8,7 @@ import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
 import QuestionBankPage from './pages/QuestionBankPage';
+import ErrorBoundary from './components/ErrorBoundary';
 import ReportPage from './pages/ReportPage';
 import TrendsPage from './pages/TrendsPage';
 import WelcomePage from './pages/WelcomePage';
@@ -16,6 +17,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<WelcomePage />} />
@@ -77,6 +79,7 @@ export default function App() {
           />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import UserModal from './UserModal';
+import ConfirmModal from './ConfirmModal';
 import './AppNav.css';
 
 export type NavTab = 'create' | 'questions' | 'history' | 'trends';
@@ -30,26 +31,42 @@ export default function AppNav({
   variant = 'sidebar',
   children,
 }: AppNavProps) {
+  const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
   const [userModalOpen, setUserModalOpen] = useState(false);
+  // 待确认的离开动作：nav=跳转到 to；logout=退出登录（替代原生 window.confirm，样式统一）。
+  const [pendingLeave, setPendingLeave] = useState<{ type: 'nav' | 'logout'; to?: string } | null>(null);
+  // 侧边栏「退出」的二次确认（与用户管理弹窗内「退出登录」保持一致）。
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
 
   // 页面加载时拉取最新用户资料（昵称/头像可能已在 WPS 侧更新）
   useEffect(() => {
     void refreshUser().catch(() => {});
   }, [refreshUser]);
 
-  function guard(): boolean {
-    if (!confirmLeave) return true;
-    return window.confirm(LEAVE_CONFIRM);
-  }
-
-  function handleClick(e: MouseEvent) {
-    if (!guard()) e.preventDefault();
+  function handleClick(e: MouseEvent, to: string) {
+    if (!confirmLeave) return;
+    // 拦截默认跳转，弹出确认；确认后由 ConfirmModal 统一 navigate。
+    e.preventDefault();
+    setPendingLeave({ type: 'nav', to });
   }
 
   function handleLogout() {
-    if (!guard()) return;
-    logout();
+    if (!confirmLeave) {
+      logout();
+      return;
+    }
+    setPendingLeave({ type: 'logout' });
+  }
+
+  function confirmLeaveNow() {
+    if (!pendingLeave) return;
+    if (pendingLeave.type === 'nav' && pendingLeave.to) {
+      navigate(pendingLeave.to);
+    } else if (pendingLeave.type === 'logout') {
+      logout();
+    }
+    setPendingLeave(null);
   }
 
   const displayName = user?.nickname || user?.username || user?.email || '未登录';
@@ -76,7 +93,7 @@ export default function AppNav({
           <Link
             className="interview-brand"
             to="/"
-            onClick={(e) => handleClick(e)}
+            onClick={(e) => handleClick(e, '/')}
           >
             面知
           </Link>
@@ -91,6 +108,15 @@ export default function AppNav({
             </button>
           </div>
         </header>
+        <ConfirmModal
+          open={pendingLeave !== null}
+          title="离开面试"
+          description={LEAVE_CONFIRM}
+          confirmLabel="确定离开"
+          cancelLabel="取消"
+          onConfirm={confirmLeaveNow}
+          onCancel={() => setPendingLeave(null)}
+        />
       </>
     );
   }
@@ -101,7 +127,7 @@ export default function AppNav({
         <Link
           className="app-sidebar-brand"
           to="/"
-          onClick={(e) => handleClick(e)}
+          onClick={(e) => handleClick(e, '/')}
         >
           面知
         </Link>
@@ -112,7 +138,7 @@ export default function AppNav({
               className={`app-sidebar-item${item.tab === tab ? ' is-active' : ''}`}
               to={item.to}
               aria-current={item.tab === tab ? 'page' : undefined}
-              onClick={(e) => handleClick(e)}
+              onClick={(e) => handleClick(e, item.to)}
             >
               {item.label}
             </Link>
@@ -146,13 +172,34 @@ export default function AppNav({
           <button
             type="button"
             className="app-sidebar-logout"
-            onClick={handleLogout}
+            onClick={() => setConfirmLogoutOpen(true)}
           >
             退出
           </button>
         </div>
       </aside>
       {userModalOpen && <UserModal onClose={() => setUserModalOpen(false)} />}
+      <ConfirmModal
+        open={pendingLeave !== null}
+        title="离开面试"
+        description={LEAVE_CONFIRM}
+        confirmLabel="确定离开"
+        cancelLabel="取消"
+        onConfirm={confirmLeaveNow}
+        onCancel={() => setPendingLeave(null)}
+      />
+      <ConfirmModal
+        open={confirmLogoutOpen}
+        title="退出登录"
+        description="退出后需要重新登录才能继续使用面试助手，确定退出吗？"
+        confirmLabel="退出登录"
+        cancelLabel="取消"
+        onConfirm={() => {
+          setConfirmLogoutOpen(false);
+          logout();
+        }}
+        onCancel={() => setConfirmLogoutOpen(false)}
+      />
     </>
   );
 }

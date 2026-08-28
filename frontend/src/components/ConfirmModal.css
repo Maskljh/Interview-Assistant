@@ -31,6 +31,12 @@
   white-space: pre-line;
 }
 
+.confirm-modal-error {
+  margin: 0 0 var(--space-lg);
+  font: var(--text-body-md);
+  color: var(--color-danger, #d93026);
+}
+
 .confirm-modal-actions {
   display: flex;
   justify-content: flex-end;

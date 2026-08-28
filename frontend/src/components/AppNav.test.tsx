@@ -29,17 +29,9 @@ function renderNav(
   );
 }
 
-const originalConfirm = window.confirm;
 afterEach(() => {
-  window.confirm = originalConfirm;
   localStorage.clear();
 });
-
-function mockConfirm(value: boolean) {
-const spy = vi.fn(() => value);
-  window.confirm = spy as unknown as typeof window.confirm;
-  return spy;
-}
 
 describe('AppNav 侧边导航', () => {
   it('渲染品牌和全部四个导航项，当前项为可点击链接', () => {
@@ -65,28 +57,28 @@ describe('AppNav 侧边导航', () => {
   });
 
   it('confirmLeave 且用户取消时阻止侧边导航跳转', () => {
-    const confirmSpy = mockConfirm(false);
     const { container } = renderNav({ tab: 'create', confirmLeave: true });
     const trendsLink = container.querySelector('a[href="/trends"]')!;
     fireEvent.click(trendsLink);
-    expect(confirmSpy).toHaveBeenCalled();
+    // 弹出确认弹窗，取消后停留原页面
+    expect(screen.getByText('离开面试')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
     expect(screen.getByTestId('location').textContent).toBe('/');
   });
 
   it('confirmLeave 且用户确认后跳转', () => {
-    mockConfirm(true);
     const { container } = renderNav({ tab: 'create', confirmLeave: true });
     const trendsLink = container.querySelector('a[href="/trends"]')!;
     fireEvent.click(trendsLink);
+    fireEvent.click(screen.getByRole('button', { name: '确定离开' }));
     expect(screen.getByTestId('location').textContent).toBe('/trends');
   });
 
   it('未设置 confirmLeave 时不弹确认框', () => {
-    const confirmSpy = mockConfirm(false);
     const { container } = renderNav({ tab: 'create' });
     const trendsLink = container.querySelector('a[href="/trends"]')!;
     fireEvent.click(trendsLink);
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText('离开面试')).toBeNull();
     expect(screen.getByTestId('location').textContent).toBe('/trends');
   });
 

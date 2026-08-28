@@ -5,6 +5,7 @@ interface ConfirmModalProps {
   open: boolean;
   title: string;
   description: string;
+  error?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
@@ -16,6 +17,7 @@ export default function ConfirmModal({
   open,
   title,
   description,
+  error = '',
   confirmLabel = '删除',
   cancelLabel = '取消',
   loading = false,
@@ -59,6 +61,7 @@ export default function ConfirmModal({
         <p id="confirm-modal-desc" className="confirm-modal-desc">
           {description}
         </p>
+        {error && <p className="confirm-modal-error">{error}</p>}
         <div className="confirm-modal-actions">
           <button
             ref={cancelRef}

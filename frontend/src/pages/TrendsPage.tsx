@@ -73,11 +73,11 @@ export default function TrendsPage() {
   // 最近 6 场（按返回顺序取最后 6 条，倒序展示为第1场→第6场）
   const recent6 = points.slice(-6);
 
-  // 连续练习：最近 6 场中从最早一场起连续有分数的场次
+  // 连续练习：从最近一场往前数，最近连续有分数的场次
   const consecutive = (() => {
     let n = 0;
-    for (const p of recent6) {
-      if (p.total != null) n += 1;
+    for (let i = recent6.length - 1; i >= 0; i -= 1) {
+      if (recent6[i].total != null) n += 1;
       else break;
     }
     return n;

@@ -92,6 +92,8 @@ export default function ReportPage() {
   const [behavior, setBehavior] = useState<BehaviorResult | null>(null);
   const [expressionError, setExpressionError] = useState(false);
   const [behaviorError, setBehaviorError] = useState(false);
+  const [expressionLoading, setExpressionLoading] = useState(false);
+  const [behaviorLoading, setBehaviorLoading] = useState(false);
   const [interviewMeta, setInterviewMeta] = useState<{
     job_title: string | null;
     job_jd: string;
@@ -140,6 +142,40 @@ export default function ReportPage() {
       }
     }, 10000);
   }, [getReport, interviewId, setFeedback, setAvailable, stopPolling]);
+
+  /** 加载表达分析与行为信号；任一失败弱提示为空态卡，可点击重试。 */
+  async function loadExtras(isCancelled: () => boolean) {
+    setExpressionLoading(true);
+    setBehaviorLoading(true);
+    await Promise.allSettled([
+      fetchExpression(interviewId)
+        .then((res) => {
+          if (!isCancelled()) {
+            setExpression(res);
+            setExpressionError(false);
+          }
+        })
+        .catch(() => {
+          /* 弱提示：表达分析加载失败时不整段消失，展示可重试的空态卡 */
+          if (!isCancelled()) setExpressionError(true);
+        }),
+      fetchBehavior(interviewId)
+        .then((res) => {
+          if (!isCancelled()) {
+            setBehavior(res);
+            setBehaviorError(false);
+          }
+        })
+        .catch(() => {
+          /* 弱提示：行为信号加载失败时不整段消失，展示可重试的空态卡 */
+          if (!isCancelled()) setBehaviorError(true);
+        }),
+    ]);
+    if (!isCancelled()) {
+      setExpressionLoading(false);
+      setBehaviorLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!Number.isFinite(interviewId)) {
@@ -193,29 +229,7 @@ export default function ReportPage() {
         /* silent: meta line is optional */
       });
 
-    fetchExpression(interviewId)
-      .then((res) => {
-        if (!cancelled) {
-          setExpression(res);
-          setExpressionError(false);
-        }
-      })
-      .catch(() => {
-        /* 弱提示：表达分析加载失败时不整段消失，展示可重试的空态卡 */
-        if (!cancelled) setExpressionError(true);
-      });
-
-    fetchBehavior(interviewId)
-      .then((res) => {
-        if (!cancelled) {
-          setBehavior(res);
-          setBehaviorError(false);
-        }
-      })
-      .catch(() => {
-        /* 弱提示：行为信号加载失败时不整段消失，展示可重试的空态卡 */
-        if (!cancelled) setBehaviorError(true);
-      });
+    void loadExtras(() => cancelled);
 
     return () => {
       cancelled = true;
@@ -228,6 +242,7 @@ export default function ReportPage() {
     setEmailConfirmOpen(true);
     setEmailTarget('');
     setEmailTargetError('');
+    setEmailError('');
     setEmailTargetLoading(true);
     try {
       const res = await getPrimaryEmail();
@@ -346,7 +361,6 @@ export default function ReportPage() {
                   已发送至 {emailTo}
                 </span>
               )}
-              {emailError && <p className="interview-error">{emailError}</p>}
             </div>
             {/* 2×2 布局：总评+优势与短板（上行）/ 能力维度+证据与建议（下行）（Figma 03 面试报告） */}
             <div className="report-grid">
@@ -432,13 +446,35 @@ export default function ReportPage() {
             {!expression && expressionError && (
               <div className="report-card report-extra-muted">
                 <h2 className="report-card-title">表达分析</h2>
-                <p className="behavior-note">表达分析暂不可用，可稍后刷新重试。</p>
+                <p className="behavior-note">表达分析暂不可用，可点击下方按钮重试。</p>
+                <button
+                  type="button"
+                  className="report-extra-retry"
+                  disabled={expressionLoading}
+                  onClick={() => void loadExtras(() => false)}
+                >
+                  {expressionLoading ? '重试中…' : '重试'}
+                </button>
               </div>
             )}
             {!behavior && behaviorError && (
               <div className="report-card report-extra-muted">
                 <h2 className="report-card-title">行为信号（辅助参考）</h2>
-                <p className="behavior-note">行为信号暂不可用，可稍后刷新重试。</p>
+                <p className="behavior-note">行为信号暂不可用，可点击下方按钮重试。</p>
+                <button
+                  type="button"
+                  className="report-extra-retry"
+                  disabled={behaviorLoading}
+                  onClick={() => void loadExtras(() => false)}
+                >
+                  {behaviorLoading ? '重试中…' : '重试'}
+                </button>
+              </div>
+            )}
+            {expressionLoading && !expression && !expressionError && (
+              <div className="report-card report-extra-muted">
+                <h2 className="report-card-title">表达分析</h2>
+                <p className="behavior-note">正在加载表达分析…</p>
               </div>
             )}
             {expression && (
@@ -470,6 +506,12 @@ export default function ReportPage() {
                 ) : (
                   <p>暂无答案数据</p>
                 )}
+              </div>
+            )}
+            {behaviorLoading && !behavior && !behaviorError && (
+              <div className="report-card report-extra-muted">
+                <h2 className="report-card-title">行为信号（辅助参考）</h2>
+                <p className="behavior-note">正在加载行为信号…</p>
               </div>
             )}
 
@@ -546,8 +588,12 @@ export default function ReportPage() {
         confirmLabel="确认发送"
         cancelLabel="取消"
         loading={sendingEmail}
+        error={emailError}
         onConfirm={() => void confirmSendEmail()}
-        onCancel={() => setEmailConfirmOpen(false)}
+        onCancel={() => {
+          setEmailConfirmOpen(false);
+          setEmailError('');
+        }}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import { useBehaviorAnalysis } from '../behavior/useBehaviorAnalysis';
 import './InterviewPages.css';
 import AppNav from '../components/AppNav';
 import CameraPreview from '../components/CameraPreview';
+import ConfirmModal from '../components/ConfirmModal';
 
 // 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
 const ESTIMATED_MINUTES = 40;
@@ -98,7 +99,10 @@ export default function InterviewRoomPage() {
     null,
   );
   const [thinking, setThinking] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
+  // 致命错误（会话不可进入/不存在）：停止自动重连，展示明确提示而非无限重试。
+  const [fatalError, setFatalError] = useState('');
   const [statusLine, setStatusLine] = useState('');
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState('');
@@ -106,7 +110,6 @@ export default function InterviewRoomPage() {
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [companyStyle, setCompanyStyle] = useState<string | null>(null);
   const [jobTitle, setJobTitle] = useState<string>('');
-  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [loadingInterview, setLoadingInterview] = useState(true);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
   const [ttsMuted, setTtsMuted] = useState(false);
@@ -127,6 +130,7 @@ export default function InterviewRoomPage() {
   const failedAudioRef = useRef<Blob | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const attemptRef = useRef(0);
+  const fatalErrorRef = useRef(false);
   const voiceReadyRef = useRef(false);
   const voiceCancelRef = useRef(false);
   const voiceActiveRef = useRef(false);
@@ -137,10 +141,10 @@ export default function InterviewRoomPage() {
   const pausedRef = useRef(false);
   const pausedAtRef = useRef<number | null>(null);
   const accumulatedPausedMsRef = useRef(0);
-  // 摄像头分析仅在「创建时勾选开启」时启用；面试全程为语音作答（input mode 恒为 voice）。
-  const behaviorVoiceEnabled = cameraEnabled;
+  // 行为分析为产品必开能力：摄像头无条件开启，全程分析面试者行为（行为数据仅作报告辅助参考，不计入评分）。
+  // 摄像头预览与行为分析复用同一路流，避免重复打开摄像头。
   const behavior = useBehaviorAnalysis({
-    enabled: behaviorVoiceEnabled,
+    enabled: true,
     sessionId: interviewId,
   });
   const behaviorStartRef = useRef<() => Promise<void>>(async () => {});
@@ -148,12 +152,8 @@ export default function InterviewRoomPage() {
   behaviorStartRef.current = behavior.start;
   behaviorStopRef.current = behavior.stop;
   useEffect(() => {
-    if (behaviorVoiceEnabled) {
-      void behaviorStartRef.current();
-    } else {
-      void behaviorStopRef.current();
-    }
-  }, [behaviorVoiceEnabled]);
+    void behaviorStartRef.current();
+  }, []);
   const [pendingCount, setPendingCount] = useState(0);
   const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
   const appendTurn = useCallback((role: Turn['role'], content: string) => {
@@ -317,6 +317,21 @@ export default function InterviewRoomPage() {
           ]);
           navigate(`/interviews/${interviewId}/report`, { replace: true });
           break;
+        case 'error':
+          // 致命错误（会话已结束/不存在等）：不再自动重连，给出明确提示。
+          fatalErrorRef.current = true;
+          setFatalError(
+            msg.code === 'invalid_state'
+              ? '该场面试已结束或当前状态不可进入，无法继续。'
+              : msg.code === 'not_found'
+                ? '面试不存在或已被删除。'
+                : msg.content || '连接发生错误，请稍后重试',
+          );
+          setDisconnected(true);
+          setThinking(false);
+          setVoicePhase('idle');
+          setStatusLine('');
+          break;
         case 'done':
           doneRef.current = true;
           setThinking(false);
@@ -345,6 +360,8 @@ export default function InterviewRoomPage() {
       socketRef.current?.close();
       setDisconnected(false);
       setError('');
+      fatalErrorRef.current = false;
+      setFatalError('');
       socketRef.current = connectInterviewWS(interviewId, token, {
         onMessage: (msg) => {
           if (msg.type === 'session_started') {
@@ -365,6 +382,14 @@ export default function InterviewRoomPage() {
         },
         onClose: () => {
           if (!mountedRef.current || doneRef.current) return;
+          if (fatalErrorRef.current) {
+            // 致命错误后连接关闭：不再重连，保持错误提示，避免无限重试。
+            setDisconnected(true);
+            setThinking(false);
+            setVoicePhase('idle');
+            voicePlayerRef.current?.stop();
+            return;
+          }
           setThinking(false);
           setVoicePhase('idle');
           voicePlayerRef.current?.stop();
@@ -408,7 +433,6 @@ export default function InterviewRoomPage() {
         setPersona(data.persona);
         setDifficulty(data.difficulty);
         setCompanyStyle(data.company_style);
-        setCameraEnabled(data.camera_enabled);
         setJobTitle(
           (data.job_title && data.job_title.trim())
             ? data.job_title.trim()
@@ -613,7 +637,7 @@ export default function InterviewRoomPage() {
   }
   async function handleForceEnd(silent = false) {
     if (ending || doneRef.current) return;
-    if (!silent && !window.confirm('确定结束面试吗？结束后将生成评分报告，且无法继续回答。')) return;
+    // silent=true 由确认弹窗触发（用户已在弹窗确认），不再二次询问。
     setEnding(true);
     setStatusLine('正在生成报告，请稍候…');
     setError('');
@@ -686,7 +710,13 @@ export default function InterviewRoomPage() {
           <>
             {/* 左右两栏：开启摄像头分析时展示摄像头预览，否则单栏双卡片 */}
             <div className="room-grid">
-              <CameraPreview />
+              <CameraPreview
+                stream={behavior.cameraStream}
+                opening={behavior.status === 'loading-model'}
+                error={
+                  behavior.status === 'failed' ? '无法访问摄像头，请检查浏览器权限' : ''
+                }
+              />
               <div className="room-grid-right">
                 {/* 双卡：实时转写 + 当前问题与追问策略 */}
                 <div className="room-cards room-cards--stacked">
@@ -806,7 +836,20 @@ export default function InterviewRoomPage() {
               </p>
             )}
 
-            {disconnected && (
+            {fatalError && (
+              <div className="interview-room-disconnect">
+                <p>{fatalError}</p>
+                <div className="interview-room-disconnect-actions">
+                  <Link className="interview-inline-link" to="/history">
+                    ← 返回列表
+                  </Link>
+                  <Link className="interview-inline-link" to={`/interviews/${interviewId}`}>
+                    查看详情
+                  </Link>
+                </div>
+              </div>
+            )}
+            {!fatalError && disconnected && (
               <div className="interview-room-disconnect">
                 <p>连接已断开。</p>
                 <button type="button" className="interview-submit" onClick={connect}>
@@ -846,6 +889,7 @@ export default function InterviewRoomPage() {
                     }
                   }}
                   disabled={
+                    fatalError ||
                     thinking ||
                     disconnected ||
                     ending ||
@@ -912,15 +956,15 @@ export default function InterviewRoomPage() {
                   type="button"
                   className="interview-room-action"
                   onClick={togglePause}
-                  disabled={ending || voicePhase === 'transcribing' || voicePhase === 'sending'}
+                  disabled={fatalError || ending || voicePhase === 'transcribing' || voicePhase === 'sending'}
                 >
                   {paused ? '继续' : '暂停'}
                 </button>
                 <button
                   type="button"
                   className="interview-room-end"
-                  onClick={() => void handleForceEnd()}
-                  disabled={ending}
+                  onClick={() => setConfirmEnd(true)}
+                  disabled={fatalError || ending}
                 >
                   {ending ? '结束中…' : '结束本场'}
                 </button>
@@ -929,6 +973,7 @@ export default function InterviewRoomPage() {
                   className="interview-room-action"
                   onClick={handleSkipQuestion}
                   disabled={
+                    fatalError ||
                     paused ||
                     thinking ||
                     ending ||
@@ -945,6 +990,16 @@ export default function InterviewRoomPage() {
           </>
         )}
       </main>
+      <ConfirmModal
+        open={confirmEnd}
+        title="结束本场面试"
+        description="确定结束面试吗？结束后将生成评分报告，且无法继续回答。"
+        confirmLabel="结束面试"
+        cancelLabel="取消"
+        loading={ending}
+        onConfirm={() => void handleForceEnd(true)}
+        onCancel={() => setConfirmEnd(false)}
+      />
     </div>
   );
 }

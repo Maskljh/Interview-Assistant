@@ -21,6 +21,8 @@ type resumeResponse struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+const maxResumeBytes = 10 * 1024 * 1024 // 10MB
+
 // uploader 抽象 OSS 上传，便于测试注入 fake。
 type uploader interface {
 	Upload(userID int64, kind, filename, contentType string, r io.Reader, size int64) (key, objectURL string, err error)
@@ -102,6 +104,11 @@ func (h *Handler) Upload(c *gin.Context) {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	// 与前端/文案一致：单文件不超过 10MB，服务端兜底校验。
+	if fileHeader.Size > maxResumeBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "文件不能超过 10MB"})
 		return
 	}
 	text := c.PostForm("text")

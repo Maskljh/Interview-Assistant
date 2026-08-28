@@ -1486,3 +1486,53 @@ func TestStartInjectsPrecheckGaps(t *testing.T) {
 		t.Fatalf("prompt missing precheck directive: %s", capLLM.userPrompts[0])
 	}
 }
+
+func TestDeleteOwnedSession(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	token := registerUser(t, sqlDB, "test-interview-del@example.com")
+	sessionID := createInterview(t, r, token, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/interviews/%d", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/interviews/%d", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("get after delete status = %d, want 404", w.Code)
+	}
+}
+
+func TestDeleteForeignSessionReturnsNotFound(t *testing.T) {
+	sqlDB := testDB(t)
+	r := testRouter(t, sqlDB, nil)
+
+	tokenA := registerUser(t, sqlDB, "test-interview-del-a@example.com")
+	tokenB := registerUser(t, sqlDB, "test-interview-del-b@example.com")
+	sessionID := createInterview(t, r, tokenA, "Backend engineer JD", "mixed")
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/interviews/%d", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("foreign delete status = %d, want 404", w.Code)
+	}
+
+	// 原 owner 的会话仍在
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/interviews/%d", sessionID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenA)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("owner get after foreign delete status = %d, want 200", w.Code)
+	}
+}

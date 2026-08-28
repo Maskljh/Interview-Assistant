@@ -112,6 +112,7 @@ func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
 	protected.GET("/:id", h.Get)
 	protected.POST("/:id/start", h.Start)
 	protected.POST("/:id/end", h.End)
+	protected.DELETE("/:id", h.Delete)
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -270,6 +271,28 @@ func (h *Handler) End(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "completed"})
+}
+
+func (h *Handler) Delete(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if err := h.svc.Delete(c.Request.Context(), userID.(int64), id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not delete interview"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
 
 func toSessionResponse(session *Session, questions []Question, turns []Turn) sessionResponse {

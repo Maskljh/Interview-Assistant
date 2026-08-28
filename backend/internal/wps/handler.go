@@ -22,8 +22,8 @@ const rootParentID = "root"
 // maxBrowseFiles 默认浏览模式最多返回的文件数。
 const maxBrowseFiles = 50
 
-// 从云文档导入的简历大小上限（20MB），避免 base64 传输过大。
-const maxImportBytes = 20 * 1024 * 1024
+// 从云文档导入的简历大小上限（10MB），避免 base64 传输过大。
+const maxImportBytes = 10 * 1024 * 1024
 
 // Handler 提供「从 WPS 云文档选简历」与「报告发送到邮箱」的 REST 端点。
 type Handler struct {

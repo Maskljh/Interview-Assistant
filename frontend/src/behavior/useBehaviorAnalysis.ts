@@ -28,6 +28,8 @@ export interface UseBehaviorOptions {
 export interface BehaviorAnalysis {
   status: BehaviorStatus;
   liveStress: number | null;
+  /** 当前正在用于行为分析的摄像头流，供预览画面复用，避免同一页重复打开摄像头。 */
+  cameraStream: MediaStream | null;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -35,6 +37,7 @@ export interface BehaviorAnalysis {
 export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis {
   const [status, setStatus] = useState<BehaviorStatus>('idle');
   const [liveStress, setLiveStress] = useState<number | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const runningRef = useRef(false);
   const cameraRef = useRef<CameraFeed | null>(null);
   const detectorRef = useRef<LandmarkDetector | null>(null);
@@ -58,6 +61,7 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
     detectorRef.current = null;
     aggRef.current = null;
     runningRef.current = false;
+    setCameraStream(null);
   }, [getCancelRaf]);
 
   const stop = useCallback(async () => {
@@ -92,6 +96,7 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
           ? await opts.cameraFeed()
           : await startCameraFeed();
       cameraRef.current = camera;
+      setCameraStream(camera.stream);
       const detector =
         opts.detectorLoader != null
           ? await opts.detectorLoader()
@@ -140,5 +145,5 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
     }
   }, [opts.enabled, opts.cameraFeed, opts.detectorLoader, getRaf, getNow, cleanup]);
 
-  return { status, liveStress, start, stop };
+  return { status, liveStress, cameraStream, start, stop };
 }

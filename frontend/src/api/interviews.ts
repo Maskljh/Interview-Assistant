@@ -148,6 +148,13 @@ export async function endInterview(id: number): Promise<void> {
   });
 }
 
+/** 删除一场面试及其全部关联数据（题目/对话/行为/使用记录），不可恢复。 */
+export async function deleteInterview(id: number): Promise<void> {
+  await fetchJSON<{ status: string }>(`/api/interviews/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getReport(id: number): Promise<ReportResult> {
   const data = await fetchJSON<InterviewFeedback | { available: false }>(
     `/api/interviews/${id}/report`,

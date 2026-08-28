@@ -6,10 +6,13 @@ export type ServerMsgType =
   | 'follow_up'
   | 'status'
   | 'done'
-  | 'closing';
+  | 'closing'
+  | 'error';
 
 export interface ServerMsg {
   type: ServerMsgType;
+  /** 仅 error 类型携带：not_found | invalid_state | error，用于区分致命错误与可重连错误。 */
+  code?: string;
   content?: string;
   progress?: {
     current: number;

@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -97,7 +98,14 @@ func (h *Handler) Serve(c *gin.Context) {
 
 	msgs, err := h.svc.BeginLive(ctx, userID, sessionID)
 	if err != nil {
-		_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
+		// 会话不可进入/不存在属于致命错误：类型化为 error，前端据此停止重连并友好提示。
+		code := "error"
+		if errors.Is(err, interview.ErrNotFound) {
+			code = "not_found"
+		} else if errors.Is(err, interview.ErrInvalidState) {
+			code = "invalid_state"
+		}
+		_ = writeJSON(conn, ServerMsg{Type: "error", Code: code, Content: err.Error()})
 		return
 	}
 	for _, m := range msgs {

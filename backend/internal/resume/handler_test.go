@@ -198,3 +198,26 @@ func TestResumeLimitFive(t *testing.T) {
 		t.Fatalf("limit error should mention 5, got %s", w.Body.String())
 	}
 }
+
+func TestResumeUploadRejectsOver10MB(t *testing.T) {
+	sqlDB := testDB(t)
+	r := newRouter(t, sqlDB)
+	token := register(t, sqlDB, "test-resume-big@example.com")
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", "big-resume.pdf")
+	// 11MB 内容，超过 10MB 上限
+	_, _ = fw.Write(bytes.Repeat([]byte("A"), 11*1024*1024))
+	_ = mw.WriteField("text", "big resume")
+	_ = mw.Close()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/resumes", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("oversize upload status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+}

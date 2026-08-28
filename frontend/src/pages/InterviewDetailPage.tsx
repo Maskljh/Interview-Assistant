@@ -116,7 +116,15 @@ export default function InterviewDetailPage() {
         {loading ? (
           <p className="interview-loading">加载中…</p>
         ) : error ? (
-          <p className="interview-error">{error}</p>
+          <>
+            <p className="interview-error">{error}</p>
+            <Link
+              className="interview-back-link"
+              to={fromQuestions ? '/questions' : '/history'}
+            >
+              ← 返回{fromQuestions ? '题库页' : '面试列表'}
+            </Link>
+          </>
         ) : interview ? (
           <>
             {/* 标题区卡片 */}
@@ -168,6 +176,14 @@ export default function InterviewDetailPage() {
                     to={`/interviews/${interview.id}/room`}
                   >
                     继续面试
+                  </Link>
+                )}
+                {interview.status === 'completed' && (
+                  <Link
+                    className="interview-submit"
+                    to={`/interviews/${interview.id}/report`}
+                  >
+                    查看报告
                   </Link>
                 )}
                 {!fromQuestions && interview.questions.length > 0 && (

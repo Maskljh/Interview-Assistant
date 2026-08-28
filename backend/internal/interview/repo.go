@@ -55,6 +55,23 @@ func (r *Repo) ListByUser(userID int64) ([]Session, error) {
 	return sessions, rows.Err()
 }
 
+// DeleteOwned 删除属于该用户的面试会话；级联删除题目/对话/行为/题目使用记录（表上 ON DELETE CASCADE）。
+// 返回是否确实删除了记录（false 表示不存在或不属于该用户）。
+func (r *Repo) DeleteOwned(userID, sessionID int64) (bool, error) {
+	res, err := r.db.Exec(
+		`DELETE FROM interview_sessions WHERE id = ? AND user_id = ?`,
+		sessionID, userID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (r *Repo) GetByID(id int64) (*Session, error) {
 	row := r.db.QueryRow(
 		`SELECT id, user_id, job_jd, job_title, jd_file_url, resume_text, resume_file_url, mode, input_mode, persona, difficulty, company_style, camera_enabled, precheck_gaps, status, score, feedback_json,

@@ -617,6 +617,21 @@ func (s *Service) SkipQuestion(ctx context.Context, userID, sessionID int64) ([]
 	return []OutboundMessage{{Type: "question", Content: q.Question, Progress: progress}}, nil
 }
 
+// Delete 删除属于该用户的面试会话及其全部关联数据（题目/对话/行为/题目使用记录）。
+// 支持任意状态（含 draft/ready/completed/失败会话），方便用户清理历史记录。
+func (s *Service) Delete(ctx context.Context, userID, sessionID int64) error {
+	deleted, err := s.repo.DeleteOwned(userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return ErrNotFound
+	}
+	// 清理可能残留的实时会话状态（Redis），避免孤儿数据。
+	_ = s.store.Delete(ctx, sessionID)
+	return nil
+}
+
 func (s *Service) ForceEnd(ctx context.Context, userID, sessionID int64) error {
 	session, _, err := s.loadOwnedSession(ctx, userID, sessionID)
 	if err != nil {

@@ -8,6 +8,7 @@ type ClientMsg struct {
 
 type ServerMsg struct {
 	Type    string `json:"type"` // session_started|question|follow_up|status|done|closing
+	Code    string `json:"code,omitempty"`
 	Content string `json:"content,omitempty"`
 	Progress *struct {
 		Current int `json:"current"`

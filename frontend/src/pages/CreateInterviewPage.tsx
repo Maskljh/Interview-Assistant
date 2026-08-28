@@ -18,7 +18,7 @@ import Dialog from '../components/Dialog';
 import ResumePreviewModal from '../components/ResumePreviewModal';
 
 /** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
-const MAX_CLOUD_IMPORT_BYTES = 20 * 1024 * 1024;
+const MAX_CLOUD_IMPORT_BYTES = 10 * 1024 * 1024;
 
 /** 列表已带 size 且超过上限时，前端直接拦截，避免无谓下载。 */
 function cloudFileTooLarge(item: WpsCloudFile): boolean {
@@ -294,7 +294,7 @@ export default function CreateInterviewPage() {
   /** 预览云文档简历：先导入拿文件内容，PDF 渲染页面，其他解析文本展示。 */
   async function previewCloudFile(item: WpsCloudFile) {
     if (cloudFileTooLarge(item)) {
-      setCloudError(`「${item.name}」超过 20MB，无法预览`);
+      setCloudError(`「${item.name}」超过 10MB，无法预览`);
       return;
     }
     setCloudError('');
@@ -332,7 +332,7 @@ export default function CreateInterviewPage() {
   /** 选中云文档文件：后端下载转 base64，前端复用解析逻辑提取简历文本。 */
   async function pickCloudFile(item: WpsCloudFile) {
     if (cloudFileTooLarge(item)) {
-      setCloudError(`「${item.name}」超过 20MB，无法导入`);
+      setCloudError(`「${item.name}」超过 10MB，无法导入`);
       return;
     }
     setCloudImporting(true);
@@ -608,14 +608,7 @@ export default function CreateInterviewPage() {
                       className="prep-new-btn prep-new-btn--select"
                       onClick={() => setModal('jd')}
                     >
-                      选择
-                    </button>
-                    <button
-                      type="button"
-                      className="prep-new-btn prep-new-btn--save"
-                      onClick={() => setModal('jd')}
-                    >
-                      保存
+                      {jobJd.trim() ? '编辑' : '选择'}
                     </button>
                   </div>
                 </div>
@@ -856,12 +849,12 @@ export default function CreateInterviewPage() {
                       className="resume-pick-body"
                       onClick={() => void pickCloudFile(item)}
                       disabled={cloudImporting || tooLarge}
-                      title={tooLarge ? '文件超过 20MB，无法导入' : undefined}
+                      title={tooLarge ? '文件超过 10MB，无法导入' : undefined}
                     >
                       <span className="resume-pick-name">{item.name}</span>
                       <span className="resume-pick-meta">
                         {tooLarge
-                          ? '超过 20MB，无法导入'
+                          ? '超过 10MB，无法导入'
                           : cloudImporting
                             ? '导入中…'
                             : formatCloudMtime(item.mtime)}
@@ -873,7 +866,7 @@ export default function CreateInterviewPage() {
                       onClick={() => void previewCloudFile(item)}
                       disabled={cloudImporting || tooLarge}
                       aria-label="预览文件"
-                      title={tooLarge ? '文件超过 20MB，无法预览' : '预览文件'}
+                      title={tooLarge ? '文件超过 10MB，无法预览' : '预览文件'}
                     >
                       预览
                     </button>
@@ -1094,6 +1087,8 @@ export default function CreateInterviewPage() {
               value={jobJd}
               onChange={(e) => {
                 setJobJd(e.target.value);
+                // 手动编辑后内容不再来自原文件，清掉文件名避免残留误导
+                setJdFileName('');
               }}
               placeholder="上传文件后内容会自动填入，也可以直接粘贴或编辑…"
             />
