@@ -28,7 +28,8 @@ vi.mock('../api/wps', () => ({
   })),
   importCloudFile: vi.fn(async () => ({
     name: '题库.docx',
-    base64: btoa('1. 云文档第一题\n2. 云文档第二题'),
+    // btoa 无法编码中文，用 ASCII 内容；文本提取按文件名 mock 返回中文题目
+    base64: btoa('1. cloud file'),
     mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     size: 2048,
   })),
@@ -142,11 +143,12 @@ describe('QuestionImportModal（设计稿导入题库流程）', () => {
     });
     fireEvent.click(screen.getByText('确认导入'));
     await waitFor(() => {
-      expect(confirmImport).toHaveBeenCalledWith(
-        [{ question: '解析出的题目', answer: '答案', reference: undefined }],
-        '产品题库',
-      );
+      expect(confirmImport).toHaveBeenCalled();
     });
+    // 参数形状：题库列表 + 题库名（toEqual 忽略 undefined 键差异）
+    const importCalls = vi.mocked(confirmImport).mock.calls;
+    expect(importCalls[0][1]).toBe('产品题库');
+    expect(importCalls[0][0]).toEqual([{ question: '解析出的题目', answer: '答案' }]);
     await waitFor(() => {
       expect(onImported).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalled();
@@ -160,8 +162,9 @@ describe('QuestionImportModal（设计稿导入题库流程）', () => {
       'image recognition unavailable, please use text input',
     );
     vi.mocked(parseImportImage).mockRejectedValueOnce(err);
-    const { container } = renderModal();
-    const fileInput = container.querySelector('input[type="file"]');
+    renderModal();
+    // 对话框 portal 到 document.body（测试环境无 #design-root）
+    const fileInput = document.body.querySelector('input[type="file"]');
     if (!fileInput) throw new Error('file input not found');
     fireEvent.change(fileInput, {
       target: { files: [new File(['x'], 'shot.png', { type: 'image/png' })] },
@@ -174,8 +177,9 @@ describe('QuestionImportModal（设计稿导入题库流程）', () => {
   });
 
   it('本地文档导入：提取文本后解析并进入预览', async () => {
-    const { container } = renderModal();
-    const fileInput = container.querySelector('input[type="file"]');
+    renderModal();
+    // 对话框 portal 到 document.body（测试环境无 #design-root）
+    const fileInput = document.body.querySelector('input[type="file"]');
     if (!fileInput) throw new Error('file input not found');
     fireEvent.change(fileInput, {
       target: { files: [new File(['resume'], 'notes.pdf', { type: 'application/pdf' })] },

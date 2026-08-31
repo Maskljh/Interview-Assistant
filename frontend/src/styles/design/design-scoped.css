@@ -18,7 +18,7 @@
 #design-root .welcome-content h1 {font:700 56px/1.15 "Noto Serif SC",serif;letter-spacing:-1.4px;margin:0}
 #design-root .welcome-content p {margin:20px 0 40px;color:#606870;font:18px/1.6 "Noto Serif SC",serif}
 #design-root .dark-button, #design-root .primary-button, #design-root .small-button, #design-root .start-button {background:#303945;color:#fff;border-radius:10px;font-weight:600}
-#design-root .hero-button {width:280px;height:44px;background:#101828;border-radius:8px}
+#design-root .hero-button {width:280px;height:44px;background:#101828;border-radius:8px;display:flex;align-items:center;justify-content:center}
 #design-root .welcome-page footer {border-top:1px solid var(--line);height:56px;padding-right:20px;display:flex;justify-content:flex-end;align-items:center;color:var(--muted);font-size:14px}
 #design-root .auth-page {min-height:100vh;display:grid;grid-template-columns:45% 55%;background:var(--paper)}
 #design-root .brand-panel {background:var(--ink);color:white;position:relative;padding:80px 72px;overflow:hidden}
@@ -322,6 +322,7 @@
 #design-root .home .required-field button {display:flex;align-items:center;width:100%;height:40px;margin:0;padding:0 14px;border:0;border-radius:9px;background:#f5f2ec;text-align:left}
 #design-root .home .required-field button strong {color:var(--ink);font:600 18px/1.2 "Noto Serif SC",serif;white-space:nowrap}
 #design-root .home .required-field .job-placeholder {margin-left:auto;color:#7b8794;font-size:12px}
+#design-root .home .required-field .job-placeholder.job-error {color:#a06a67;font-weight:600}
 #design-root .home .required-field .job-arrow {margin-left:10px;color:#6d96c1;font-size:12px}
 #design-root /* Alternate field treatment: label above a full-width, #design-root borderless selection surface. */
 .home .interview-card {grid-template-rows:28px 8px 48px minmax(0,1fr) 50px}
@@ -525,6 +526,9 @@
 #design-root .question-add-dialog-actions {display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
 #design-root .question-add-dialog-actions button {height:34px;padding:0 16px;border-radius:8px;font-size:12px;font-weight:600}
 #design-root .question-add-dialog-actions .management-action {background:#303945;color:#fff}
+/* 设计稿 .manage .management-action 全局规则（min-width:88/height:30/padding 0 14）：
+   对话框 portal 到 #design-root 后脱离 .manage 作用域，需单独补齐 actions 内深色确认键尺寸 */
+#design-root .question-add-dialog .question-add-dialog-actions .management-action {min-width:88px;height:30px;padding:0 14px}
 #design-root .question-tag-field {margin-top:16px;color:#5f6b7a;font-size:12px}
 #design-root .question-tag-picker {display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 #design-root .question-tag-picker label {position:relative;display:inline-flex;margin:0;cursor:pointer}
@@ -714,10 +718,9 @@
 #design-root .home-bank-picker-list strong {overflow:hidden;font-size:13px;font-weight:600;line-height:18px;white-space:nowrap;text-overflow:ellipsis}
 #design-root .home-bank-picker-list small {color:#7b8794;font-size:11px;line-height:15px}
 #design-root .home-bank-picker-list i {color:#4879b8;font-size:11px;font-style:normal;font-weight:600}
-#design-root .home-bank-picker-empty {display:grid;min-height:150px;place-items:center;align-content:center;gap:7px;color:#5f6b7a;text-align:center}
+#design-root .home-bank-picker-empty {display:grid;min-height:96px;place-items:center;align-content:center;gap:7px;color:#5f6b7a;text-align:center}
 #design-root .home-bank-picker-empty p {margin:0;font-size:14px}
 #design-root .home-bank-picker-empty small {font-size:11px;color:#8a939d}
-#design-root .home-bank-picker-empty .management-action {margin-top:8px;background:#303945}
 #design-root .home-bank-picker-head-actions {display:flex;align-items:center;gap:8px}
 #design-root .home-bank-picker-dialog .home-bank-picker-create {width:auto;height:28px;padding:0 10px;border:1px solid #c8d7e8;border-radius:7px;background:#f5f2ec;color:#5f6b7a;font-size:11px;font-weight:600}
 #design-root .home-bank-picker-dialog .home-bank-picker-create:hover {border-color:#8eafd2;background:#eef3f8;color:#4879b8}
@@ -946,7 +949,7 @@
 #design-root .report-bottom span i {display:block;height:100%;border-radius:inherit;background:#4879b8}
 #design-root .report-bottom b {color:#4879b8;font-size:10px;text-align:right}
 #design-root .report-exit {position:absolute;right:31px;bottom:23px}
-#design-root .dash {position:absolute;top:48px;right:41px;bottom:0;left:41px;padding:0 0 30px}
+#design-root .dash {position:absolute;top:48px;right:41px;bottom:0;left:41px;padding:0 0 30px;overflow-y:auto;overflow-x:hidden;scrollbar-color:#b6c2d0 transparent;scrollbar-width:thin}
 #design-root .dash>h1 {margin:0;color:#131e2b;font-family:STSong,"Songti SC","Microsoft YaHei",serif;font-size:25px;line-height:34px}
 #design-root .dash>h1::after {content:"";display:block;width:70px;height:4px;margin-top:5px;border-radius:4px;background:#4879b8}
 #design-root .dash>p {margin:8px 0 18px;color:#77818c;font-size:12px}

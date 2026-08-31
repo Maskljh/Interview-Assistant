@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import {
-  deleteInterview,
-  listInterviews,
-  startInterview,
-  type InterviewListItem,
-} from '../api/interviews';
+import { listInterviews, type InterviewListItem } from '../api/interviews';
 import { STATUS_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import DesignSidebar from '../components/DesignSidebar';
-import ConfirmModal from '../components/ConfirmModal';
 import { mockRecords, type MockRecord } from '../lib/mockData';
 
 /** 把面试列表项渲染为记录行数据。 */
@@ -51,14 +45,11 @@ function mockToRow(r: MockRecord, index: number): {
 export default function InterviewListPage() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
-  // mock 演示行：删除后本地移除（id 为负数）
-  const [mockRows, setMockRows] = useState(() => mockRecords.map(mockToRow));
+  // mock 演示行（id 为负数），静态只读
+  const mockRows = useMemo(() => mockRecords.map(mockToRow), []);
   const [usingMock, setUsingMock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [startingId, setStartingId] = useState<number | null>(null);
 
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -143,40 +134,6 @@ export default function InterviewListPage() {
     };
   }, [interviews, usingMock]);
 
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    // mock 演示行（负数 id）：仅从本地列表移除，不调后端
-    if (deleteTarget.id < 0) {
-      setMockRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
-      setDeleteTarget(null);
-      return;
-    }
-    setDeleting(true);
-    setError('');
-    try {
-      await deleteInterview(deleteTarget.id);
-      setInterviews((prev) => prev.filter((i) => i.id !== deleteTarget.id));
-      setDeleteTarget(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : '删除失败');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  // draft 会话题目未生成：先调 startInterview 生成题目，再进入面试室
-  async function handleStart(id: number) {
-    setStartingId(id);
-    setError('');
-    try {
-      await startInterview(id);
-      navigate(`/interviews/${id}/room`);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : '开始面试失败');
-      setStartingId(null);
-    }
-  }
-
   function openReport(id: number) {
     navigate(`/interviews/${id}/report`);
   }
@@ -225,24 +182,6 @@ export default function InterviewListPage() {
                         <button type="button" onClick={() => openReport(r.id)}>
                           查看复盘
                         </button>
-                        <button
-                          type="button"
-                          className="record-delete"
-                          onClick={() =>
-                            setDeleteTarget({ id: r.id, title: r.title })
-                          }
-                        >
-                          删除
-                        </button>
-                        {!usingMock && r.statusKey === 'draft' && (
-                          <button
-                            type="button"
-                            onClick={() => void handleStart(r.id)}
-                            disabled={startingId === r.id}
-                          >
-                            {startingId === r.id ? '准备中…' : '开始面试'}
-                          </button>
-                        )}
                       </span>
                     </p>
                   ))
@@ -253,19 +192,6 @@ export default function InterviewListPage() {
         </section>
       </section>
 
-      <ConfirmModal
-        open={deleteTarget !== null}
-        title="删除面试记录"
-        description={
-          deleteTarget
-            ? `确定删除「${deleteTarget.title}」吗？删除后该场面试的对话、报告与行为数据将一并清除，且不可恢复。`
-            : ''
-        }
-        confirmLabel="删除该场面试"
-        loading={deleting}
-        onConfirm={() => void confirmDelete()}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   );
 }

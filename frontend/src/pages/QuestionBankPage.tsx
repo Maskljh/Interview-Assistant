@@ -262,12 +262,12 @@ export default function QuestionBankPage() {
       <ConfirmModal
         open={deleteTarget !== null}
         title="删除题目"
-        description={
+        description="此操作不可撤销"
+        body={
           deleteTarget
-            ? `确定删除这道题目吗？\n「${deleteTarget.question.slice(0, 50)}」`
+            ? `确认删除「${deleteTarget.question.slice(0, 50)}」吗？`
             : ''
         }
-        confirmLabel="删除这道题目"
         loading={deleting}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteTarget(null)}

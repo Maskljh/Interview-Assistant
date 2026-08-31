@@ -119,6 +119,8 @@ export default function AppNav({
           open={pendingLeave !== null}
           title="离开面试"
           description={LEAVE_CONFIRM}
+          body=""
+          danger={false}
           confirmLabel="确定离开"
           cancelLabel="取消"
           onConfirm={confirmLeaveNow}
@@ -199,6 +201,8 @@ export default function AppNav({
         open={confirmLogoutOpen}
         title="退出登录"
         description="退出后需要重新登录才能继续使用面试助手，确定退出吗？"
+        body=""
+        danger={false}
         confirmLabel="退出登录"
         cancelLabel="取消"
         onConfirm={() => {

@@ -15,11 +15,11 @@ import { listCloudFiles, importCloudFile, type WpsCloudFile } from '../api/wps';
 import './InterviewPages.css';
 import './CreateInterviewPage.css';
 import DesignSidebar from '../components/DesignSidebar';
-import Dialog from '../components/Dialog';
-import ResumePreviewModal from '../components/ResumePreviewModal';
+import QuestionImportModal from '../components/QuestionImportModal';
+import { createPortal } from 'react-dom';
 import homeGlow from '../assets/design/homeGlow.svg';
 import homeLogo from '../assets/design/homeLogo.png';
-import { commonInterviewJobs } from '../lib/mockData';
+import { commonInterviewJobs, mockJobInfoItems } from '../lib/mockData';
 
 /** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
 const MAX_CLOUD_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -58,34 +58,24 @@ export default function CreateInterviewPage() {
   const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
   const [jobDraft, setJobDraft] = useState('');
   const [commonJobs, setCommonJobs] = useState<string[]>(commonInterviewJobs);
-  // ── 岗位信息（JD）──
+  // ── 岗位信息（JD）：设计稿 home 岗位卡内联编辑 + 导入选择器 ──
   const [jobJd, setJobJd] = useState('');
-  const [jdFileName, setJdFileName] = useState('');
-  const [jdFileUrl, setJdFileUrl] = useState('');
-  const [jdUploading, setJdUploading] = useState(false);
-  const [jdProgress, setJdProgress] = useState(0);
-  const [jdOcrName, setJdOcrName] = useState('');
-  const [jdOcrRecognizing, setJdOcrRecognizing] = useState(false);
   const [jdError, setJdError] = useState('');
-  const [jdDragging, setJdDragging] = useState(false);
+  // 上传岗位信息图片 OCR 识别中（home-job-info-picker 头部按钮态）
+  const [jobInfoRecognizing, setJobInfoRecognizing] = useState(false);
+  // 当前选中的岗位信息（home-job-info-picker 高亮态）
+  const [selectedJobInfoId, setSelectedJobInfoId] = useState('');
   // ── 个人简历 ──
   const [resumeText, setResumeText] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
   const [resumeFileUrl, setResumeFileUrl] = useState('');
-  const [resumeUploading, setResumeUploading] = useState(false);
-  const [resumeProgress, setResumeProgress] = useState(0);
   const [resumeParsing, setResumeParsing] = useState(false);
   const [resumeError, setResumeError] = useState('');
-  const [resumeDragging, setResumeDragging] = useState(false);
   // ── 选择题库 ──
   const [bankQuestions, setBankQuestions] = useState<Question[]>([]);
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  // 题库勾选上限与推荐范围（需求确认：硬上限 10，推荐 5~8）。
-  const MAX_BANK_QUESTIONS = 10;
-  const BANK_RECOMMEND_MIN = 5;
-  const BANK_RECOMMEND_MAX = 8;
   // 已选题目详情（用于卡片内列表展示）
   const selectedQuestions = useMemo(
     () =>
@@ -94,21 +84,28 @@ export default function CreateInterviewPage() {
         .filter((q): q is Question => Boolean(q)),
     [selectedIds, bankQuestions],
   );
-  // 单项目提示：勾选的题目都来自同一个 job_tag 时，提示 AI 会补充简历其他项目/经历的题目。
-  const selectedJobTags = useMemo(
-    () => Array.from(new Set(selectedQuestions.map((q) => q.job_tag).filter(Boolean))),
-    [selectedQuestions],
-  );
-  const singleProjectHint = selectedIds.length > 0 && selectedJobTags.length === 1;
+  // 题库列表：按 job_tag 分组（与「面试信息管理」题库 tab 的 bank 口径一致）
+  const bankGroups = useMemo(() => {
+    const map = new Map<string, Question[]>();
+    for (const q of bankQuestions) {
+      const bank = q.job_tag || '未命名题库';
+      const list = map.get(bank) ?? [];
+      list.push(q);
+      map.set(bank, list);
+    }
+    return Array.from(map.entries());
+  }, [bankQuestions]);
+  // 新建题库（设计稿：选择题库弹窗头部按钮 → 导入题库对话框）
+  const [importOpen, setImportOpen] = useState(false);
 
   // ── 通用 ──
   const [error, setError] = useState('');
   // 提交阶段：creating=正在创建会话；generating=正在生成题目（LLM 可能耗时较长，需明确提示）
   const [phase, setPhase] = useState<'creating' | 'generating' | null>(null);
-  // 模态编辑态：resume=简历导入、resumeChoose=简历来源选择、resumePick=从简历库挑选、
-  // wpsCloud=从 WPS 云文档选择、jd=岗位 JD 编辑、bank=选择题库
+  // 模态编辑态（设计稿 home 对话框）：resumePick=选择简历、resumeImportMethod=上传简历、
+  // wpsCloud=从 WPS 云文档选择、jd=导入岗位信息、bank=选择题库
   const [modal, setModal] = useState<
-    'resume' | 'resumeChoose' | 'resumePick' | 'wpsCloud' | 'jd' | 'bank' | null
+    'resumePick' | 'resumeImportMethod' | 'wpsCloud' | 'jd' | 'bank' | null
   >(null);
   const [libraryResumes, setLibraryResumes] = useState<ResumeFile[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
@@ -119,12 +116,6 @@ export default function CreateInterviewPage() {
   const [cloudError, setCloudError] = useState('');
   const [cloudKeyword, setCloudKeyword] = useState('');
   const [cloudImporting, setCloudImporting] = useState(false);
-  // ── 简历预览 ──
-  const [previewTitle, setPreviewTitle] = useState('');
-  const [previewText, setPreviewText] = useState('');
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
-  const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
   const cloudSearchTimerRef = useRef<number | null>(null);
@@ -167,8 +158,6 @@ export default function CreateInterviewPage() {
 
     setResumeError('');
     setResumeParsing(true);
-    setResumeUploading(true);
-    setResumeProgress(0);
     setResumeFileUrl('');
     try {
       const text = await extractResumeText(file);
@@ -178,7 +167,6 @@ export default function CreateInterviewPage() {
       try {
         const upload = await uploadFile('resume', file);
         setResumeFileUrl(upload.url);
-        setResumeProgress(100);
       } catch (uploadErr) {
         setResumeError(
           uploadErr instanceof Error
@@ -195,14 +183,7 @@ export default function CreateInterviewPage() {
       return false;
     } finally {
       setResumeParsing(false);
-      setResumeUploading(false);
     }
-  }
-
-  function clearResume() {
-    setResumeText('');
-    setResumeFileName('');
-    setResumeFileUrl('');
   }
 
   /** 打开「从简历库挑选」弹窗并加载简历列表。 */
@@ -213,7 +194,7 @@ export default function CreateInterviewPage() {
     setLibraryResumes([]);
     try {
       const items = await listResumes();
-      setLibraryResumes(items);
+      setLibraryResumes(Array.isArray(items) ? items : []);
     } catch {
       setLibraryError('简历库加载失败');
     } finally {
@@ -278,53 +259,6 @@ export default function CreateInterviewPage() {
     }
   }
 
-  /** 预览简历库中的简历：PDF 用文件渲染，其他展示解析文本。 */
-  function previewLibraryResume(item: ResumeFile) {
-    setPreviewTitle(item.name);
-    setPreviewText(item.resume_text ?? '');
-    setPreviewFile(null);
-    setPreviewFileUrl(item.file_url || null);
-    setPreviewOpen(true);
-  }
-
-  /** 预览云文档简历：先导入拿文件内容，PDF 渲染页面，其他解析文本展示。 */
-  async function previewCloudFile(item: WpsCloudFile) {
-    if (cloudFileTooLarge(item)) {
-      setCloudError(`「${item.name}」超过 10MB，无法预览`);
-      return;
-    }
-    setCloudError('');
-    setCloudImporting(true);
-    try {
-      const result = await importCloudFile(item);
-      const file = base64ToFile(result.base64, result.name, result.mime_type);
-      if (/^\.pdf$/i.test(result.name.slice(result.name.lastIndexOf('.')))) {
-        setPreviewTitle(result.name);
-        setPreviewText('');
-        setPreviewFile(file);
-        setPreviewFileUrl(null);
-        setPreviewOpen(true);
-      } else {
-        const text = await extractResumeText(file);
-        setPreviewTitle(result.name);
-        setPreviewText(text);
-        setPreviewFile(null);
-        setPreviewFileUrl(null);
-        setPreviewOpen(true);
-      }
-    } catch (err) {
-      setCloudError(
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : '预览失败，请稍后重试',
-      );
-    } finally {
-      setCloudImporting(false);
-    }
-  }
-
   /** 选中云文档文件：后端下载转 base64，前端复用解析逻辑提取简历文本。 */
   async function pickCloudFile(item: WpsCloudFile) {
     if (cloudFileTooLarge(item)) {
@@ -363,95 +297,37 @@ export default function CreateInterviewPage() {
     }
   }
 
-  /** 统一处理 JD 上传：图片走 OCR，其他走文本解析；成功把内容填入职位描述框。 */
-  async function handleJdDrop(file: File): Promise<boolean> {
-    if (!file) return false;
-
-    const isImage = file.type.startsWith('image/');
-    const isDoc =
-      file.type === 'text/plain' ||
-      file.type === 'application/pdf' ||
-      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      /\.(txt|md|pdf|docx)$/i.test(file.name);
-
-    if (!isImage && !isDoc) {
-      setJdError('不支持的文件类型，请上传 .txt、.md、.pdf、.docx 或图片');
-      return false;
-    }
-
+  /** 上传岗位信息图片（home-job-info-picker 头部按钮）：OCR 识别后填入岗位信息。 */
+  async function handleJobInfoImage(file: File) {
     if (file.size > 10 * 1024 * 1024) {
       setJdError('文件不能超过 10MB');
-      return false;
+      return;
     }
-
     setJdError('');
-    if (isImage) {
-      setJdOcrRecognizing(true);
-      setJdOcrName(file.name);
-      try {
-        const { text } = await recognizeImage(file);
-        if (!text.trim()) {
-          setJdOcrName('');
-          setJdError('未识别到文字，请尝试更清晰的图片');
-          return false;
-        }
-        setJobJd(text);
-        return true;
-      } catch (err) {
-        setJdOcrName('');
-        const msg = err instanceof ApiError ? err.rawMessage : '';
-        const ux = err instanceof ApiError ? err.message : '图片识别失败';
-        if (msg.includes('unavailable') || ux.includes('改用文本粘贴')) {
-          setJdError('图片识别失败，请改用文本粘贴');
-        } else {
-          setJdError(ux);
-        }
-        return false;
-      } finally {
-        setJdOcrRecognizing(false);
-      }
-    }
-
-    // 文档文件：解析文本
-    setJdUploading(true);
-    setJdProgress(0);
-    setJdFileUrl('');
+    setJobInfoRecognizing(true);
     try {
-      const text = await extractResumeText(file);
-      setJobJd(text);
-      setJdFileName(file.name);
-      try {
-        const upload = await uploadFile('jd', file);
-        setJdFileUrl(upload.url);
-        setJdProgress(100);
-      } catch (uploadErr) {
-        setJdError(
-          uploadErr instanceof Error
-            ? `JD 文件上传失败：${uploadErr.message}（文本已填入可用）`
-            : 'JD 文件上传失败（文本已填入可用）',
-        );
+      const { text } = await recognizeImage(file);
+      if (!text.trim()) {
+        setJdError('未识别到文字，请尝试更清晰的图片');
+        return;
       }
-      return true;
+      setJobJd(text);
+      setModal(null);
     } catch (err) {
-      setJdFileName('');
-      setJdFileUrl('');
-      setJdError(err instanceof Error ? err.message : 'JD 文件解析失败');
-      return false;
+      const raw = err instanceof ApiError ? err.rawMessage : '';
+      const ux = err instanceof ApiError ? err.message : '图片识别失败';
+      if (raw.includes('unavailable') || ux.includes('改用文本粘贴')) {
+        setJdError('图片识别失败，请改用文本粘贴');
+      } else {
+        setJdError(ux);
+      }
     } finally {
-      setJdUploading(false);
+      setJobInfoRecognizing(false);
     }
   }
 
-  function clearJd() {
-    setJobJd('');
-    setJdFileName('');
-    setJdFileUrl('');
-    setJdError('');
-  }
-
-  /** 打开「选择题库」弹窗并加载题库列表。 */
-  async function openBankPicker() {
-    setModal('bank');
+  /** 加载题库题目列表（选择题库弹窗 / 新建题库导入完成后刷新共用）。 */
+  async function loadBankQuestions() {
     setBankError('');
     setBankLoading(true);
     setBankQuestions([]);
@@ -465,14 +341,21 @@ export default function CreateInterviewPage() {
     }
   }
 
-  function toggleQuestion(id: number) {
-    if (!selectedIds.includes(id) && selectedIds.length >= MAX_BANK_QUESTIONS) {
-      setBankError(`最多选择 ${MAX_BANK_QUESTIONS} 题，请先取消部分已选题目`);
-      return;
-    }
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+  /** 打开「选择题库」弹窗并加载题库列表。 */
+  function openBankPicker() {
+    setModal('bank');
+    void loadBankQuestions();
+  }
+
+  /** 选中整个题库（设计稿 home-bank-picker：按题库整组选择）。 */
+  function pickBank(bank: string) {
+    setSelectedIds(
+      bankQuestions
+        .filter((q) => (q.job_tag || '未命名题库') === bank)
+        .map((q) => q.id),
     );
+    setBankError('');
+    setModal(null);
   }
 
   /** 从已选列表移除一道题。 */
@@ -486,6 +369,7 @@ export default function CreateInterviewPage() {
     if (!value) return;
     setJobTitle(value);
     setJobDraft(value);
+    setError('');
     if (!commonJobs.includes(value)) setCommonJobs((prev) => [value, ...prev]);
     setJobDropdownOpen(false);
   }
@@ -517,7 +401,6 @@ export default function CreateInterviewPage() {
           job_jd: effectiveJd,
           ...(trimmedResume ? { resume_text: trimmedResume } : {}),
           ...(resumeFileUrl ? { resume_file_url: resumeFileUrl } : {}),
-          ...(jdFileUrl ? { jd_file_url: jdFileUrl } : {}),
         });
         setPhase('generating');
         await startInterview(created.id);
@@ -530,7 +413,6 @@ export default function CreateInterviewPage() {
         input_mode: 'voice',
         ...(trimmedResume ? { resume_text: trimmedResume } : {}),
         ...(resumeFileUrl ? { resume_file_url: resumeFileUrl } : {}),
-        ...(jdFileUrl ? { jd_file_url: jdFileUrl } : {}),
       });
       setPhase('generating');
       await startInterview(created.id);
@@ -575,7 +457,11 @@ export default function CreateInterviewPage() {
                   onClick={() => setJobDropdownOpen((v) => !v)}
                   aria-expanded={jobDropdownOpen}
                 >
-                  <span className="job-placeholder">{jobTitle || '点击选择'}</span>
+                  <span
+                    className={`job-placeholder${error === '请选择面试岗位' ? ' job-error' : ''}`}
+                  >
+                    {jobTitle || (error === '请选择面试岗位' ? '请选择面试岗位' : '点击选择')}
+                  </span>
                   <span className="job-arrow">▽</span>
                 </button>
                 {jobDropdownOpen && (
@@ -635,11 +521,21 @@ export default function CreateInterviewPage() {
                     type="file"
                     accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void handleResumeFile(file);
+                    }}
                   />
+                  {resumeError && (
+                    <p className="resume-upload-error" role="alert">
+                      {resumeError}
+                    </p>
+                  )}
                   <button
                     type="button"
                     className="small-button resume-upload"
-                    onClick={() => setModal('resumeChoose')}
+                    onClick={() => void openResumePick()}
                   >
                     导入
                   </button>
@@ -672,7 +568,17 @@ export default function CreateInterviewPage() {
                     />
                     <span className="job-info-empty">暂无岗位信息，请输入或导入</span>
                   </div>
-                  <input id="job-info-file-input" type="file" accept=".jpg,.jpeg,.png" hidden />
+                  <input
+                    id="job-info-file-input"
+                    type="file"
+                    accept=".jpg,.jpeg,.png"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void handleJobInfoImage(file);
+                    }}
+                  />
                 </article>
 
                 {/* 选择题库（可选） */}
@@ -682,9 +588,9 @@ export default function CreateInterviewPage() {
                       <h3>选择题库</h3>
                       <span className="field-note optional-note">可选</span>
                     </div>
-                    {selectedIds.length > 0 && (
+                    {selectedQuestions.length > 0 && (
                       <span className="question-total">
-                        共 {selectedIds.length} 题 · 建议 {BANK_RECOMMEND_MIN}~{BANK_RECOMMEND_MAX} 题
+                        共 {selectedQuestions.length} 题
                       </span>
                     )}
                     <button
@@ -709,11 +615,6 @@ export default function CreateInterviewPage() {
                           </button>
                         </article>
                       ))}
-                      {singleProjectHint && (
-                        <p className="question-bank-hint">
-                          所选题目都来自同一项目，AI 将补充简历中其他项目/经历的题目。
-                        </p>
-                      )}
                     </div>
                   ) : (
                     <div className="optional-preview">暂无题目，请导入</div>
@@ -723,7 +624,9 @@ export default function CreateInterviewPage() {
 
               {/* 开始模拟面试 */}
               <form onSubmit={handleSubmit}>
-                {error && <p className="interview-error">{error}</p>}
+                {error && error !== '请选择面试岗位' && (
+                  <p className="interview-error">{error}</p>
+                )}
                 <button
                   type="submit"
                   className="start-button"
@@ -746,483 +649,419 @@ export default function CreateInterviewPage() {
         </section>
       </section>
 
-      {/* ─── 简历来源选择 Modal：自己上传 / 从简历库挑选 ─── */}
-      <Dialog
-        open={modal === 'resumeChoose'}
-        title="导入简历"
-        onClose={() => {
-          setModal(null);
-          setResumeError('');
-        }}
-        width={420}
-      >
-        <div className="resume-choose-options">
-          <button
-            type="button"
-            className="resume-choose-option"
-            onClick={() => setModal('resume')}
-          >
-            <span className="resume-choose-option-title">自己上传</span>
-            <span className="resume-choose-option-desc">
-              从本地上传一份新的简历文件
-            </span>
-          </button>
-          <button
-            type="button"
-            className="resume-choose-option"
-            onClick={() => void openResumePick()}
-          >
-            <span className="resume-choose-option-title">从简历库挑选</span>
-            <span className="resume-choose-option-desc">
-              在已上传的简历库中选择一份使用
-            </span>
-          </button>
-          <button
-            type="button"
-            className="resume-choose-option"
-            onClick={() => void openWpsCloud()}
-          >
-            <span className="resume-choose-option-title">从 WPS 云文档选择</span>
-            <span className="resume-choose-option-desc">
-              从你的 WPS 云文档中选择简历文件
-            </span>
-          </button>
-        </div>
-      </Dialog>
-
-      {/* ─── 从简历库挑选 Modal ─── */}
-      <Dialog
-        open={modal === 'resumePick'}
-        title="从简历库挑选"
-        onClose={() => {
-          setModal(null);
-          setLibraryError('');
-        }}
-        width={520}
-      >
-        <div className="resume-pick-list">
-          {libraryLoading ? (
-            <p className="interview-loading">加载简历库…</p>
-          ) : libraryError ? (
-            <p className="dialog-error">{libraryError}</p>
-          ) : libraryResumes.length === 0 ? (
-            <div className="resume-pick-empty">
-              <p className="interview-loading">简历库为空，可先上传一份简历。</p>
-              <button
-                type="button"
-                className="interview-inline-link"
-                onClick={() => {
-                  setModal(null);
-                  window.dispatchEvent(new Event('open-user-modal'));
-                }}
-              >
-                去用户管理上传简历
-              </button>
-            </div>
-          ) : (
-            libraryResumes.map((item) => (
-              <div key={item.id} className="resume-pick-item">
-                <button
-                  type="button"
-                  className="resume-pick-body"
-                  onClick={() => pickResume(item)}
-                >
-                  <span className="resume-pick-name">{item.name}</span>
-                  <span className="resume-pick-meta">
-                    {item.resume_text ? '已解析' : '无文本'} · {item.updated_at}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="resume-pick-preview"
-                  onClick={() => previewLibraryResume(item)}
-                  aria-label="预览简历"
-                  title="预览简历"
-                >
-                  预览
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </Dialog>
-
-      {/* ─── 从 WPS 云文档选择 Modal ─── */}
-      <Dialog
-        open={modal === 'wpsCloud'}
-        title="从 WPS 云文档选择"
-        onClose={() => {
-          setModal(null);
-          setCloudError('');
-          if (cloudSearchTimerRef.current != null) {
-            window.clearTimeout(cloudSearchTimerRef.current);
-            cloudSearchTimerRef.current = null;
-          }
-        }}
-        width={560}
-      >
-        <div className="wps-cloud-search">
-          <input
-            type="text"
-            value={cloudKeyword}
-            onChange={(e) => {
-              const v = e.target.value;
-              setCloudKeyword(v);
-              if (cloudSearchTimerRef.current != null) {
-                window.clearTimeout(cloudSearchTimerRef.current);
-                cloudSearchTimerRef.current = null;
-              }
-              cloudSearchTimerRef.current = window.setTimeout(() => {
-                cloudSearchTimerRef.current = null;
-                void searchCloudFiles(v);
-              }, 300);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !cloudLoading && !cloudImporting) {
-                if (cloudSearchTimerRef.current != null) {
-                  window.clearTimeout(cloudSearchTimerRef.current);
-                  cloudSearchTimerRef.current = null;
-                }
-                void searchCloudFiles();
-              }
-            }}
-            placeholder="搜索云文档中的简历…"
-            aria-label="搜索云文档简历"
-          />
-          <button
-            type="button"
-            className="wps-cloud-search-btn"
-            onClick={() => void searchCloudFiles()}
-            disabled={cloudLoading || cloudImporting}
-          >
-            {cloudLoading ? '搜索中…' : '搜索'}
-          </button>
-        </div>
-        <div className="resume-pick-list">
-          {cloudLoading ? (
-            <p className="interview-loading">加载云文档…</p>
-          ) : cloudError ? (
-            <p className="dialog-error">{cloudError}</p>
-          ) : cloudFiles.length === 0 ? (
-            <p className="interview-loading">
-              {cloudKeyword.trim()
-                ? '未找到匹配的简历文件，可换个关键词试试。'
-                : '云文档根目录暂无简历文件，可输入关键词搜索。'}
-            </p>
-          ) : (
-            cloudFiles.map((item) => {
-              const tooLarge = cloudFileTooLarge(item);
-              return (
-                <div key={item.id} className="resume-pick-item">
-                  <button
-                    type="button"
-                    className="resume-pick-body"
-                    onClick={() => void pickCloudFile(item)}
-                    disabled={cloudImporting || tooLarge}
-                    title={tooLarge ? '文件超过 10MB，无法导入' : undefined}
-                  >
-                    <span className="resume-pick-name">{item.name}</span>
-                    <span className="resume-pick-meta">
-                      {tooLarge
-                        ? '超过 10MB，无法导入'
-                        : cloudImporting
-                          ? '导入中…'
-                          : formatCloudMtime(item.mtime)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="resume-pick-preview"
-                    onClick={() => void previewCloudFile(item)}
-                    disabled={cloudImporting || tooLarge}
-                    aria-label="预览文件"
-                    title={tooLarge ? '文件超过 10MB，无法预览' : '预览文件'}
-                  >
-                    预览
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </Dialog>
-
-      {/* ─── 简历导入 Modal（拖拽上传） ─── */}
-      <Dialog
-        open={modal === 'resume'}
-        title={resumeFileName ? '替换简历' : '导入简历'}
-        onClose={() => {
-          setModal(null);
-          setResumeError('');
-        }}
-        footer={
+      {/* ─── 对话框宿主：挂到 #design-root（缩放画布外），fixed 定位相对视口 ─── */}
+      {(() => {
+        const portalHost =
+          typeof document !== 'undefined' ? document.getElementById('design-root') : null;
+        if (!portalHost) return null;
+        return createPortal(
           <>
-            <button type="button" className="btn btn--secondary" onClick={() => setModal(null)}>
-              取消
-            </button>
-            {resumeFileName && (
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  clearResume();
-                  setModal(null);
-                  setResumeError('');
-                }}
-                disabled={resumeParsing || phase !== null}
-              >
-                清除简历
-              </button>
-            )}
-          </>
-        }
-      >
-        <div className="dialog-field">
-          <div
-            className={`dropzone${resumeDragging ? ' is-dragging' : ''}${resumeParsing || resumeUploading ? ' is-busy' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setResumeDragging(true);
-            }}
-            onDragLeave={() => setResumeDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setResumeDragging(false);
-              const file = e.dataTransfer.files?.[0];
-              if (!file) return;
-              void handleResumeFile(file).then((ok) => {
-                if (ok) setModal(null);
-              });
-            }}
-            onClick={() => {
-              if (!resumeParsing && !resumeUploading) {
-                document.getElementById('resume-file-input')?.click();
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label="上传简历"
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && !resumeParsing && !resumeUploading) {
-                document.getElementById('resume-file-input')?.click();
-              }
-            }}
-          >
-            <input
-              id="resume-file-input"
-              type="file"
-              accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (!file) return;
-                void handleResumeFile(file).then((ok) => {
-                  if (ok) setModal(null);
-                });
-              }}
-              disabled={resumeParsing || phase !== null}
-              hidden
-            />
-            {resumeParsing || resumeUploading ? (
-              <div className="dropzone-busy">
-                <span className="dropzone-spinner" aria-hidden="true" />
-                <p>
-                  {resumeParsing
-                    ? '正在解析简历…'
-                    : `正在上传原文件… ${resumeProgress}%`}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="dropzone-icon" aria-hidden="true">↑</div>
-                <p className="dropzone-title">
-                  {resumeFileName ? '拖拽新简历到这里' : '拖拽简历到这里，或点击选择文件'}
-                </p>
-                <p className="dropzone-hint">支持 .txt、.md、.pdf、.docx，不超过 10MB</p>
-              </>
-            )}
-          </div>
-          {resumeFileName && !resumeParsing && !resumeUploading && (
-            <p className="dialog-success">已导入：{resumeFileName}</p>
-          )}
-          {resumeError && <p className="dialog-error" role="alert">{resumeError}</p>}
-        </div>
-      </Dialog>
-
-      {/* ─── 岗位信息 / 面试岗位 Modal（拖拽上传，支持文件+图片OCR） ─── */}
-      <Dialog
-        open={modal === 'jd'}
-        title={jdFileName || jobJd ? '编辑岗位信息' : '导入岗位信息'}
-        onClose={() => {
-          setModal(null);
-          setJdError('');
-        }}
-        width={560}
-        footer={
-          <>
-            {(jobJd || jdFileName) && (
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  clearJd();
-                  setJdError('');
-                }}
-                disabled={jdUploading || jdOcrRecognizing || phase !== null}
-              >
-                清空
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => {
-                setModal(null);
-                setJdError('');
-              }}
-            >
-              完成
-            </button>
-          </>
-        }
-      >
-        <div className="dialog-field">
-          <div
-            className={`dropzone${jdDragging ? ' is-dragging' : ''}${jdUploading || jdOcrRecognizing ? ' is-busy' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setJdDragging(true);
-            }}
-            onDragLeave={() => setJdDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setJdDragging(false);
-              const file = e.dataTransfer.files?.[0];
-              if (!file) return;
-              void handleJdDrop(file);
-            }}
-            onClick={() => {
-              if (!jdUploading && !jdOcrRecognizing) {
-                document.getElementById('jd-file-input')?.click();
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label="上传岗位 JD"
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && !jdUploading && !jdOcrRecognizing) {
-                document.getElementById('jd-file-input')?.click();
-              }
-            }}
-          >
-            <input
-              id="jd-file-input"
-              type="file"
-              accept=".txt,.md,.pdf,.docx,image/jpeg,image/png,image/webp,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (!file) return;
-                void handleJdDrop(file);
-              }}
-              disabled={jdUploading || jdOcrRecognizing || phase !== null}
-              hidden
-            />
-            {jdUploading || jdOcrRecognizing ? (
-              <div className="dropzone-busy">
-                <span className="dropzone-spinner" aria-hidden="true" />
-                <p>
-                  {jdOcrRecognizing
-                    ? `正在识别图片中的文字（${jdOcrName}）…`
-                    : `正在解析文件… ${jdProgress}%`}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="dropzone-icon" aria-hidden="true">↑</div>
-                <p className="dropzone-title">
-                  {jdFileName ? '拖拽新文件到这里' : '拖拽文件或图片到这里，或点击选择'}
-                </p>
-                <p className="dropzone-hint">支持 .txt、.md、.pdf、.docx 或图片（自动 OCR），不超过 10MB</p>
-              </>
-            )}
-          </div>
-          {jdError && <p className="dialog-error" role="alert">{jdError}</p>}
-
-          <label htmlFor="job-jd" className="dialog-field-label">岗位信息</label>
-          <textarea
-            id="job-jd"
-            aria-label="岗位 JD"
-            required
-            value={jobJd}
-            onChange={(e) => {
-              setJobJd(e.target.value);
-              // 手动编辑后内容不再来自原文件，清掉文件名避免残留误导
-              setJdFileName('');
-            }}
-            placeholder="上传文件后内容会自动填入，也可以直接粘贴或编辑…"
-          />
-        </div>
-      </Dialog>
-
-      {/* ─── 选择题库 Modal ─── */}
-      <Dialog
-        open={modal === 'bank'}
-        title="选择题库"
-        onClose={() => {
-          setModal(null);
-          setBankError('');
-        }}
-        width={560}
-        footer={
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => {
-              setModal(null);
-              setBankError('');
-            }}
-          >
-            完成
-          </button>
-        }
-      >
-        <div className="bank-pick-list">
-          {bankLoading ? (
-            <p className="interview-loading">加载题库…</p>
-          ) : bankError ? (
-            <p className="dialog-error">{bankError}</p>
-          ) : bankQuestions.length === 0 ? (
-            <p className="interview-loading">题库暂无题目，可先在「面试信息管理」中导入。</p>
-          ) : (
-            bankQuestions.map((q) => {
-              const selected = selectedIds.includes(q.id);
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  className={`bank-pick-item${selected ? ' is-selected' : ''}`}
-                  onClick={() => toggleQuestion(q.id)}
+            {/* 选择简历：设计稿 home-resume-picker-dialog */}
+            {modal === 'resumePick' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog home-resume-picker-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="选择简历"
                 >
-                  <span className="bank-pick-check" aria-hidden="true">
-                    {selected ? '✓' : ''}
-                  </span>
-                  <span className="bank-pick-question">{q.question}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </Dialog>
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>选择简历</h2>
+                      <p>从已有的简历里选择或新建导入简历</p>
+                    </div>
+                    <div className="home-resume-picker-head-actions">
+                      <button
+                        type="button"
+                        className="home-resume-picker-create"
+                        disabled={libraryResumes.length >= 5}
+                        title={libraryResumes.length >= 5 ? '最多上传 5 份简历' : ''}
+                        onClick={() => setModal('resumeImportMethod')}
+                      >
+                        上传简历
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="关闭"
+                        onClick={() => {
+                          setModal(null);
+                          setResumeError('');
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="home-resume-picker-body">
+                    {libraryLoading ? (
+                      <p className="interview-loading">加载简历库…</p>
+                    ) : libraryError ? (
+                      <p className="dialog-error">{libraryError}</p>
+                    ) : libraryResumes.length === 0 ? (
+                      <div className="home-resume-picker-empty">
+                        <p>还没有添加简历</p>
+                        <small>添加后可在模拟面试时选择使用</small>
+                      </div>
+                    ) : (
+                      <div className="home-resume-picker-list">
+                        {libraryResumes.map((item) => {
+                          const active = item.name === resumeFileName;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={active ? 'active' : ''}
+                              onClick={() => pickResume(item)}
+                            >
+                              <span className="resume-file-mark">PDF</span>
+                              <span>
+                                <strong>{item.name}</strong>
+                                <small>{item.updated_at}</small>
+                              </span>
+                              <i>{active ? '已选择' : '选择'}</i>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {libraryResumes.length >= 5 && (
+                      <p className="resume-upload-limit">最多上传 5 份简历</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
 
-      {/* ─── 简历预览弹窗（PDF 渲染 / 文本展示） ─── */}
-      <ResumePreviewModal
-        open={previewOpen}
-        title={previewTitle}
-        text={previewText}
-        file={previewFile}
-        fileUrl={previewFileUrl}
-        onClose={() => setPreviewOpen(false)}
+            {/* 上传简历：设计稿 resume-import-method-dialog */}
+            {modal === 'resumeImportMethod' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog resume-import-method-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="上传简历"
+                >
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>上传简历</h2>
+                      <p>选择简历的导入方式</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="关闭"
+                      onClick={() => setModal('resumePick')}
+                    >
+                      ×
+                    </button>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="resume-import-method-body">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModal(null);
+                        requestAnimationFrame(() => {
+                          document.getElementById('resume-file-input')?.click();
+                        });
+                      }}
+                    >
+                      <strong>本地上传</strong>
+                      <small>从电脑选择 PDF、DOC 或 DOCX 文件</small>
+                    </button>
+                    <button type="button" onClick={() => void openWpsCloud()}>
+                      <strong>WPS 云文档上传</strong>
+                      <small>从 WPS 云文档中选择简历文件</small>
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* 从 WPS 云文档选择：设计稿 wps-picker-dialog */}
+            {modal === 'wpsCloud' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog wps-picker-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="从 WPS 云文档选择"
+                >
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>从 WPS 云文档选择</h2>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="关闭"
+                      onClick={() => {
+                        setModal(null);
+                        setCloudError('');
+                        if (cloudSearchTimerRef.current != null) {
+                          window.clearTimeout(cloudSearchTimerRef.current);
+                          cloudSearchTimerRef.current = null;
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="wps-picker-body">
+                    <div className="wps-picker-search">
+                      <input
+                        type="text"
+                        value={cloudKeyword}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCloudKeyword(v);
+                          if (cloudSearchTimerRef.current != null) {
+                            window.clearTimeout(cloudSearchTimerRef.current);
+                            cloudSearchTimerRef.current = null;
+                          }
+                          cloudSearchTimerRef.current = window.setTimeout(() => {
+                            cloudSearchTimerRef.current = null;
+                            void searchCloudFiles(v);
+                          }, 300);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !cloudLoading && !cloudImporting) {
+                            if (cloudSearchTimerRef.current != null) {
+                              window.clearTimeout(cloudSearchTimerRef.current);
+                              cloudSearchTimerRef.current = null;
+                            }
+                            void searchCloudFiles();
+                          }
+                        }}
+                        placeholder="输入文件名搜索"
+                        aria-label="搜索云文档"
+                      />
+                      <button
+                        type="button"
+                        className="management-action"
+                        onClick={() => void searchCloudFiles()}
+                        disabled={cloudLoading || cloudImporting}
+                      >
+                        {cloudLoading ? '搜索中…' : '搜索'}
+                      </button>
+                    </div>
+                    <p className="wps-picker-tip">选择文件后将直接添加至简历管理</p>
+                    <div className="wps-picker-list">
+                      {cloudImporting ? (
+                        <div className="wps-picker-empty">正在导入所选文件…</div>
+                      ) : cloudLoading ? (
+                        <div className="wps-picker-empty">正在加载云文档…</div>
+                      ) : cloudError ? (
+                        <div className="wps-picker-empty">{cloudError}</div>
+                      ) : cloudFiles.length === 0 ? (
+                        <div className="wps-picker-empty">
+                          {cloudKeyword.trim()
+                            ? '未找到匹配的简历文件，可换个关键词试试。'
+                            : '未找到云文档简历文件。'}
+                        </div>
+                      ) : (
+                        cloudFiles.map((item) => {
+                          const tooLarge = cloudFileTooLarge(item);
+                          return (
+                            <article
+                              key={item.id}
+                              className="wps-file-item"
+                              onClick={() => {
+                                if (!tooLarge) void pickCloudFile(item);
+                              }}
+                            >
+                              <div>
+                                <strong>{item.name}</strong>
+                                <span className="wps-file-mtime">
+                                  <small>
+                                    {tooLarge
+                                      ? '超过 10MB，无法导入'
+                                      : formatCloudMtime(item.mtime)}
+                                  </small>
+                                </span>
+                              </div>
+                              <button type="button" disabled={tooLarge}>
+                                选择
+                              </button>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* 导入岗位信息：设计稿 home-job-info-picker-dialog */}
+            {modal === 'jd' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog home-job-info-picker-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="导入岗位信息"
+                >
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>导入岗位信息</h2>
+                      <p>从已有的岗位信息里选择或新建导入岗位信息</p>
+                    </div>
+                    <div className="home-resume-picker-head-actions">
+                      <button
+                        type="button"
+                        className="home-resume-picker-create"
+                        disabled={jobInfoRecognizing}
+                        onClick={() =>
+                          document.getElementById('job-info-file-input')?.click()
+                        }
+                      >
+                        {jobInfoRecognizing ? '识别中…' : '上传岗位信息图片'}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="关闭"
+                        onClick={() => {
+                          setModal(null);
+                          setJdError('');
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="home-resume-picker-body">
+                    {mockJobInfoItems.length ? (
+                      <div className="home-job-info-picker-list">
+                        {mockJobInfoItems.map((item) => {
+                          const active = item.id === selectedJobInfoId;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={active ? 'active' : ''}
+                              onClick={() => {
+                                setSelectedJobInfoId(item.id);
+                                setJobJd(
+                                  `岗位名称：${item.name}\n${item.content}`,
+                                );
+                                setModal(null);
+                              }}
+                            >
+                              <span className="job-info-file-mark">岗</span>
+                              <span>
+                                <strong>{item.name}</strong>
+                                <small>{item.content}</small>
+                              </span>
+                              <i>{active ? '已选择' : '导入'}</i>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="home-resume-picker-empty">
+                        <p>还没有岗位信息</p>
+                        <small>上传岗位信息图片后可在此选择使用</small>
+                      </div>
+                    )}
+                    {jdError && (
+                      <p className="home-job-info-picker-error" role="alert">
+                        {jdError}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* 选择题库：设计稿 home-bank-picker-dialog */}
+            {modal === 'bank' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog home-bank-picker-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="从题库管理选择"
+                >
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>选择题库</h2>
+                      <p>从已有的题库里选择或新建导入题库</p>
+                    </div>
+                    <div className="home-bank-picker-head-actions">
+                      <button
+                        type="button"
+                        className="home-bank-picker-create"
+                        onClick={() => {
+                          setModal(null);
+                          setImportOpen(true);
+                        }}
+                      >
+                        新建题库
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="关闭"
+                        onClick={() => {
+                          setModal(null);
+                          setBankError('');
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="home-bank-picker-body">
+                    {bankLoading ? (
+                      <p className="interview-loading">加载题库…</p>
+                    ) : bankError ? (
+                      <p className="dialog-error">{bankError}</p>
+                    ) : bankGroups.length === 0 ? (
+                      <div className="home-bank-picker-empty">
+                        <p>还没有上传题库</p>
+                        <small>新建题库后可用于开始模拟面试</small>
+                      </div>
+                    ) : (
+                      <div className="home-bank-picker-list">
+                        {bankGroups.map(([bank, list]) => (
+                          <button
+                            key={bank}
+                            type="button"
+                            onClick={() => pickBank(bank)}
+                          >
+                            <span>
+                              <strong>{bank}</strong>
+                              <small>{list.length} 道题目</small>
+                            </span>
+                            <i>选择</i>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+          </>,
+          portalHost,
+        );
+      })()}
+
+      {/* 新建题库：设计稿 question-import-dialog（导入完成后回到选择题库弹窗） */}
+      <QuestionImportModal
+        open={importOpen}
+        onClose={() => {
+          setImportOpen(false);
+          setModal('bank');
+        }}
+        onImported={() => {
+          setImportOpen(false);
+          setModal('bank');
+          void loadBankQuestions();
+        }}
+        existingQuestions={bankQuestions.map((q) => q.question)}
       />
     </div>
   );

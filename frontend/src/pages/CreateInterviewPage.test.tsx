@@ -96,151 +96,110 @@ describe('CreateInterviewPage 面试间准备页（设计稿工作台）', () =>
     expect(screen.getByText('产品经理')).toBeTruthy();
   });
 
-  it('岗位信息：打开导入弹窗显示拖拽上传区', () => {
+  it('岗位信息：打开导入弹窗显示岗位信息列表', () => {
     renderPage();
     openCardModal('岗位信息');
-    expect(screen.getByRole('dialog', { name: /导入岗位信息/ })).toBeTruthy();
-    expect(screen.getByText(/拖拽文件或图片到这里/)).toBeTruthy();
-    expect(screen.getByText(/自动 OCR/)).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: '导入岗位信息' })).toBeTruthy();
+    expect(screen.getByText('从已有的岗位信息里选择或新建导入岗位信息')).toBeTruthy();
+    expect(screen.getByText('项目管理专员/主管')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '上传岗位信息图片' })).toBeTruthy();
   });
 
-  it('岗位信息：拖入图片后 OCR 文本填入编辑框', async () => {
+  it('岗位信息：选择已有岗位信息后填入编辑框并关闭弹窗', () => {
     renderPage();
     openCardModal('岗位信息');
-    const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
+    fireEvent.click(screen.getByText('项目管理专员/主管'));
+    expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    const editor = screen.getByLabelText('岗位信息') as HTMLTextAreaElement;
+    expect(editor.value).toContain('岗位名称：项目管理专员/主管');
+    expect(editor.value).toContain('负责公司各类项目全流程管理');
+  });
+
+  it('岗位信息：上传图片后 OCR 文本填入编辑框', async () => {
+    renderPage();
+    openCardModal('岗位信息');
+    const input = document.getElementById('job-info-file-input') as HTMLInputElement;
     const file = new File(['x'], 'jd.png', { type: 'image/png' });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => {
-      expect((screen.getByLabelText('岗位 JD') as HTMLTextAreaElement).value).toBe('识别出的 JD 文本');
+      expect((screen.getByLabelText('岗位信息') as HTMLTextAreaElement).value).toBe('识别出的 JD 文本');
     });
     expect(recognizeImage).toHaveBeenCalledWith(file);
     expect(screen.queryByText(/图片识别失败|未识别到文字/)).toBeNull();
   });
 
-  it('岗位信息：超过 10MB 的文件被拒绝且不调用 OCR', async () => {
+  it('岗位信息：超过 10MB 的图片被拒绝且不调用 OCR', async () => {
     renderPage();
     openCardModal('岗位信息');
-    const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
+    const input = document.getElementById('job-info-file-input') as HTMLInputElement;
     const bigFile = new File(['x'.repeat(10 * 1024 * 1024 + 1)], 'big.png', {
       type: 'image/png',
     });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [bigFile] } });
+    fireEvent.change(input, { target: { files: [bigFile] } });
     await waitFor(() => {
       expect(screen.getByText('文件不能超过 10MB')).toBeTruthy();
     });
     expect(recognizeImage).not.toHaveBeenCalled();
   });
 
-  it('简历：自己上传成功后关闭弹窗，卡片显示文件名', async () => {
+  it('简历：本地上传成功后关闭弹窗，卡片显示文件名', async () => {
     renderPage();
-    // 简历卡「导入」→ 来源选择 → 自己上传
+    // 简历卡「导入」→ 选择简历（空态）→ 上传简历 → 本地上传
     openCardModal('个人简历');
-    expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
-    expect(screen.getByText(/自己上传/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /自己上传/ }));
-    expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
-    expect(screen.getByText('拖拽简历到这里，或点击选择文件')).toBeTruthy();
-
-    // 拖入合法文件（.txt）→ 解析成功自动关闭弹窗
-    const file = new File(['简历内容'], 'resume.txt', { type: 'text/plain' });
-    const dropzone = screen.getByRole('button', { name: '上传简历' });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(screen.getByRole('dialog', { name: '选择简历' })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: '导入简历' })).toBeNull();
+      expect(screen.getByText('还没有添加简历')).toBeTruthy();
     });
-    // 卡片显示文件名
-    expect(screen.getByText('resume.txt')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '上传简历' }));
+    expect(screen.getByRole('dialog', { name: '上传简历' })).toBeTruthy();
+    expect(screen.getByText('本地上传')).toBeTruthy();
+    expect(screen.getByText('WPS 云文档上传')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /本地上传/ }));
+
+    // 对话框关闭后，隐藏 input 触发解析（jsdom 中直接派发 change）
+    const file = new File(['简历内容'], 'resume.txt', { type: 'text/plain' });
+    const input = document.getElementById('resume-file-input') as HTMLInputElement;
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText('resume.txt')).toBeTruthy();
+    });
   });
 
-  it('选择题库：打开弹窗可勾选题目，完成后卡片显示计数', async () => {
+  it('选择题库：打开弹窗按题库整组选择，卡片显示计数', async () => {
     renderPage();
     openCardModal('选择题库');
-    expect(screen.getByRole('dialog', { name: '选择题库' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: '从题库管理选择' })).toBeTruthy();
+    expect(screen.getByText('从已有的题库里选择或新建导入题库')).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy();
+      expect(screen.getByText('2 道题目')).toBeTruthy();
     });
-    const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
-    fireEvent.click(bankItem!);
-    expect(bankItem?.className).toContain('is-selected');
-    // 完成 → 卡片显示已选计数与推荐范围
-    fireEvent.click(screen.getByRole('button', { name: '完成' }));
-    expect(screen.getByText(/共 1 题 · 建议 5~8 题/)).toBeTruthy();
+    // 选择题库（未命名题库：mock 题目无 job_tag）
+    fireEvent.click(screen.getByText('未命名题库'));
+    // 弹窗关闭，卡片显示已选计数与题目列表
+    expect(screen.queryByRole('dialog', { name: '从题库管理选择' })).toBeNull();
+    expect(screen.getByText('共 2 题')).toBeTruthy();
+    expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy();
+    expect(screen.getByText('如何处理需求冲突？')).toBeTruthy();
+  });
+
+  it('选择题库：空题库时显示新建题库空态', async () => {
+    vi.mocked(listQuestions).mockResolvedValueOnce([]);
+    renderPage();
+    openCardModal('选择题库');
+    await waitFor(() => {
+      expect(screen.getByText('还没有上传题库')).toBeTruthy();
+    });
+    expect(screen.getByText('新建题库后可用于开始模拟面试')).toBeTruthy();
+    // 仅头部右上角保留「新建题库」按钮（空态底部按钮已按需求移除）
+    expect(screen.getAllByRole('button', { name: '新建题库' }).length).toBe(1);
   });
 
   it('未选择岗位时开始面试被拦截并提示', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /开始模拟面试/ }));
     expect(screen.getByText('请选择面试岗位')).toBeTruthy();
-  });
-
-  it('题库勾选超过 10 题被阻止并提示', async () => {
-    vi.mocked(listQuestions).mockResolvedValueOnce(
-      Array.from({ length: 11 }, (_, i) => ({
-        id: i + 1,
-        question: `题目 ${i + 1}`,
-        answer: null,
-        user_answer: null,
-        source_session_id: null,
-        reference: null,
-        source: 'import',
-        starred: false,
-        usage_count: 0,
-        created_at: '2026-01-01',
-        job_tag: '电商项目',
-        dimension: 'logic',
-      })),
-    );
-    renderPage();
-    openCardModal('选择题库');
-    await waitFor(() => expect(screen.getByText('题目 1')).toBeTruthy());
-    // 勾选前 10 题
-    for (let i = 1; i <= 10; i++) {
-      fireEvent.click(screen.getByText(`题目 ${i}`).closest('.bank-pick-item')!);
-    }
-    // 第 11 题被阻止并提示
-    fireEvent.click(screen.getByText('题目 11').closest('.bank-pick-item')!);
-    expect(screen.getByText(/最多选择 10 题/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '完成' }));
-    expect(screen.getByText(/共 10 题/)).toBeTruthy();
-  });
-
-  it('所选题目来自同一项目时显示补全提示', async () => {
-    vi.mocked(listQuestions).mockResolvedValueOnce([
-      {
-        id: 1,
-        question: '电商项目A',
-        answer: null,
-        user_answer: null,
-        source_session_id: null,
-        reference: null,
-        source: 'import',
-        starred: false,
-        usage_count: 0,
-        created_at: '2026-01-01',
-        job_tag: '电商项目',
-        dimension: 'logic',
-      },
-      {
-        id: 2,
-        question: '电商项目B',
-        answer: null,
-        user_answer: null,
-        source_session_id: null,
-        reference: null,
-        source: 'import',
-        starred: false,
-        usage_count: 0,
-        created_at: '2026-01-01',
-        job_tag: '电商项目',
-        dimension: 'content',
-      },
-    ]);
-    renderPage();
-    openCardModal('选择题库');
-    await waitFor(() => expect(screen.getByText('电商项目A')).toBeTruthy());
-    fireEvent.click(screen.getByText('电商项目A').closest('.bank-pick-item')!);
-    fireEvent.click(screen.getByText('电商项目B').closest('.bank-pick-item')!);
-    fireEvent.click(screen.getByRole('button', { name: '完成' }));
-    expect(screen.getByText(/所选题目都来自同一项目/)).toBeTruthy();
   });
 });

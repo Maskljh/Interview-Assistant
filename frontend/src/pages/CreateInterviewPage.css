@@ -16,6 +16,50 @@
   justify-self: end;
 }
 
+/* 生成中提示与失败提示：绝对定位到卡片底部、开始按钮左侧，
+   完全脱离 grid 流——若作为 grid 子项（含指定 grid-row）会干扰列轨道，
+   把卡片单列撑成双列、导致上方三个模块整体缩窄。 */
+#design-root .home .interview-card form .start-hint,
+#design-root .home .interview-card form .interview-error {
+  position: absolute;
+  bottom: 24px;
+  left: 26px;
+  right: 196px;
+  margin: 0;
+}
+
+#design-root .home .interview-card form .start-hint {
+  color: #5f6b7a;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: right;
+}
+
+#design-root .home .interview-card form .interview-error {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  color: #a06a67;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: right;
+}
+
+#design-root .home .interview-card form .start-hint {
+  color: #5f6b7a;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+#design-root .home .interview-card form .interview-error {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  color: #a06a67;
+  font-size: 12px;
+  line-height: 16px;
+}
+
 /* 下拉框：相对岗位区绝对定位，左缘对齐按钮列（110px 标签列 + 12px 间距），
    展开时悬浮不挤压下方卡片布局 */
 #design-root .home .interview-card .required-field {
@@ -30,4 +74,13 @@
   min-width: 320px;
   max-width: none !important;
   z-index: 5;
+}
+
+/* 本地上传/图片识别失败提示（设计稿无对应元素，仅错误态出现） */
+#design-root .resume-upload-error,
+#design-root .home-job-info-picker-error {
+  margin: 8px 0 0;
+  color: #a06a67;
+  font-size: 11px;
+  line-height: 18px;
 }

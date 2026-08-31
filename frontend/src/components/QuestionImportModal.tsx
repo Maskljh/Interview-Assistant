@@ -287,6 +287,7 @@ export default function QuestionImportModal({ open, onClose, onImported, existin
       );
       reset();
       onImported();
+      onClose();
     } catch (err) {
       setImportError(err instanceof ApiError ? err.message : '导入失败');
     } finally {

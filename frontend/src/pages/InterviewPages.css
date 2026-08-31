@@ -3991,25 +3991,9 @@
   opacity: 0.6;
 }
 
-/* ── 记录行操作区：容纳「查看复盘 + 删除」两键（设计稿外新增的删除能力） ──
-   最后一列由固定 62px 改为 auto，按钮行内右对齐；删除键用红色弱化样式。 */
-#design-root .records .record-list > p {
-  grid-template-columns: 1.1fr 1.3fr .7fr 40px auto;
-}
-
+/* ── 记录行操作区：与设计稿一致，每行仅一个「查看复盘」按钮，落在固定 62px 末列 ── */
 #design-root .records .record-list > p .record-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
   justify-content: flex-end;
-}
-
-#design-root .records .record-list .record-delete {
-  color: #b8454a;
-  border-color: #e6c8c8;
-}
-
-#design-root .records .record-list .record-delete:hover {
-  border-color: #b8454a;
-  background: #fdf3f3;
 }

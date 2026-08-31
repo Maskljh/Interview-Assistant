@@ -44,7 +44,8 @@ describe('ConfirmModal', () => {
         onCancel={() => {}}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    // 重写后默认危险态确认键文案为设计稿的「确认删除」
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
