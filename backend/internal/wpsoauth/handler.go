@@ -71,10 +71,12 @@ func (h *Handler) RegisterCallbackListener(r *gin.Engine) {
 }
 
 type userResponse struct {
-	ID       int64  `json:"id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	UserID   string `json:"user_id,omitempty"` // WPS 账号全局数字 ID
+	ID        int64  `json:"id"`
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	Nickname  string `json:"nickname,omitempty"`  // WPS 账号昵称
+	AvatarURL string `json:"avatar_url,omitempty"` // WPS 账号头像
+	UserID    string `json:"user_id,omitempty"`   // WPS 账号全局数字 ID
 }
 
 type authResponse struct {
@@ -201,7 +203,14 @@ func (h *Handler) Exchange(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, authResponse{
 		Token: token,
-		User:  userResponse{ID: dbUser.ID, Email: dbUser.Email, Username: dbUser.Username, UserID: dbUser.UserID},
+		User: userResponse{
+			ID:        dbUser.ID,
+			Email:     dbUser.Email,
+			Username:  dbUser.Username,
+			Nickname:  dbUser.Nickname,
+			AvatarURL: dbUser.AvatarURL,
+			UserID:    dbUser.UserID,
+		},
 	})
 }
 

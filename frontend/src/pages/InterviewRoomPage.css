@@ -61,20 +61,20 @@
   color: #4879b8;
 }
 
-/* ─── 主体两栏：左摄像头（约 47%）+ 右双卡（约 53%） ─── */
+/* ─── 主体：左数字人主视觉舞台（大） + 右信息栏（当前问题/实时转写） ─── */
 .ir-body {
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 19px;
   flex: 1;
   min-height: 0;
 }
 
-/* 左：深色摄像头面板（对齐设计稿 .camera 视觉） */
-.ir-camera {
+/* 左：数字人主视觉舞台（深色底衬托 3D 形象，占据主要面积） */
+.ir-stage {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 10px;
   background: #131e2b;
@@ -82,39 +82,62 @@
   min-height: 0;
 }
 
-/* 设计稿：中心 82px 蓝圆“面”字；视频流就绪时被 video 覆盖 */
-.ir-camera::after {
-  content: '面';
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 82px;
-  height: 82px;
-  border-radius: 50%;
-  background: #4879b8;
-  color: #fff;
-  font-family: STSong, 'Songti SC', serif;
-  font-size: 32px;
-  pointer-events: none;
+/* 数字人组件撑满舞台 */
+.ir-stage .ir-avatar {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
-.ir-camera-label {
+.ir-stage .ir-avatar-head {
+  flex: none;
+  padding: 10px 16px 6px;
+}
+
+.ir-stage .ir-avatar-title {
+  color: #dce4ed;
+}
+
+.ir-stage .ir-avatar-stage {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* 摄像头小窗：叠在数字人舞台右下角 */
+.ir-camera-mini {
   position: absolute;
-  top: 14px;
-  left: 17px;
-  z-index: 2;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  width: 200px;
+  height: 140px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0c1520;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.ir-camera-mini .ir-camera-label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 3;
   color: #dce4ed;
   font-size: 11px;
-  line-height: 18px;
+  line-height: 16px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
-.ir-camera-label em {
+.ir-camera-mini .ir-camera-label em {
   color: #dce4ed;
   font-style: normal;
 }
 
-/* CameraPreview 内层透明化，让出深色面板 */
-.ir-camera .room-camera {
+.ir-camera-mini .room-camera {
   width: 100%;
   height: 100%;
   padding: 0;
@@ -125,11 +148,11 @@
   justify-content: center;
 }
 
-.ir-camera .room-camera .room-card-title {
+.ir-camera-mini .room-camera .room-card-title {
   display: none;
 }
 
-.ir-camera .room-camera-frame {
+.ir-camera-mini .room-camera-frame {
   width: 100%;
   height: 100%;
   aspect-ratio: auto;
@@ -137,7 +160,7 @@
   background: transparent;
 }
 
-.ir-camera .room-camera-video {
+.ir-camera-mini .room-camera-video {
   position: relative;
   z-index: 2;
   width: 100%;
@@ -146,19 +169,27 @@
   display: block;
 }
 
-/* 设计稿无错误占位文案：无摄像头时不显示提示，仅保留中心头像 */
-.ir-camera .room-camera-placeholder,
-.ir-camera .room-camera-error {
+/* 无摄像头时不显示占位/错误文案，仅保留深色小窗底 */
+.ir-camera-mini .room-camera-placeholder,
+.ir-camera-mini .room-camera-error {
   display: none !important;
 }
 
-/* ─── 右：双卡（上大下小，对齐设计稿 .room-grid>div） ─── */
-/* 设计稿 .room-grid>div：rows 1.2fr .85fr，gap 14 */
+/* ─── 右：信息栏（当前问题在上、实时转写在下） ─── */
 .ir-cols {
   display: grid;
   grid-template-rows: 1.2fr .85fr;
   gap: 14px;
   min-height: 0;
+}
+
+/* 当前问题卡排第一行（较大），实时转写卡排第二行 */
+.ir-cols > .ir-card:nth-child(2) {
+  order: -1;
+}
+
+.ir-cols > .ir-card:nth-child(1) {
+  order: 0;
 }
 
 .ir-card {
@@ -407,12 +438,8 @@
   }
 }
 
-/* ── 设计稿对齐：隐藏设计稿没有的元素（恢复时删除本块即可） ──
-   设计稿 room-card 只有：标题行 + 摄像头/双卡 + footer 三键。
-   以下隐藏语音控制块（按住说话/静音/重播）、会话 meta 行、常规状态行。 */
-.ir-meta,
-.ir-voice,
-.ir-status {
+/* ── AI 面试产品化：恢复录音控制条与必要状态提示；岗位信息行非必需故隐藏 ── */
+.ir-meta {
   display: none !important;
 }
 
@@ -425,23 +452,11 @@
   justify-content: flex-end;
 }
 
-/* ── 设计稿对齐：room-grid 固定高度 358px（设计稿 .room-grid{height:358px!important}） ──
-   设计稿右列 rows=196.98:147 源于第二卡 min-content(147) 超出 fr 份额(142.5)，
-   故以 min-height:147px 复现该行为；内容更长时行仍可扩展。 */
+/* ── AI 面试产品化：主体为「数字人主视觉舞台 + 右侧信息栏」，高度撑满 room-card ── */
 #design-root .interview .ir-body {
-  flex: none;
-  height: 358px;
-}
-
-#design-root .interview .ir-cols > .ir-card:nth-child(3) {
-  min-height: 147px;
-}
-
-/* ── 数字人面试官面板 ──
-   默认展开：ir-body 由 358px 增至 488px 容纳新增行；
-   折叠（is-collapsed）时回到设计稿原始 358px。 */
-#design-root .interview .ir-body:has(.ir-avatar:not(.is-collapsed)) {
-  height: 488px;
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 .ir-avatar {
@@ -564,4 +579,16 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── AI 面试产品化：banner 无 logo 后 room-card 上移，给数字人舞台更大纵向空间 ── */
+#design-root .interview .room-card {
+  top: 108px;
+}
+
+/* 底部控制条：左侧录音/语音，右侧 暂停/跳过/结束 */
+#design-root .interview .ir-footer {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
@@ -16,7 +17,12 @@ const NAV_ITEMS: { key: DesignSidebarActive; label: string; path: string }[] = [
  */
 export default function DesignSidebar({ active }: { active: DesignSidebarActive }) {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+
+  // 页面加载时拉取最新用户资料（昵称/头像可能已在 WPS 侧更新）
+  useEffect(() => {
+    void refreshUser().catch(() => {});
+  }, [refreshUser]);
 
   function handleLogout() {
     logout();
@@ -25,6 +31,12 @@ export default function DesignSidebar({ active }: { active: DesignSidebarActive 
 
   const displayName = user?.username || user?.nickname || 'username';
   const displayId = user?.user_id || user?.email || 'useid';
+  const avatarUrl = user?.avatar_url || '';
+
+  function avatarInitial(name: string): string {
+    const trimmed = name.trim();
+    return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+  }
 
   return (
     <aside className="sidebar">
@@ -42,7 +54,13 @@ export default function DesignSidebar({ active }: { active: DesignSidebarActive 
         ))}
       </nav>
       <div className="profile">
-        <span>{displayName.slice(0, 1)}</span>
+        <span aria-hidden>
+          {avatarUrl ? (
+            <img className="sidebar-avatar-img" src={avatarUrl} alt="" />
+          ) : (
+            avatarInitial(displayName)
+          )}
+        </span>
         <div>
           <strong>{displayName}</strong>
           <small>{displayId}</small>

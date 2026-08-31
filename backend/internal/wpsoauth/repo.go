@@ -21,10 +21,12 @@ func NewRepo(db *sql.DB) *Repo {
 
 // User 是登录回调落库后返回给前端的用户信息（复用现有 authResponse 结构）。
 type User struct {
-	ID       int64
-	Email    string
-	Username string
-	UserID   string // WPS 账号全局数字 ID（个人中心可见）
+	ID        int64
+	Email     string
+	Username  string
+	Nickname  string // WPS 账号昵称
+	AvatarURL string // WPS 账号头像
+	UserID    string // WPS 账号全局数字 ID（个人中心可见）
 }
 
 // WPSToken 是用户在授权时下发的 WPS 开放平台访问凭证（持久化用于云文档/邮箱能力）。
@@ -73,9 +75,9 @@ const tokenColumns = "wps_access_token, wps_refresh_token, wps_token_expires_at,
 func (r *Repo) GetByWPSOpenID(openid string) (*User, error) {
 	var u User
 	err := r.db.QueryRow(
-		"SELECT id, email, username, COALESCE(user_id, '') FROM users WHERE wps_openid = ?",
+		"SELECT id, email, username, COALESCE(nickname, ''), COALESCE(avatar_url, ''), COALESCE(user_id, '') FROM users WHERE wps_openid = ?",
 		openid,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.UserID)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Nickname, &u.AvatarURL, &u.UserID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNoUser
 	}
@@ -89,9 +91,9 @@ func (r *Repo) GetByWPSOpenID(openid string) (*User, error) {
 func (r *Repo) GetByID(id int64) (*User, error) {
 	var u User
 	err := r.db.QueryRow(
-		"SELECT id, email, username, COALESCE(user_id, '') FROM users WHERE id = ?",
+		"SELECT id, email, username, COALESCE(nickname, ''), COALESCE(avatar_url, ''), COALESCE(user_id, '') FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.UserID)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Nickname, &u.AvatarURL, &u.UserID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNoUser
 	}

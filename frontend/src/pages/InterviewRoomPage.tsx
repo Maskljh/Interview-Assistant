@@ -23,7 +23,6 @@ import CameraPreview from '../components/CameraPreview';
 import InterviewerAvatar from '../components/InterviewerAvatar';
 import ConfirmModal from '../components/ConfirmModal';
 import DesignSidebar from '../components/DesignSidebar';
-import homeLogo from '../assets/design/homeLogo.png';
 
 // 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
 const ESTIMATED_MINUTES = 40;
@@ -765,9 +764,8 @@ export default function InterviewRoomPage() {
           <DesignSidebar active="home" />
           <main className="workspace-main">
             <header className="workspace-banner">
-              <img src={homeLogo} alt="面知" />
               <div>
-                <h1>面知，把每一场模拟变成下一次可验证的进步</h1>
+                <h1>把每一场模拟变成下一次可验证的进步</h1>
                 <p>面试可定制、历史可复盘、进步可感知</p>
               </div>
             </header>
@@ -813,29 +811,32 @@ export default function InterviewRoomPage() {
                 <p className="interview-loading">加载面试中…</p>
               ) : (
                 <>
-                  {/* 主体两栏：左摄像头 + 右双卡 */}
+                  {/* 主体两栏：左数字人主视觉舞台（含摄像头小窗） + 右信息栏（当前问题/实时转写） */}
                   <div className="ir-body">
-                    <div className="ir-camera">
-                      <span className="ir-camera-label">
-                        摄像头预览　<em>● {formatElapsed(elapsedMs)}</em>
-                      </span>
-                      <CameraPreview
-                        stream={behavior.cameraStream}
-                        opening={behavior.status === 'loading-model'}
-                        error={
-                          behavior.status === 'failed'
-                            ? '无法访问摄像头，请检查浏览器权限'
-                            : ''
-                        }
-                      />
-                    </div>
-                    <div className="ir-cols">
-                      {/* 数字人面试官：与 TTS 朗读联动开口说话 */}
+                    <div className="ir-stage">
+                      {/* 数字人面试官：主视觉，与 TTS 朗读联动开口说话 */}
                       <InterviewerAvatar
                         controller={avatarRef.current}
                         enabled={avatarEnabled}
                         onToggle={toggleAvatar}
                       />
+                      {/* 摄像头小窗：叠在数字人舞台右下角 */}
+                      <div className="ir-camera-mini">
+                        <span className="ir-camera-label">
+                          摄像头预览　<em>● {formatElapsed(elapsedMs)}</em>
+                        </span>
+                        <CameraPreview
+                          stream={behavior.cameraStream}
+                          opening={behavior.status === 'loading-model'}
+                          error={
+                            behavior.status === 'failed'
+                              ? '无法访问摄像头，请检查浏览器权限'
+                              : ''
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="ir-cols">
                       {/* 实时转写 */}
                       <article className="ir-card">
                         <div className="ir-card-head">
