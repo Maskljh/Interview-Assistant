@@ -1,0 +1,211 @@
+/* =====================================================================
+   面试报告（ReportPage）设计稿外壳适配
+   外壳与 report-top/report-bottom/report-meta/report-exit 等样式由
+   design-scoped.css 提供；本文件只负责内容溢出滚动与附加分析区（rp-*）。
+   ===================================================================== */
+
+#design-root .report .report-card {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 设计稿无滚动条：隐藏但保留滚动能力（溢出仅发生在底部 padding 空白区） */
+  scrollbar-width: none;
+}
+
+#design-root .report .report-card::-webkit-scrollbar {
+  display: none;
+}
+
+/* 综合表现描述（report-top 左卡） */
+.rp-score-note {
+  margin: 6px 0 0;
+  color: #5f6b7a;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+/* 亮点 / 改进行（report-top 右卡） */
+.rp-top-line {
+  display: block;
+  color: #5f6b7a;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.rp-top-line--good {
+  color: #4879b8;
+}
+
+/* report-bottom 右卡底部操作区
+   设计稿：.report-bottom article:last-child .report-exit 为 absolute 定位于卡片右下角，
+   不占文档流；rp-actions 用 display:contents 透明化包裹层，避免额外 margin/高度。 */
+.rp-actions {
+  display: contents;
+}
+
+.rp-email {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #4879b8;
+  border-radius: 7px;
+  background: #4879b8;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rp-email:hover:not(:disabled) {
+  background: #3a67a3;
+}
+
+.rp-email:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rp-email-success {
+  color: #148c57;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* 附加分析区：表达分析 / 行为信号 */
+.rp-extra {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.rp-extra article {
+  padding: 14px 18px;
+  border: 1px solid #dbe2e9;
+  border-radius: 9px;
+  background: #fffdf7;
+}
+
+.rp-extra h3 {
+  margin: 0 0 8px;
+  color: #131e2b;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.rp-extra p {
+  margin: 6px 0;
+  color: #5f6b7a;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.rp-extra .rp-note {
+  color: #77818c;
+}
+
+.rp-extra button.rp-retry {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid #c8d7e8;
+  border-radius: 6px;
+  background: #fffdf7;
+  color: #4879b8;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rp-extra button.rp-retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 报告卡内状态区（加载/错误/生成中） */
+.rp-state {
+  margin-top: 18px;
+}
+
+.rp-state .interview-error {
+  margin: 0 0 8px;
+}
+
+.rp-retry-btn {
+  height: 33px;
+  padding: 0 18px;
+  border: 1px solid #303945;
+  border-radius: 7px;
+  background: #303945;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.rp-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rp-back {
+  display: inline-block;
+  margin-top: 10px;
+  color: #4879b8;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.rp-back:hover {
+  color: #2b508e;
+}
+
+/* 能力维度行：label / track / score（覆盖 design-scoped 的 .report-bottom span 规则） */
+#design-root .report-bottom article:first-child > p .rp-dim-label {
+  display: block;
+  height: auto;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+  color: #5f6b7a;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+#design-root .report-bottom article:first-child > p .rp-dim-track {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #ebeff3;
+}
+
+#design-root .report-bottom article:first-child > p .rp-dim-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #4879b8;
+}
+
+#design-root .report-bottom article:first-child > p .rp-dim-value {
+  color: #4879b8;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* 亮点行（report-top 右卡）优先高亮 */
+#design-root .report-top .rp-top-line--good {
+  color: #4879b8;
+}
+
+/* ── 设计稿对齐：隐藏设计稿没有的元素（恢复时删除本块即可） ──
+   设计稿 report-card 只有：标题行 + meta + 综合表现/亮点改进 +
+   能力维度/关键证据建议 + 退出。以下隐藏发送邮箱、重新生成、
+   表达分析/行为信号附加区。 */
+.rp-email,
+.rp-email-success,
+.rp-extra,
+.rp-retry-btn {
+  display: none !important;
+}

@@ -33,6 +33,8 @@ interface AuthContextValue {
   loginWithWPS: (code: string) => Promise<void>;
   /** 从后端刷新当前用户资料（用户名等）并更新本地存储。 */
   refreshUser: () => Promise<void>;
+  /** mock 登录：写入演示 token 与用户，供设计稿账号密码/验证码登录在无后端时进入应用。 */
+  loginWithMock: (account: string, username?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -65,6 +67,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
     storeUser(data.user);
   }, []);
+  const loginWithMock = useCallback((account: string, username?: string) => {
+    const mockToken = `mock-token-${Date.now()}`;
+    setToken(mockToken);
+    const mockUser: User = {
+      id: 0,
+      email: account,
+      username: username || 'demo',
+      nickname: username || 'demo',
+      user_id: 'mock-user',
+    };
+    setUser(mockUser);
+    storeUser(mockUser);
+  }, []);
 
   const logout = useCallback(() => {
     setToken(null);
@@ -92,8 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout, navigate]);
 
   const value = useMemo(
-    () => ({ user, logout, loginWithWPS, refreshUser }),
-    [user, logout, loginWithWPS, refreshUser],
+    () => ({ user, logout, loginWithWPS, refreshUser, loginWithMock }),
+    [user, logout, loginWithWPS, refreshUser, loginWithMock],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

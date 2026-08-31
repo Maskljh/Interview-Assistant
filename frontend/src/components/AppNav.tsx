@@ -44,6 +44,13 @@ export default function AppNav({
     void refreshUser().catch(() => {});
   }, [refreshUser]);
 
+  // 支持从其他页面（如创建页简历库空态）打开用户管理弹窗
+  useEffect(() => {
+    const onOpen = () => setUserModalOpen(true);
+    window.addEventListener('open-user-modal', onOpen);
+    return () => window.removeEventListener('open-user-modal', onOpen);
+  }, []);
+
   function handleClick(e: MouseEvent, to: string) {
     if (!confirmLeave) return;
     // 拦截默认跳转，弹出确认；确认后由 ConfirmModal 统一 navigate。

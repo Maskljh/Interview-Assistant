@@ -2,13 +2,36 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import QuestionImportModal from './QuestionImportModal';
 import type { ImportItem } from '../api/questions';
-import { parseImportImage, parseImportText } from '../api/questions';
+import { parseImportImage, parseImportText, confirmImport } from '../api/questions';
 import { ApiError } from '../api/client';
-
 
 // 组件内解析文档文件会用到 pdfjs（需要 DOMMatrix）；测试里 mock 掉文本解析器
 vi.mock('../lib/resumeParse', () => ({
-  extractResumeText: vi.fn(async () => '文件解析出的文本'),
+  extractResumeText: vi.fn(async (file: File) =>
+    file.name === '题库.docx' ? '1. 云文档第一题\n2. 云文档第二题' : '1. 文件第一题\n2. 文件第二题',
+  ),
+}));
+
+vi.mock('../api/wps', () => ({
+  listCloudFiles: vi.fn(async () => ({
+    items: [
+      {
+        id: 'w1',
+        name: '题库.docx',
+        drive_id: 'd1',
+        link_url: null,
+        mtime: 1700000000,
+        size: 1024,
+      },
+    ],
+    error: '',
+  })),
+  importCloudFile: vi.fn(async () => ({
+    name: '题库.docx',
+    base64: btoa('1. 云文档第一题\n2. 云文档第二题'),
+    mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    size: 2048,
+  })),
 }));
 
 vi.mock('../api/questions', async (importOriginal) => {
@@ -39,66 +62,98 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('QuestionImportModal', () => {
-  it('renders input step when open', () => {
+describe('QuestionImportModal（设计稿导入题库流程）', () => {
+  it('打开时渲染导入题库输入对话框', () => {
     renderModal();
-    expect(screen.getByText('导入题目')).toBeTruthy();
-    expect(screen.getByPlaceholderText(/粘贴面经文本/)).toBeTruthy();
+    expect(screen.getByText('导入题库')).toBeTruthy();
+    expect(screen.getByText('支持文字、本地文件和 WPS 云文档导入')).toBeTruthy();
+    expect(screen.getByPlaceholderText('例如：产品经理通用题库')).toBeTruthy();
+    expect(screen.getByPlaceholderText(/单题直接输入/)).toBeTruthy();
+    expect(screen.getByText('查看导入预览')).toBeTruthy();
+    expect(screen.getByText('本地文件导入')).toBeTruthy();
+    expect(screen.getByText('WPS 云文档导入')).toBeTruthy();
   });
 
-  it('parses text and shows editable candidates', async () => {
+  it('名称与内容缺失时显示设计稿校验文案', () => {
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/粘贴面经文本/), {
+    fireEvent.click(screen.getByText('查看导入预览'));
+    expect(screen.getByText('请填写题库名称和题目内容')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('例如：产品经理通用题库'), {
+      target: { value: '产品题库' },
+    });
+    fireEvent.click(screen.getByText('查看导入预览'));
+    expect(screen.getByText('请填写题目内容')).toBeTruthy();
+  });
+
+  it('查看导入预览：后端解析结果进入预览对话框', async () => {
+    renderModal();
+    fireEvent.change(screen.getByPlaceholderText('例如：产品经理通用题库'), {
+      target: { value: '产品题库' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/单题直接输入/), {
       target: { value: '面经原文' },
     });
-    fireEvent.click(screen.getByText('解析'));
+    fireEvent.click(screen.getByText('查看导入预览'));
     await waitFor(() => {
-      expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
+      expect(screen.getByText('导入预览')).toBeTruthy();
     });
-    // 候选步骤：显示题号与可编辑标签，按钮带数量
-    expect(screen.getByText('第 1 题')).toBeTruthy();
-    expect(screen.getByText('题干')).toBeTruthy();
-    expect(screen.getByText('参考答案（可选）')).toBeTruthy();
-    expect(screen.getByText('确认导入 1 题')).toBeTruthy();
+    expect(screen.getByText('将导入至「产品题库」')).toBeTruthy();
+    expect(screen.getByText('1 道题')).toBeTruthy();
+    expect(screen.getByText('解析出的题目')).toBeTruthy();
+    expect(parseImportText).toHaveBeenCalledWith('面经原文');
   });
 
-  it('confirms import and reports counts', async () => {
-    renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/粘贴面经文本/), {
-      target: { value: '面经原文' },
-    });
-    fireEvent.click(screen.getByText('解析'));
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
-    });
-    fireEvent.click(screen.getByText('确认导入 1 题'));
-    await waitFor(() => {
-      expect(screen.getByText(/新增 2 题，跳过 1 题重复/)).toBeTruthy();
-    });
-  });
-
-  it('auto-splits raw lines into editable candidates when LLM parse returns none', async () => {
+  it('LLM 未识别时回退按行拆分', async () => {
     vi.mocked(parseImportText).mockResolvedValueOnce({
       items: [],
       raw: '1. React useEffect 依赖\n2. 虚拟 DOM 原理\n3. flex 与 grid 区别',
       ocr_text: '',
     });
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText(/粘贴面经文本/), {
+    fireEvent.change(screen.getByPlaceholderText('例如：产品经理通用题库'), {
+      target: { value: '前端题库' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/单题直接输入/), {
       target: { value: '面经原文' },
     });
-    fireEvent.click(screen.getByText('解析'));
+    fireEvent.click(screen.getByText('查看导入预览'));
     await waitFor(() => {
-      expect(screen.getByText('第 1 题')).toBeTruthy();
+      expect(screen.getByText('React useEffect 依赖')).toBeTruthy();
     });
-    // 序号前缀被去除，自动生成 3 条可编辑候选
-    expect(screen.getByDisplayValue('React useEffect 依赖')).toBeTruthy();
-    expect(screen.getByDisplayValue('虚拟 DOM 原理')).toBeTruthy();
-    expect(screen.getByDisplayValue('flex 与 grid 区别')).toBeTruthy();
-    expect(screen.getByText('确认导入 3 题')).toBeTruthy();
+    expect(screen.getByText('虚拟 DOM 原理')).toBeTruthy();
+    expect(screen.getByText('flex 与 grid 区别')).toBeTruthy();
+    expect(screen.getByText('3 道题')).toBeTruthy();
   });
 
-  it('shows mandated copy when OCR is unavailable (502)', async () => {
+  it('确认导入：提交后端并回调 onImported', async () => {
+    const onImported = vi.fn();
+    const onClose = vi.fn();
+    renderModal(true, onClose, onImported);
+    fireEvent.change(screen.getByPlaceholderText('例如：产品经理通用题库'), {
+      target: { value: '产品题库' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/单题直接输入/), {
+      target: { value: '面经原文' },
+    });
+    fireEvent.click(screen.getByText('查看导入预览'));
+    await waitFor(() => {
+      expect(screen.getByText('导入预览')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('确认导入'));
+    await waitFor(() => {
+      expect(confirmImport).toHaveBeenCalledWith(
+        [{ question: '解析出的题目', answer: '答案', reference: undefined }],
+        '产品题库',
+      );
+    });
+    await waitFor(() => {
+      expect(onImported).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it('本地图片导入：OCR 不可用时显示指定文案', async () => {
     const err = new ApiError(
       502,
       '服务器开小差了，请稍后重试',
@@ -111,7 +166,6 @@ describe('QuestionImportModal', () => {
     fireEvent.change(fileInput, {
       target: { files: [new File(['x'], 'shot.png', { type: 'image/png' })] },
     });
-    fireEvent.click(screen.getByText('解析'));
     await waitFor(() => {
       expect(screen.getByText('图片识别失败，请改用文本粘贴')).toBeTruthy();
     });
@@ -119,19 +173,31 @@ describe('QuestionImportModal', () => {
     expect(screen.queryByText('服务器开小差了，请稍后重试')).toBeNull();
   });
 
-  it('parses a document file via text extraction then LLM', async () => {
+  it('本地文档导入：提取文本后解析并进入预览', async () => {
     const { container } = renderModal();
     const fileInput = container.querySelector('input[type="file"]');
     if (!fileInput) throw new Error('file input not found');
     fireEvent.change(fileInput, {
       target: { files: [new File(['resume'], 'notes.pdf', { type: 'application/pdf' })] },
     });
-    // 选择文件后显示文件名，点解析走文本提取 + parseImportText
-    expect(screen.getByText('notes.pdf')).toBeTruthy();
-    fireEvent.click(screen.getByText('解析'));
     await waitFor(() => {
-      expect(screen.getByDisplayValue('解析出的题目')).toBeTruthy();
+      expect(screen.getByText('导入预览')).toBeTruthy();
     });
     expect(parseImportText).toHaveBeenCalled();
+  });
+
+  it('WPS 云文档导入：选择文件后进入预览', async () => {
+    renderModal();
+    fireEvent.click(screen.getByText('WPS 云文档导入'));
+    await waitFor(() => {
+      expect(screen.getByText('从 WPS 云文档选择')).toBeTruthy();
+      expect(screen.getByText('题库.docx')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('选择'));
+    await waitFor(() => {
+      expect(screen.getByText('导入预览')).toBeTruthy();
+    });
+    expect(screen.getByText('云文档第一题')).toBeTruthy();
+    expect(screen.getByText('将导入至「题库」')).toBeTruthy();
   });
 });

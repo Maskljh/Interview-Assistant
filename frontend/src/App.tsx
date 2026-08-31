@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import CreateInterviewPage from './pages/CreateInterviewPage';
@@ -7,7 +7,7 @@ import InterviewDetailPage from './pages/InterviewDetailPage';
 import InterviewListPage from './pages/InterviewListPage';
 import InterviewRoomPage from './pages/InterviewRoomPage';
 import LoginPage from './pages/LoginPage';
-import QuestionBankPage from './pages/QuestionBankPage';
+import ManagePage from './pages/ManagePage';
 import ErrorBoundary from './components/ErrorBoundary';
 import ReportPage from './pages/ReportPage';
 import TrendsPage from './pages/TrendsPage';
@@ -30,13 +30,14 @@ export default function App() {
             }
           />
           <Route
-            path="/questions"
+            path="/manage"
             element={
               <ProtectedRoute>
-                <QuestionBankPage />
+                <ManagePage />
               </ProtectedRoute>
             }
           />
+          <Route path="/questions" element={<Navigate to="/manage" replace />} />
           <Route
             path="/interviews/new"
             element={

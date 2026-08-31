@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './ConfirmModal.css';
 
 interface ConfirmModalProps {
   open: boolean;
   title: string;
+  /** 头部副标题（设计稿 question-add-dialog-head p） */
   description: string;
+  /** 正文（设计稿 question-delete-dialog-body p），默认“此操作不可撤销，请确认是否继续。” */
+  body?: string;
   error?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  /** 危险操作：红色确认键 + 红调头部渐变（设计稿 question-delete-dialog） */
+  danger?: boolean;
+  /** 确认按钮额外禁用条件（如收件人未就绪） */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,10 +25,13 @@ export default function ConfirmModal({
   open,
   title,
   description,
+  body,
   error = '',
-  confirmLabel = '删除',
+  confirmLabel,
   cancelLabel = '取消',
   loading = false,
+  danger = true,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -45,43 +56,57 @@ export default function ConfirmModal({
 
   if (!open) return null;
 
-  return (
-    <div className="confirm-modal-overlay" onClick={onCancel}>
-      <div
-        className="confirm-modal"
+  // 挂到 #design-root（缩放画布外）：fixed 定位相对视口、尺寸不被 --home-fit 缩放
+  const host =
+    typeof document !== 'undefined' ? document.getElementById('design-root') : null;
+  const fallback = typeof document !== 'undefined' ? document.body : null;
+  const target = host ?? fallback;
+
+  const dialog = (
+    <div className="question-dialog-backdrop" onClick={onCancel}>
+      <section
+        className={`question-add-dialog${danger ? ' question-delete-dialog' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="confirm-modal-title"
-        aria-describedby="confirm-modal-desc"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="confirm-modal-title" className="confirm-modal-title">
-          {title}
-        </h3>
-        <p id="confirm-modal-desc" className="confirm-modal-desc">
-          {description}
-        </p>
-        {error && <p className="confirm-modal-error">{error}</p>}
-        <div className="confirm-modal-actions">
-          <button
-            ref={cancelRef}
-            type="button"
-            className="btn btn--secondary"
-            onClick={onCancel}
-            disabled={loading}
-          >
-            {cancelLabel}
+        <header className="question-add-dialog-head">
+          <div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </div>
+          <button type="button" aria-label="关闭" onClick={onCancel}>
+            ×
           </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={onConfirm}
-            disabled={loading}
-          >
-            {loading ? '处理中…' : confirmLabel}
-          </button>
+        </header>
+        <div className="question-add-dialog-rule" />
+        <div className="question-delete-dialog-body">
+          {body !== '' && <p>{body ?? '此操作不可撤销，请确认是否继续。'}</p>}
+          {error && <p className="dialog-error" role="alert">{error}</p>}
+          <div className="question-add-dialog-actions">
+            <button
+              ref={cancelRef}
+              type="button"
+              className="dialog-cancel"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              {cancelLabel}
+            </button>
+            <button
+              type="button"
+              className={danger ? 'question-delete-confirm' : 'management-action'}
+              onClick={onConfirm}
+              disabled={loading || confirmDisabled}
+            >
+              {loading ? '处理中…' : (confirmLabel ?? (danger ? '确认删除' : '确定'))}
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
+
+  return target ? createPortal(dialog, target) : dialog;
 }

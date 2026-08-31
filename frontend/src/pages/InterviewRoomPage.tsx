@@ -9,19 +9,38 @@ import {
   type VoiceRecorder,
 } from '../lib/voiceRecorder';
 import { createVoicePlayer } from '../lib/voicePlayer';
+import {
+  AvatarSpeechStopped,
+  createAvatarController,
+  type AvatarController,
+} from '../lib/avatar/avatarController';
 import { COMPANY_STYLE_LABELS, DIFFICULTY_LABELS, PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import { useBehaviorAnalysis } from '../behavior/useBehaviorAnalysis';
 import './InterviewPages.css';
-import AppNav from '../components/AppNav';
+import './InterviewRoomPage.css';
 import CameraPreview from '../components/CameraPreview';
+import InterviewerAvatar from '../components/InterviewerAvatar';
 import ConfirmModal from '../components/ConfirmModal';
+import DesignSidebar from '../components/DesignSidebar';
+import homeLogo from '../assets/design/homeLogo.png';
 
 // 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
 const ESTIMATED_MINUTES = 40;
 
 // TTS 单次合成长度上限（后端 maxTTSTextRunes=300）。超长问题拆成多段顺序朗读。
 const TTS_MAX_RUNES = 300;
+
+// 数字人面试官开关的本地持久化 key（默认开启，'0' 表示用户主动关闭）。
+const AVATAR_PREF_KEY = 'mianzhi.interviewer-avatar.enabled';
+
+function readAvatarPref(): boolean {
+  try {
+    return localStorage.getItem(AVATAR_PREF_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
 
 /** 把超长文本按句切成不超过 max 字符的段，尽量在断句处切，避免朗读被截断。 */
 function splitTextForTTS(text: string, max = TTS_MAX_RUNES): string[] {
@@ -117,6 +136,10 @@ export default function InterviewRoomPage() {
   const [retryingASR, setRetryingASR] = useState(false);
   const [paused, setPaused] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  // 数字人面试官：默认开启，localStorage 记忆用户选择。
+  const [avatarEnabled, setAvatarEnabled] = useState<boolean>(readAvatarPref);
+  const avatarEnabledRef = useRef(avatarEnabled);
+  const avatarRef = useRef<AvatarController | null>(null);
   const turnIdRef = useRef(0);
   const socketRef = useRef<ReturnType<typeof connectInterviewWS> | null>(null);
   const doneRef = useRef(false);
@@ -147,12 +170,38 @@ export default function InterviewRoomPage() {
     enabled: true,
     sessionId: interviewId,
   });
+  if (!avatarRef.current) {
+    avatarRef.current = createAvatarController();
+  }
   const behaviorStartRef = useRef<() => Promise<void>>(async () => {});
   const behaviorStopRef = useRef<() => Promise<void>>(async () => {});
   behaviorStartRef.current = behavior.start;
   behaviorStopRef.current = behavior.stop;
   useEffect(() => {
     void behaviorStartRef.current();
+  }, []);
+  // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const compute = () => {
+      const workspaceWidth = Math.max(window.innerWidth - 218, 1);
+      const scale = Math.min(workspaceWidth / 938, window.innerHeight / 692);
+      const fit = Math.max(scale, 0.2);
+      root.style.setProperty('--home-fit', fit.toFixed(4));
+      root.style.setProperty('--home-canvas-width', `${(workspaceWidth / fit).toFixed(2)}px`);
+    };
+    compute();
+    // jsdom 等非浏览器环境没有 ResizeObserver，做存在性守卫以便测试可运行
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(compute) : null;
+    ro?.observe(root);
+    window.addEventListener('resize', compute);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', compute);
+    };
   }, []);
   const [pendingCount, setPendingCount] = useState(0);
   const pendingAnswersRef = useRef<{ content: string; voiceDurationMs?: number }[]>([]);
@@ -174,43 +223,84 @@ export default function InterviewRoomPage() {
     },
     [appendTurn],
   );
-  const playQuestion = useCallback(async (content: string) => {
-    if (ttsMutedRef.current) return;
-    const version = ++speechVersionRef.current;
-    setStatusLine('正在朗读问题...');
-    try {
-      if (!voicePlayerRef.current) {
-        voicePlayerRef.current = createVoicePlayer();
-      }
-      setReading(true);
-      // 超长文本分段合成并顺序播放，保证整段都能被朗读。
-      for (const seg of splitTextForTTS(content)) {
-        if (version !== speechVersionRef.current) return;
-        const blob = await synthesizeSpeech(seg);
-        if (version !== speechVersionRef.current) return;
-        await voicePlayerRef.current.play(blob);
-      }
-      if (version === speechVersionRef.current) {
-        setStatusLine('');
-        setReading(false);
-      }
-    } catch (err) {
-      if (version !== speechVersionRef.current) return;
-      setReading(false);
-      setStatusLine(
-        err instanceof ApiError && err.status === 502
-          ? '语音服务暂不可用，请稍后重试'
-          : '播放失败，请阅读文字',
-      );
-    }
+  // 统一的语音停止：数字人与纯语音两条播放路径一起停。
+  const stopVoice = useCallback(() => {
+    const player = voicePlayerRef.current;
+    if (player) player.stop();
+    avatarRef.current?.stop();
   }, []);
+  // 播放单段音频：数字人开启且可用时由数字人发声（带口型同步），
+  // 否则回落现有 voicePlayer 纯语音路径。
+  const playSegment = useCallback(async (blob: Blob): Promise<void> => {
+    if (avatarEnabledRef.current && avatarRef.current) {
+      const result = await avatarRef.current.speak(blob);
+      if (result === 'avatar') return;
+    }
+    await voicePlayerRef.current?.play(blob);
+  }, []);
+  const playQuestion = useCallback(
+    async (content: string) => {
+      if (ttsMutedRef.current) return;
+      const version = ++speechVersionRef.current;
+      setStatusLine('正在朗读问题...');
+      try {
+        if (!voicePlayerRef.current) {
+          voicePlayerRef.current = createVoicePlayer();
+        }
+        setReading(true);
+        // 超长文本分段合成并顺序播放，保证整段都能被朗读。
+        for (const seg of splitTextForTTS(content)) {
+          if (version !== speechVersionRef.current) return;
+          const blob = await synthesizeSpeech(seg);
+          if (version !== speechVersionRef.current) return;
+          await playSegment(blob);
+        }
+        if (version === speechVersionRef.current) {
+          setStatusLine('');
+          setReading(false);
+        }
+      } catch (err) {
+        if (err instanceof AvatarSpeechStopped) {
+          // 语音被主动停止（静音/暂停/切换数字人开关等）：静默收尾。
+          setReading(false);
+          setStatusLine('');
+          return;
+        }
+        if (version !== speechVersionRef.current) return;
+        setReading(false);
+        setStatusLine(
+          err instanceof ApiError && err.status === 502
+            ? '语音服务暂不可用，请稍后重试'
+            : '播放失败，请阅读文字',
+        );
+      }
+    },
+    [playSegment],
+  );
+  const toggleAvatar = useCallback(() => {
+    const next = !avatarEnabledRef.current;
+    avatarEnabledRef.current = next;
+    setAvatarEnabled(next);
+    try {
+      localStorage.setItem(AVATAR_PREF_KEY, next ? '1' : '0');
+    } catch {
+      // 持久化失败不影响本次会话
+    }
+    avatarRef.current?.setRenderingEnabled(next);
+    if (!next) {
+      speechVersionRef.current += 1;
+      stopVoice();
+      setReading(false);
+      setStatusLine('');
+    }
+  }, [stopVoice]);
   const toggleMute = useCallback(() => {
     const next = !ttsMutedRef.current;
     ttsMutedRef.current = next;
     setTtsMuted(next);
     if (next) {
       speechVersionRef.current += 1;
-      voicePlayerRef.current?.stop();
+      stopVoice();
       setReading(false);
       setStatusLine('');
     }
@@ -245,7 +335,7 @@ export default function InterviewRoomPage() {
       pausedAtRef.current = Date.now();
       setPaused(true);
       speechVersionRef.current += 1;
-      voicePlayerRef.current?.stop();
+      stopVoice();
       setReading(false);
       setStatusLine('');
     } else {
@@ -336,7 +426,7 @@ export default function InterviewRoomPage() {
           doneRef.current = true;
           setThinking(false);
           setVoicePhase('idle');
-          voicePlayerRef.current?.stop();
+          stopVoice();
           await Promise.race([
             behaviorStopRef.current(),
             new Promise((resolve) => setTimeout(resolve, 3000)),
@@ -387,12 +477,12 @@ export default function InterviewRoomPage() {
             setDisconnected(true);
             setThinking(false);
             setVoicePhase('idle');
-            voicePlayerRef.current?.stop();
+            stopVoice();
             return;
           }
           setThinking(false);
           setVoicePhase('idle');
-          voicePlayerRef.current?.stop();
+          stopVoice();
           if (attemptRef.current >= RETRY_DELAYS.length) {
             setDisconnected(true); // 退避耗尽，降级手动按钮
             return;
@@ -458,7 +548,7 @@ export default function InterviewRoomPage() {
         lastInterviewerMsgRef.current = lastInterviewerContent;
         connect();
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !(err instanceof ApiError && err.status === 401)) {
           setError(
             err instanceof ApiError ? err.message : '加载面试失败',
           );
@@ -489,7 +579,9 @@ export default function InterviewRoomPage() {
         timerIntervalRef.current = null;
       }
       timerStartedRef.current = false;
-      voicePlayerRef.current?.stop();
+      stopVoice();
+      avatarRef.current?.dispose();
+      avatarRef.current = null;
       socketRef.current?.close();
       socketRef.current = null;
       void behaviorStopRef.current();
@@ -517,7 +609,7 @@ export default function InterviewRoomPage() {
       return;
     }
     speechVersionRef.current += 1;
-    voicePlayerRef.current?.stop();
+    stopVoice();
     setReading(false);
     setStatusLine('');
   }
@@ -538,7 +630,7 @@ export default function InterviewRoomPage() {
     }
     voiceActiveRef.current = true;
     speechVersionRef.current += 1;
-    voicePlayerRef.current?.stop();
+    stopVoice();
     setError('');
     voiceCancelRef.current = false;
     voiceReadyRef.current = false;
@@ -635,14 +727,13 @@ export default function InterviewRoomPage() {
       setRetryingASR(false);
     }
   }
-  async function handleForceEnd(silent = false) {
+  async function handleForceEnd() {
     if (ending || doneRef.current) return;
-    // silent=true 由确认弹窗触发（用户已在弹窗确认），不再二次询问。
     setEnding(true);
     setStatusLine('正在生成报告，请稍候…');
     setError('');
     speechVersionRef.current += 1;
-    voicePlayerRef.current?.stop();
+    stopVoice();
     voiceRecorderRef.current?.cancel();
     voiceRecorderRef.current = null;
     recordStartRef.current = null;
@@ -668,336 +759,384 @@ export default function InterviewRoomPage() {
   }
 
   return (
-    <div className="interview-page interview-page--immersive">
-      <AppNav tab="create" confirmLeave variant="topbar">
-        {/* 顶栏中部：岗位 + 模式标签（左侧），进度 + 剩余时间 + 录音状态（右侧） */}
-        <span className="room-topbar-job">
-          <span className="room-topbar-meta">{jobTitle || '未命名岗位'}</span>
-          {persona && persona !== 'standard' && (
-            <span className="mode-pill mode-pill--light">
-              {PERSONA_LABELS[persona]}
-            </span>
-          )}
-          {difficulty && difficulty !== 'medium' && (
-            <span className="mode-pill mode-pill--light">
-              {DIFFICULTY_LABELS[difficulty]}
-            </span>
-          )}
-          {companyStyle && companyStyle !== 'general' && (
-            <span className="mode-pill mode-pill--light">
-              {COMPANY_STYLE_LABELS[companyStyle]}
-            </span>
-          )}
-        </span>
-        <span className="room-topbar-right">
-          {progress && (
-            <span className="room-topbar-progress">
-              第 {progress.current} / {progress.total} 题
-            </span>
-          )}
-          <span className="room-topbar-timer">
-            预计 {ESTIMATED_MINUTES} 分钟 · 已用 {formatElapsed(elapsedMs)}
-          </span>
-          <span className={`room-rec-ok room-rec-ok--${VOICE_PHASE_META[voicePhase].cls}`}>
-            ● {VOICE_PHASE_META[voicePhase].label}
-          </span>
-        </span>
-      </AppNav>
-      <main className="interview-main interview-room">
-        {loadingInterview ? (
-          <p className="interview-loading">加载面试中…</p>
-        ) : (
-          <>
-            {/* 左右两栏：开启摄像头分析时展示摄像头预览，否则单栏双卡片 */}
-            <div className="room-grid">
-              <CameraPreview
-                stream={behavior.cameraStream}
-                opening={behavior.status === 'loading-model'}
-                error={
-                  behavior.status === 'failed' ? '无法访问摄像头，请检查浏览器权限' : ''
-                }
-              />
-              <div className="room-grid-right">
-                {/* 双卡：实时转写 + 当前问题与追问策略 */}
-                <div className="room-cards room-cards--stacked">
-                  <section className="room-card">
-                    <h2 className="room-card-title">实时转写</h2>
-                    <div className="interview-transcript interview-room-transcript">
-                      {turns.length === 0 ? (
-                        error && !loadingInterview ? (
-                          <div className="interview-room-error">
-                            <p className="interview-error">{error}</p>
-                            <button
-                              type="button"
-                              className="interview-submit"
-                              onClick={() => window.location.reload()}
-                            >
-                              重新加载
-                            </button>
-                            <Link className="interview-inline-link" to="/history">
-                              返回列表
-                            </Link>
-                          </div>
-                        ) : (
-                          <p className="interview-loading">正在连接面试间…</p>
-                        )
-                      ) : (
-                        (() => {
-                          // 只展示最新一题：找到最后一道面试官题目，以及紧随其后的候选回答
-                          let latestIdx = -1;
-                          for (let i = turns.length - 1; i >= 0; i--) {
-                            if (turns[i].role === 'interviewer') { latestIdx = i; break; }
-                          }
-                          if (latestIdx === -1) return null;
-                          const visible = [turns[latestIdx]];
-                          if (latestIdx + 1 < turns.length && turns[latestIdx + 1].role === 'candidate') {
-                            visible.push(turns[latestIdx + 1]);
-                          }
-                          return visible.map((turn, i) => (
-                            <article
-                              key={turn.id}
-                              className={`transcript-turn transcript-turn--animate${
-                                turn.role === 'interviewer'
-                                  ? ' transcript-turn--interviewer'
-                                  : ''
-                              }`}
-                            >
-                              <div className="transcript-turn-header">
-                                <span className="transcript-role">
-                                  {turn.role === 'interviewer' ? 'AI 面试官' : '我'}
-                                </span>
-                                {turn.role === 'interviewer' && i === 0 && (
-                                  <span className="transcript-new-badge">新题目</span>
-                                )}
+    <div id="design-root" ref={rootRef}>
+      <section className="interview screen">
+        <section className="workspace-page">
+          <DesignSidebar active="home" />
+          <main className="workspace-main">
+            <header className="workspace-banner">
+              <img src={homeLogo} alt="面知" />
+              <div>
+                <h1>面知，把每一场模拟变成下一次可验证的进步</h1>
+                <p>面试可定制、历史可复盘、进步可感知</p>
+              </div>
+            </header>
+            <section className="room-card">
+              <h2>面试间</h2>
+              <i />
+              {/* 顶部信息行：岗位/模式标签 + 进度/计时/录音状态 */}
+              <div className="ir-meta">
+                <div className="ir-meta-left">
+                  <span className="ir-job">{jobTitle || '未命名岗位'}</span>
+                  {persona && persona !== 'standard' && (
+                    <span className="mode-pill mode-pill--light">
+                      {PERSONA_LABELS[persona]}
+                    </span>
+                  )}
+                  {difficulty && difficulty !== 'medium' && (
+                    <span className="mode-pill mode-pill--light">
+                      {DIFFICULTY_LABELS[difficulty]}
+                    </span>
+                  )}
+                  {companyStyle && companyStyle !== 'general' && (
+                    <span className="mode-pill mode-pill--light">
+                      {COMPANY_STYLE_LABELS[companyStyle]}
+                    </span>
+                  )}
+                </div>
+                <div className="ir-meta-right">
+                  {progress && (
+                    <span>
+                      第 {progress.current} / {progress.total} 题
+                    </span>
+                  )}
+                  <span>
+                    预计 {ESTIMATED_MINUTES} 分钟 · 已用 {formatElapsed(elapsedMs)}
+                  </span>
+                  <span className={`ir-rec ir-rec--${VOICE_PHASE_META[voicePhase].cls}`}>
+                    ● {VOICE_PHASE_META[voicePhase].label}
+                  </span>
+                </div>
+              </div>
+
+              {loadingInterview ? (
+                <p className="interview-loading">加载面试中…</p>
+              ) : (
+                <>
+                  {/* 主体两栏：左摄像头 + 右双卡 */}
+                  <div className="ir-body">
+                    <div className="ir-camera">
+                      <span className="ir-camera-label">
+                        摄像头预览　<em>● {formatElapsed(elapsedMs)}</em>
+                      </span>
+                      <CameraPreview
+                        stream={behavior.cameraStream}
+                        opening={behavior.status === 'loading-model'}
+                        error={
+                          behavior.status === 'failed'
+                            ? '无法访问摄像头，请检查浏览器权限'
+                            : ''
+                        }
+                      />
+                    </div>
+                    <div className="ir-cols">
+                      {/* 数字人面试官：与 TTS 朗读联动开口说话 */}
+                      <InterviewerAvatar
+                        controller={avatarRef.current}
+                        enabled={avatarEnabled}
+                        onToggle={toggleAvatar}
+                      />
+                      {/* 实时转写 */}
+                      <article className="ir-card">
+                        <div className="ir-card-head">
+                          <h3 className="ir-card-title">实时转写</h3>
+                          <small>AI 面试官　·　{formatElapsed(elapsedMs)}</small>
+                        </div>
+                        <div className="ir-transcript interview-transcript interview-room-transcript">
+                          {turns.length === 0 ? (
+                            error && !loadingInterview ? (
+                              <div className="interview-room-error">
+                                <p className="interview-error">{error}</p>
+                                <button
+                                  type="button"
+                                  className="interview-submit"
+                                  onClick={() => window.location.reload()}
+                                >
+                                  重新加载
+                                </button>
+                                <Link className="interview-inline-link" to="/history">
+                                  返回列表
+                                </Link>
                               </div>
-                              <p className="transcript-content">{turn.content}</p>
-                            </article>
-                          ));
-                        })()
-                      )}
-                      {thinking && (
-                        <p className="interview-room-thinking">面试官思考中…</p>
-                      )}
-                    </div>
-                  </section>
+                            ) : (
+                              <p className="interview-loading">正在连接面试间…</p>
+                            )
+                          ) : (
+                            (() => {
+                              // 只展示最新一题：找到最后一道面试官题目，以及紧随其后的候选回答
+                              let latestIdx = -1;
+                              for (let i = turns.length - 1; i >= 0; i--) {
+                                if (turns[i].role === 'interviewer') {
+                                  latestIdx = i;
+                                  break;
+                                }
+                              }
+                              if (latestIdx === -1) return null;
+                              const visible = [turns[latestIdx]];
+                              if (
+                                latestIdx + 1 < turns.length &&
+                                turns[latestIdx + 1].role === 'candidate'
+                              ) {
+                                visible.push(turns[latestIdx + 1]);
+                              }
+                              return visible.map((turn, i) => (
+                                <article
+                                  key={turn.id}
+                                  className={`transcript-turn transcript-turn--animate${
+                                    turn.role === 'interviewer'
+                                      ? ' transcript-turn--interviewer'
+                                      : ''
+                                  }`}
+                                >
+                                  <div className="transcript-turn-header">
+                                    <span className="transcript-role">
+                                      {turn.role === 'interviewer' ? 'AI 面试官' : '我'}
+                                    </span>
+                                    {turn.role === 'interviewer' && i === 0 && (
+                                      <span className="transcript-new-badge">新题目</span>
+                                    )}
+                                  </div>
+                                  <p className="transcript-content">{turn.content}</p>
+                                </article>
+                              ));
+                            })()
+                          )}
+                          {thinking && (
+                            <p className="interview-room-thinking">面试官思考中…</p>
+                          )}
+                        </div>
+                      </article>
 
-                  <section className="room-card">
-                    <div className="room-card-head">
-                      <h2 className="room-card-title">当前问题</h2>
-                      {progress && (
-                        <span className="room-card-count">
-                          {progress.current} / {progress.total}
-                        </span>
-                      )}
-                    </div>
-                    {currentQuestionRef.current ? (
-                      <>
-                        <p className="room-question-text">{currentQuestionRef.current}</p>
-                        <p className="room-question-hint">
-                          Agent 将基于你的答案继续追问：指标口径、样本偏差、结论边界。
+                      {/* 当前问题 */}
+                      <article className="ir-card">
+                        <div className="ir-card-head">
+                          <small>
+                            当前问题
+                            {progress ? `　${progress.current} / ${progress.total}` : ''}
+                          </small>
+                        </div>
+                        {currentQuestionRef.current ? (
+                          <>
+                            <p className="ir-question-text">{currentQuestionRef.current}</p>
+                            <p className="ir-question-hint">
+                              Agent 将基于你的答案继续追问：指标口径、样本偏差、结论边界。
+                            </p>
+                          </>
+                        ) : (
+                          <p className="interview-loading">等待面试官提问…</p>
+                        )}
+                        <p className="ir-question-status">
+                          面试状态：
+                          {paused
+                            ? '已暂停'
+                            : thinking
+                              ? '思考中'
+                              : reading
+                                ? '播报中'
+                                : '倾听中'}
                         </p>
-                      </>
-                    ) : (
-                      <p className="interview-loading">等待面试官提问…</p>
-                    )}
-                    <p className="room-question-status">
-                      面试状态：
-                      {paused ? '已暂停' : thinking ? '思考中' : reading ? '播报中' : '倾听中'}
-                    </p>
-                  </section>
-                </div>
-              </div>
-            </div>
-
-            {turns.length > 0 && error && <p className="interview-error">{error}</p>}
-            {pendingCount > 0 && (
-              <p className="interview-room-status interview-room-pending">
-                未连接，回答已暂存（{pendingCount} 条），重连后自动发送
-              </p>
-            )}
-            {statusLine && <p className="interview-room-status">{statusLine}</p>}
-            {behavior.status === 'loading-model' && (
-              <p className="interview-room-status">正在加载摄像头分析…</p>
-            )}
-            {behavior.status === 'running' && (
-              <p className="interview-room-status">
-                <span
-                  className={`behavior-light behavior-light--${
-                    behavior.liveStress == null
-                      ? 'ok'
-                      : behavior.liveStress < 40
-                        ? 'ok'
-                        : behavior.liveStress < 70
-                          ? 'mid'
-                          : 'high'
-                  }`}
-                />
-                摄像头分析中…
-              </p>
-            )}
-
-            {fatalError && (
-              <div className="interview-room-disconnect">
-                <p>{fatalError}</p>
-                <div className="interview-room-disconnect-actions">
-                  <Link className="interview-inline-link" to="/history">
-                    ← 返回列表
-                  </Link>
-                  <Link className="interview-inline-link" to={`/interviews/${interviewId}`}>
-                    查看详情
-                  </Link>
-                </div>
-              </div>
-            )}
-            {!fatalError && disconnected && (
-              <div className="interview-room-disconnect">
-                <p>连接已断开。</p>
-                <button type="button" className="interview-submit" onClick={connect}>
-                  重新连接
-                </button>
-              </div>
-            )}
-            <div className="interview-room-form">
-              {/* 左侧：按住说话 + 识别状态 + TTS 控制 */}
-              <div className="voice-room-controls">
-                <button
-                  type="button"
-                  className={`voice-record-button${
-                    voicePhase === 'recording'
-                      ? ' voice-record-button--recording'
-                      : ''
-                  }`}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    void handleStartRecording();
-                  }}
-                  onPointerUp={() => void handleStopRecording()}
-                  onPointerCancel={() => void handleStopRecording()}
-                  onKeyDown={(e) => {
-                    if (
-                      (e.key === ' ' || e.key === 'Enter') &&
-                      !e.repeat
-                    ) {
-                      e.preventDefault();
-                      void handleStartRecording();
-                    }
-                  }}
-                  onKeyUp={(e) => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      void handleStopRecording();
-                    }
-                  }}
-                  disabled={
-                    fatalError ||
-                    thinking ||
-                    disconnected ||
-                    ending ||
-                    paused ||
-                    voicePhase === 'transcribing' ||
-                    voicePhase === 'sending'
-                  }
-                  aria-pressed={voicePhase === 'recording'}
-                >
-                  {voicePhase === 'recording' ? '松开发送' : '按住说话'}
-                </button>
-                {voicePhase === 'transcribing' && (
-                  <span className="voice-room-phase">正在识别…</span>
-                )}
-                {voicePhase === 'sending' && (
-                  <span className="voice-room-phase">正在发送…</span>
-                )}
-                {failedAudioRef.current && voicePhase === 'idle' && (
-                  <div className="voice-room-retry">
-                    <button
-                      type="button"
-                      className="interview-inline-link"
-                      onClick={() => void handleRetryASR()}
-                      disabled={retryingASR}
-                    >
-                      {retryingASR ? '重试中…' : '重试识别'}
-                    </button>
-                    <button
-                      type="button"
-                      className="interview-inline-link"
-                      onClick={() => {
-                        failedAudioRef.current = null;
-                        setStatusLine('');
-                      }}
-                    >
-                      放弃重录
-                    </button>
+                      </article>
+                    </div>
                   </div>
-                )}
-                <div className="voice-room-tts-controls">
-                  <button
-                    type="button"
-                    className={`voice-room-tts-btn${
-                      ttsMuted ? ' is-active' : ''
-                    }`}
-                    onClick={toggleMute}
-                    disabled={paused}
-                  >
-                    {ttsMuted ? '取消静音' : '静音'}
-                  </button>
-                  <button
-                    type="button"
-                    className="voice-room-tts-btn"
-                    onClick={handleReplay}
-                    disabled={!currentQuestionRef.current || ttsMuted || paused}
-                  >
-                    重播
-                  </button>
-                </div>
-              </div>
-              {/* 右侧：暂停 / 结束本场 / 跳过问题（按 Figma 置于右下角） */}
-              <div className="interview-room-actions">
-                <button
-                  type="button"
-                  className="interview-room-action"
-                  onClick={togglePause}
-                  disabled={fatalError || ending || voicePhase === 'transcribing' || voicePhase === 'sending'}
-                >
-                  {paused ? '继续' : '暂停'}
-                </button>
-                <button
-                  type="button"
-                  className="interview-room-end"
-                  onClick={() => setConfirmEnd(true)}
-                  disabled={fatalError || ending}
-                >
-                  {ending ? '结束中…' : '结束本场'}
-                </button>
-                <button
-                  type="button"
-                  className="interview-room-action"
-                  onClick={handleSkipQuestion}
-                  disabled={
-                    fatalError ||
-                    paused ||
-                    thinking ||
-                    ending ||
-                    disconnected ||
-                    voicePhase === 'recording' ||
-                    voicePhase === 'transcribing' ||
-                    voicePhase === 'sending'
-                  }
-                >
-                  跳过问题
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </main>
+
+                  {/* 状态提示区 */}
+                  <div className="ir-status">
+                    {turns.length > 0 && error && (
+                      <p className="interview-error">{error}</p>
+                    )}
+                    {pendingCount > 0 && (
+                      <p className="interview-room-status interview-room-pending">
+                        未连接，回答已暂存（{pendingCount} 条），重连后自动发送
+                      </p>
+                    )}
+                    {statusLine && <p className="interview-room-status">{statusLine}</p>}
+                    {behavior.status === 'loading-model' && (
+                      <p className="interview-room-status">正在加载摄像头分析…</p>
+                    )}
+                    {behavior.status === 'running' && (
+                      <p className="interview-room-status">
+                        <span
+                          className={`behavior-light behavior-light--${
+                            behavior.liveStress == null
+                              ? 'ok'
+                              : behavior.liveStress < 40
+                                ? 'ok'
+                                : behavior.liveStress < 70
+                                  ? 'mid'
+                                  : 'high'
+                          }`}
+                        />
+                        摄像头分析中…
+                      </p>
+                    )}
+
+                    {fatalError && (
+                      <div className="ir-disconnect">
+                        <p>{fatalError}</p>
+                        <div className="ir-disconnect-actions">
+                          <Link className="interview-inline-link" to="/history">
+                            ← 返回列表
+                          </Link>
+                          <Link
+                            className="interview-inline-link"
+                            to={`/interviews/${interviewId}`}
+                          >
+                            查看详情
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                    {!fatalError && disconnected && (
+                      <div className="ir-disconnect">
+                        <p>连接已断开。</p>
+                        <button type="button" className="interview-submit" onClick={connect}>
+                          重新连接
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 底部控制区 */}
+                  <div className="ir-footer">
+                    <div className="ir-voice">
+                      <button
+                        type="button"
+                        className={`ir-record${
+                          voicePhase === 'recording' ? ' ir-record--recording' : ''
+                        }`}
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          void handleStartRecording();
+                        }}
+                        onPointerUp={() => void handleStopRecording()}
+                        onPointerCancel={() => void handleStopRecording()}
+                        onKeyDown={(e) => {
+                          if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                            e.preventDefault();
+                            void handleStartRecording();
+                          }
+                        }}
+                        onKeyUp={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            void handleStopRecording();
+                          }
+                        }}
+                        disabled={
+                          Boolean(fatalError) ||
+                          thinking ||
+                          disconnected ||
+                          ending ||
+                          paused ||
+                          voicePhase === 'transcribing' ||
+                          voicePhase === 'sending'
+                        }
+                        aria-pressed={voicePhase === 'recording'}
+                      >
+                        {voicePhase === 'recording' ? '松开发送' : '按住说话'}
+                      </button>
+                      {voicePhase === 'transcribing' && (
+                        <span className="voice-room-phase">正在识别…</span>
+                      )}
+                      {voicePhase === 'sending' && (
+                        <span className="voice-room-phase">正在发送…</span>
+                      )}
+                      {failedAudioRef.current && voicePhase === 'idle' && (
+                        <div className="voice-room-retry">
+                          <button
+                            type="button"
+                            className="interview-inline-link"
+                            onClick={() => void handleRetryASR()}
+                            disabled={retryingASR}
+                          >
+                            {retryingASR ? '重试中…' : '重试识别'}
+                          </button>
+                          <button
+                            type="button"
+                            className="interview-inline-link"
+                            onClick={() => {
+                              failedAudioRef.current = null;
+                              setStatusLine('');
+                            }}
+                          >
+                            放弃重录
+                          </button>
+                        </div>
+                      )}
+                      <div className="voice-room-tts-controls">
+                        <button
+                          type="button"
+                          className={`voice-room-tts-btn${ttsMuted ? ' is-active' : ''}`}
+                          onClick={toggleMute}
+                          disabled={paused}
+                        >
+                          {ttsMuted ? '取消静音' : '静音'}
+                        </button>
+                        <button
+                          type="button"
+                          className="voice-room-tts-btn"
+                          onClick={handleReplay}
+                          disabled={!currentQuestionRef.current || ttsMuted || paused}
+                        >
+                          重播
+                        </button>
+                      </div>
+                    </div>
+                    <div className="ir-ctrl">
+                      <button
+                        type="button"
+                        onClick={togglePause}
+                        disabled={
+                          Boolean(fatalError) ||
+                          ending ||
+                          voicePhase === 'transcribing' ||
+                          voicePhase === 'sending'
+                        }
+                      >
+                        {paused ? '继续' : '暂停'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ir-end"
+                        onClick={() => setConfirmEnd(true)}
+                        disabled={Boolean(fatalError) || ending}
+                      >
+                        {ending ? '结束中…' : '结束面试'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSkipQuestion}
+                        disabled={
+                          Boolean(fatalError) ||
+                          paused ||
+                          thinking ||
+                          ending ||
+                          disconnected ||
+                          voicePhase === 'recording' ||
+                          voicePhase === 'transcribing' ||
+                          voicePhase === 'sending'
+                        }
+                      >
+                        跳过问题
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+          </main>
+        </section>
+      </section>
       <ConfirmModal
         open={confirmEnd}
-        title="结束本场面试"
-        description="确定结束面试吗？结束后将生成评分报告，且无法继续回答。"
+        title="结束面试"
+        description="结束后将生成本场评分报告，无法继续回答"
+        body=""
+        danger={false}
         confirmLabel="结束面试"
         cancelLabel="取消"
         loading={ending}
-        onConfirm={() => void handleForceEnd(true)}
+        onConfirm={() => void handleForceEnd()}
         onCancel={() => setConfirmEnd(false)}
       />
     </div>

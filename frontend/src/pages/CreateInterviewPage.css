@@ -1,0 +1,33 @@
+/* =====================================================================
+   面试间准备（CreateInterviewPage）设计稿对齐层
+   设计稿 interview-card 是 grid 5 行布局（28px 标题 / 12px / 40px 岗位 /
+   1fr 三卡 / 40px 开始按钮），start-button 是卡片直接子元素。
+   React 版把按钮包在 <form> 里，用 display:contents 让 form 不参与
+   布局、按钮直接落入 grid 第 5 行——视觉与设计稿完全一致，同时保留
+   表单提交能力。
+   ===================================================================== */
+
+#design-root .home .interview-card form {
+  display: contents;
+}
+
+#design-root .home .interview-card form .start-button {
+  align-self: end;
+  justify-self: end;
+}
+
+/* 下拉框：相对岗位区绝对定位，左缘对齐按钮列（110px 标签列 + 12px 间距），
+   展开时悬浮不挤压下方卡片布局 */
+#design-root .home .interview-card .required-field {
+  position: relative;
+}
+
+#design-root .home .interview-card .home-job-dropdown {
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 122px !important;
+  width: auto !important;
+  min-width: 320px;
+  max-width: none !important;
+  z-index: 5;
+}

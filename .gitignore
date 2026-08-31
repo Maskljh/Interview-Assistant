@@ -35,3 +35,6 @@ server.exe~
 .web_builder/
 clean_clone_check/
 frontend/.build-tmp/
+
+# Figma 导出的设计资源 PNG 需要入库（被页面引用）
+!frontend/src/assets/design/*.png

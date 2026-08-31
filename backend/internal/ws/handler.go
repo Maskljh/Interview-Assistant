@@ -105,7 +105,7 @@ func (h *Handler) Serve(c *gin.Context) {
 		} else if errors.Is(err, interview.ErrInvalidState) {
 			code = "invalid_state"
 		}
-		_ = writeJSON(conn, ServerMsg{Type: "error", Code: code, Content: err.Error()})
+		_ = writeJSON(conn, ServerMsg{Type: "error", Code: code, Content: userFacingWSStatus(err)})
 		return
 	}
 	for _, m := range msgs {
@@ -123,7 +123,7 @@ func (h *Handler) Serve(c *gin.Context) {
 		case "answer":
 			answerMsgs, err := h.svc.HandleAnswer(ctx, userID, sessionID, clientMsg.Content, clientMsg.VoiceDurationMs)
 			if err != nil {
-				_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
+				_ = writeJSON(conn, ServerMsg{Type: "status", Content: userFacingWSStatus(err)})
 				continue
 			}
 			for _, m := range answerMsgs {
@@ -134,7 +134,7 @@ func (h *Handler) Serve(c *gin.Context) {
 		case "skip_question":
 			skipMsgs, err := h.svc.SkipQuestion(ctx, userID, sessionID)
 			if err != nil {
-				_ = writeJSON(conn, ServerMsg{Type: "status", Content: err.Error()})
+				_ = writeJSON(conn, ServerMsg{Type: "status", Content: userFacingWSStatus(err)})
 				continue
 			}
 			for _, m := range skipMsgs {
@@ -145,6 +145,20 @@ func (h *Handler) Serve(c *gin.Context) {
 		default:
 			continue
 		}
+	}
+}
+
+// userFacingWSStatus 把服务端错误映射为面向用户的中文提示，避免把内部错误原文透传给客户端。
+func userFacingWSStatus(err error) string {
+	switch {
+	case errors.Is(err, interview.ErrNotFound):
+		return "面试不存在或已结束，请刷新页面"
+	case errors.Is(err, interview.ErrInvalidState):
+		return "面试状态已变化，请刷新后重试"
+	case errors.Is(err, interview.ErrLLMFailure):
+		return "AI 思考出错了，请稍后重试或跳过本问题"
+	default:
+		return "发生错误，请稍后重试"
 	}
 }
 

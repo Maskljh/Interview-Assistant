@@ -1,0 +1,567 @@
+/* =====================================================================
+   面试间（InterviewRoomPage）设计稿外壳适配
+   外壳（.interview.screen / .workspace-page / .workspace-main /
+   .workspace-banner / .room-card 及其 h2、>i）样式由 design-scoped.css 提供；
+   本文件只负责房间卡内部功能区（ir-* 命名，避免与设计稿类名冲突）。
+   ===================================================================== */
+
+#design-root .interview .room-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── 顶部信息行：岗位/模式标签 + 进度/计时/录音状态 ─── */
+.ir-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -2px 0 14px;
+  padding: 9px 12px;
+  background: #f5f2ec;
+  border-radius: 8px;
+}
+
+.ir-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ir-job {
+  font-size: 13px;
+  font-weight: 600;
+  color: #131e2b;
+  white-space: nowrap;
+}
+
+.ir-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #5f6b7a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ir-rec {
+  color: #148c57;
+  font-weight: 600;
+}
+
+.ir-rec--is-recording,
+.ir-rec--is-transcribing {
+  color: #b8454a;
+}
+
+.ir-rec--is-sending {
+  color: #4879b8;
+}
+
+/* ─── 主体两栏：左摄像头（约 47%）+ 右双卡（约 53%） ─── */
+.ir-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
+  gap: 19px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 左：深色摄像头面板（对齐设计稿 .camera 视觉） */
+.ir-camera {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #131e2b;
+  color: #fffdf7;
+  min-height: 0;
+}
+
+/* 设计稿：中心 82px 蓝圆“面”字；视频流就绪时被 video 覆盖 */
+.ir-camera::after {
+  content: '面';
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background: #4879b8;
+  color: #fff;
+  font-family: STSong, 'Songti SC', serif;
+  font-size: 32px;
+  pointer-events: none;
+}
+
+.ir-camera-label {
+  position: absolute;
+  top: 14px;
+  left: 17px;
+  z-index: 2;
+  color: #dce4ed;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.ir-camera-label em {
+  color: #dce4ed;
+  font-style: normal;
+}
+
+/* CameraPreview 内层透明化，让出深色面板 */
+.ir-camera .room-camera {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ir-camera .room-camera .room-card-title {
+  display: none;
+}
+
+.ir-camera .room-camera-frame {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ir-camera .room-camera-video {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 设计稿无错误占位文案：无摄像头时不显示提示，仅保留中心头像 */
+.ir-camera .room-camera-placeholder,
+.ir-camera .room-camera-error {
+  display: none !important;
+}
+
+/* ─── 右：双卡（上大下小，对齐设计稿 .room-grid>div） ─── */
+/* 设计稿 .room-grid>div：rows 1.2fr .85fr，gap 14 */
+.ir-cols {
+  display: grid;
+  grid-template-rows: 1.2fr .85fr;
+  gap: 14px;
+  min-height: 0;
+}
+
+.ir-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px 20px;
+  border: 1px solid #dbe2e9;
+  border-radius: 10px;
+  background: #fffdf7;
+  overflow: hidden;
+}
+
+/* 设计稿：标题与时间/序号垂直堆叠、左对齐（h3 在上 small 在下） */
+.ir-card-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.ir-card-head small {
+  display: block;
+  color: #77818c;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.ir-card-title {
+  margin: 0;
+  color: #131e2b;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+}
+
+.ir-card-count {
+  color: #77818c;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 实时转写内容区 */
+.ir-transcript {
+  flex: 1;
+  min-height: 0;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.ir-transcript .interview-room-thinking {
+  margin: 10px 0 0;
+  color: #77818c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 当前问题 */
+.ir-question-text {
+  margin: 10px 0 6px;
+  color: #131e2b;
+  font-family: 'Noto Serif SC', 'Songti SC', STSong, serif;
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.ir-question-hint {
+  margin: 0;
+  color: #5f6b7a;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.ir-question-status {
+  margin: 10px 0 0;
+  color: #5d9479;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ─── 状态提示区 ─── */
+.ir-status {
+  margin-top: 10px;
+}
+
+.ir-status .interview-error,
+.ir-status .interview-room-status {
+  margin: 0 0 6px;
+}
+
+/* 断线 / 致命错误 */
+.ir-disconnect {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid #f0d6d6;
+  border-radius: 8px;
+  background: #fdf3f3;
+}
+
+.ir-disconnect p {
+  margin: 0 0 8px;
+  color: #a03a3f;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ir-disconnect-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ─── 底部控制区 ─── */
+.ir-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ir-voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ir-record {
+  height: 38px;
+  padding: 0 22px;
+  border: 1px solid #4879b8;
+  border-radius: 19px;
+  background: #4879b8;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ir-record:hover:not(:disabled) {
+  background: #3a67a3;
+}
+
+.ir-record:active:not(:disabled) {
+  background: #2f5490;
+}
+
+.ir-record:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ir-record--recording {
+  background: #b8454a;
+  border-color: #b8454a;
+}
+
+.ir-record--recording:active:not(:disabled) {
+  background: #9a393e;
+}
+
+.ir-voice .voice-room-phase {
+  color: #5f6b7a;
+  font-size: 12px;
+}
+
+.ir-voice .voice-room-tts-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #d4dce6;
+  border-radius: 15px;
+  background: #fffdf7;
+  color: #5f6b7a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ir-voice .voice-room-tts-btn:hover:not(:disabled) {
+  color: #131e2b;
+  border-color: #b9c5d2;
+}
+
+.ir-voice .voice-room-tts-btn.is-active {
+  color: #4879b8;
+  border-color: #4879b8;
+}
+
+.ir-voice .voice-room-tts-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ir-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#design-root .ir-ctrl button {
+  height: 33px;
+  padding: 0 18px;
+  border: 1px solid #d4dce6;
+  border-radius: 7px;
+  background: #fffdf7;
+  color: #5f6b7a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ir-ctrl button:hover:not(:disabled) {
+  color: #131e2b;
+  border-color: #b9c5d2;
+}
+
+.ir-ctrl button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#design-root .ir-ctrl .ir-end {
+  border-color: #303945;
+  background: #303945;
+  color: #fff;
+}
+
+#design-root .ir-ctrl .ir-end:hover:not(:disabled) {
+  background: #1f2730;
+  border-color: #1f2730;
+}
+
+@media (max-width: 900px) {
+  .ir-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .ir-camera {
+    min-height: 180px;
+  }
+}
+
+/* ── 设计稿对齐：隐藏设计稿没有的元素（恢复时删除本块即可） ──
+   设计稿 room-card 只有：标题行 + 摄像头/双卡 + footer 三键。
+   以下隐藏语音控制块（按住说话/静音/重播）、会话 meta 行、常规状态行。 */
+.ir-meta,
+.ir-voice,
+.ir-status {
+  display: none !important;
+}
+
+/* footer 按钮顺序与设计稿一致：暂停 → 跳过问题 → 结束面试（深色最右） */
+.ir-ctrl .ir-end {
+  order: 3;
+}
+
+.ir-footer {
+  justify-content: flex-end;
+}
+
+/* ── 设计稿对齐：room-grid 固定高度 358px（设计稿 .room-grid{height:358px!important}） ──
+   设计稿右列 rows=196.98:147 源于第二卡 min-content(147) 超出 fr 份额(142.5)，
+   故以 min-height:147px 复现该行为；内容更长时行仍可扩展。 */
+#design-root .interview .ir-body {
+  flex: none;
+  height: 358px;
+}
+
+#design-root .interview .ir-cols > .ir-card:nth-child(3) {
+  min-height: 147px;
+}
+
+/* ── 数字人面试官面板 ──
+   默认展开：ir-body 由 358px 增至 488px 容纳新增行；
+   折叠（is-collapsed）时回到设计稿原始 358px。 */
+#design-root .interview .ir-body:has(.ir-avatar:not(.is-collapsed)) {
+  height: 488px;
+}
+
+.ir-avatar {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dbe2e9;
+  border-radius: 10px;
+  background: #fffdf7;
+  overflow: hidden;
+}
+
+.ir-avatar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 0;
+}
+
+.ir-avatar-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #243b53;
+}
+
+/* 开关：滑动式 toggle */
+.ir-avatar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ir-avatar-toggle-knob {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #c6d0da;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.ir-avatar-toggle-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+}
+
+.ir-avatar-toggle.is-on .ir-avatar-toggle-knob {
+  background: #4879b8;
+}
+
+.ir-avatar-toggle.is-on .ir-avatar-toggle-knob::after {
+  left: 18px;
+}
+
+.ir-avatar-toggle-label {
+  font-size: 12px;
+  color: #627d98;
+}
+
+/* 舞台：深色背景衬托 3D 形象 */
+.ir-avatar-stage {
+  position: relative;
+  height: 168px;
+  background: #131e2b;
+}
+
+.ir-avatar-stage-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.ir-avatar-stage-inner canvas {
+  display: block;
+}
+
+/* 折叠态：收起舞台只留标题行 */
+.ir-avatar.is-collapsed .ir-avatar-stage {
+  display: none;
+}
+
+/* 加载/失败遮罩 */
+.ir-avatar-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #b8c5d4;
+  font-size: 13px;
+  background: #131e2b;
+}
+
+.ir-avatar-mask--error {
+  color: #f0b4b4;
+}
+
+.ir-avatar-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #4879b8;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ir-avatar-rotate 0.8s linear infinite;
+}
+
+@keyframes ir-avatar-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}

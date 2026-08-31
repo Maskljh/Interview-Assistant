@@ -1072,16 +1072,6 @@
   opacity: 1;
 }
 
-.question-bank-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-md);
-  margin-top: var(--space-xl);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--color-hairline);
-}
-
 .question-bank-selected {
   font: var(--text-body-md-strong);
   color: var(--color-ink);
@@ -1692,6 +1682,13 @@
   gap: 10px;
   max-height: 360px;
   overflow-y: auto;
+}
+
+.resume-pick-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .resume-pick-item {
@@ -3705,6 +3702,14 @@
   transition: opacity 0.15s ease;
 }
 
+.prep-new-phase-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #6b7280;
+  text-align: center;
+}
+
 .prep-new-start:hover {
   opacity: 0.88;
 }
@@ -3984,4 +3989,27 @@
 .report-extra-retry:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* ── 记录行操作区：容纳「查看复盘 + 删除」两键（设计稿外新增的删除能力） ──
+   最后一列由固定 62px 改为 auto，按钮行内右对齐；删除键用红色弱化样式。 */
+#design-root .records .record-list > p {
+  grid-template-columns: 1.1fr 1.3fr .7fr 40px auto;
+}
+
+#design-root .records .record-list > p .record-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#design-root .records .record-list .record-delete {
+  color: #b8454a;
+  border-color: #e6c8c8;
+}
+
+#design-root .records .record-list .record-delete:hover {
+  border-color: #b8454a;
+  background: #fdf3f3;
 }

@@ -202,7 +202,11 @@ export default function QuestionBankPage() {
           <p className="interview-loading">加载中…</p>
         ) : filtered.length === 0 ? (
           <div className="interview-empty">
-            <p>题库暂无题目。完成面试后可将题目存入题库。</p>
+            <p>
+              {questions.length === 0
+                ? '题库暂无题目。完成面试后可将题目存入题库。'
+                : '没有匹配的题目，换个关键词或筛选条件试试。'}
+            </p>
           </div>
         ) : (
           <ul className="question-bank-flat-list">

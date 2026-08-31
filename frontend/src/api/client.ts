@@ -126,14 +126,19 @@ export async function fetchJSON<T>(
         : 'Unauthorized';
     // 子授权类 401（如 WPS 授权失效）：应用登录仍有效，不清理登录态、不跳登录页。
     if (!skipAuthClear) {
-      setToken(null);
-      localStorage.removeItem(USER_KEY);
-      if (
-        !skipAuthRedirect &&
-        !window.location.pathname.startsWith('/login')
-      ) {
-        // 路由级跳转（SPA）而非整页刷新：保留应用现场，避免闪白与状态丢失。
-        window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+      // mock 演示模式（token 以 mock-token- 开头）：后端无此账号，401 属预期，
+      // 不清登录态也不登出，交由页面捕获后回退到本地 mock 数据。
+      const isMockToken = token != null && token.startsWith('mock-token-');
+      if (!isMockToken) {
+        setToken(null);
+        localStorage.removeItem(USER_KEY);
+        if (
+          !skipAuthRedirect &&
+          !window.location.pathname.startsWith('/login')
+        ) {
+          // 路由级跳转（SPA）而非整页刷新：保留应用现场，避免闪白与状态丢失。
+          window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+        }
       }
     }
     throw new ApiError(401, toUserMessage(401, rawMessage), rawMessage);

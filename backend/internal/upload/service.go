@@ -153,13 +153,16 @@ func (s *Service) Upload(userID int64, kind, filename, contentType string, r io.
 
 // Proxy streams an OSS object back to the client through the API server
 // (keeps the object private and avoids browser CORS to OSS).
-func (s *Service) Proxy(c http.ResponseWriter, key string) error {
+// userID 归属校验：对象 key 必须属于当前用户（uploads/{userID}/...），
+// 防止越权读取其他用户上传的简历/JD 原文件（IDOR）。
+func (s *Service) Proxy(c http.ResponseWriter, userID int64, key string) error {
 	if !s.ready() {
 		return ErrNotConfigured
 	}
 	key = strings.TrimSpace(key)
 	key = strings.TrimPrefix(path.Clean("/"+key), "/")
-	if key == "" || strings.Contains(key, "..") || !strings.HasPrefix(key, uploadDir+"/") {
+	ownedPrefix := fmt.Sprintf("%s/%d/", uploadDir, userID)
+	if key == "" || strings.Contains(key, "..") || !strings.HasPrefix(key, ownedPrefix) {
 		return errors.New("invalid key")
 	}
 

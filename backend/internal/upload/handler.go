@@ -57,7 +57,12 @@ func RegisterRoutes(r *gin.Engine, secret string, svc *Service) {
 
 	// GET /api/uploads/object?key=... — proxy an OSS object through the API server.
 	g.GET("/object", func(c *gin.Context) {
-		if err := svc.Proxy(c.Writer, c.Query("key")); err != nil {
+		userID, ok := c.Get("userID")
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		if err := svc.Proxy(c.Writer, userID.(int64), c.Query("key")); err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, ErrNotConfigured) {
 				status = http.StatusServiceUnavailable

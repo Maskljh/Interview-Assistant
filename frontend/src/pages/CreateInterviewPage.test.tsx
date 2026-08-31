@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CreateInterviewPage from './CreateInterviewPage';
 import { AuthProvider } from '../auth/AuthContext';
 import { recognizeImage } from '../api/ocr';
 import { listQuestions } from '../api/questions';
-
 
 vi.mock('../api/ocr', () => ({
   recognizeImage: vi.fn(async () => ({ text: '识别出的 JD 文本' })),
@@ -17,7 +16,7 @@ vi.mock('../lib/resumeParse', () => ({
   extractResumeText: vi.fn(async () => ''),
 }));
 
-// 简历库 / 题库 API mock
+// 简历库 / 题库 / 面试创建 API mock
 vi.mock('../api/resumes', () => ({
   listResumes: vi.fn(async () => []),
 }));
@@ -26,6 +25,11 @@ vi.mock('../api/questions', () => ({
     { id: 1, question: '请介绍一个你主导的项目', source: 'import', starred: false, usage_count: 0, created_at: '2026-01-01' },
     { id: 2, question: '如何处理需求冲突？', source: 'import', starred: false, usage_count: 0, created_at: '2026-01-01' },
   ]),
+}));
+vi.mock('../api/interviews', () => ({
+  createInterview: vi.fn(async () => ({ id: 1 })),
+  createInterviewFromBank: vi.fn(async () => ({ id: 1 })),
+  startInterview: vi.fn(async () => ({ id: 1 })),
 }));
 
 function renderPage() {
@@ -38,16 +42,25 @@ function renderPage() {
   );
 }
 
-/** 点击「面试岗位」卡的「选择」按钮，打开 JD/岗位信息 Modal */
-function openJdModal() {
-  fireEvent.click(screen.getAllByRole('button', { name: '选择' })[0]);
+/** 按卡片标题定位卡片容器，精确点击卡内「导入」按钮（页面上有多个同名按钮）。 */
+function openCardModal(cardTitle: string) {
+  const card = screen.getByText(cardTitle).closest('article');
+  if (!card) throw new Error(`未找到卡片：${cardTitle}`);
+  fireEvent.click(within(card).getByRole('button', { name: '导入' }));
+}
+
+/** 打开岗位下拉并输入/确定一个岗位。 */
+function chooseJobByInput(job: string) {
+  fireEvent.click(screen.getByRole('button', { name: /点击选择/ }));
+  fireEvent.change(screen.getByLabelText('输入面试岗位'), { target: { value: job } });
+  fireEvent.click(screen.getByRole('button', { name: '确定' }));
 }
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('CreateInterviewPage 面试间准备页', () => {
+describe('CreateInterviewPage 面试间准备页（设计稿工作台）', () => {
   it('渲染标题、四卡片与开始按钮', () => {
     renderPage();
     expect(screen.getByText('面试间准备')).toBeTruthy();
@@ -63,32 +76,37 @@ describe('CreateInterviewPage 面试间准备页', () => {
 
   it('初始展示占位文案', () => {
     renderPage();
-    expect(screen.getByText('点击选择 ▽')).toBeTruthy();
-    expect(screen.getByText(/暂无岗位信息/)).toBeTruthy();
+    expect(screen.getByText('点击选择')).toBeTruthy();
+    expect(screen.getByText('暂未上传文件')).toBeTruthy();
+    expect(screen.getByText(/暂无岗位信息，请输入或导入/)).toBeTruthy();
     expect(screen.getByText(/暂无题目，请导入/)).toBeTruthy();
   });
 
-  it('目标岗位从 JD 首行提取', () => {
+  it('岗位：输入岗位名并确定后显示', () => {
     renderPage();
-    openJdModal();
-    const ta = screen.getByLabelText('岗位 JD') as HTMLTextAreaElement;
-    fireEvent.change(ta, { target: { value: '高级产品经理\n1. 负责增长方向...' } });
-    // 关闭 Modal 后卡片显示提取的岗位名
-    fireEvent.click(screen.getByRole('button', { name: '完成' }));
+    chooseJobByInput('高级产品经理');
     expect(screen.getByText('高级产品经理')).toBeTruthy();
-    expect(screen.queryByText('点击选择 ▽')).toBeNull();
+    expect(screen.queryByText('点击选择')).toBeNull();
   });
 
-  it('JD 编辑器打开后显示拖拽上传区', () => {
+  it('岗位：点击常用岗位标签直接选中', () => {
     renderPage();
-    openJdModal();
+    fireEvent.click(screen.getByRole('button', { name: /点击选择/ }));
+    fireEvent.click(screen.getByRole('button', { name: '产品经理' }));
+    expect(screen.getByText('产品经理')).toBeTruthy();
+  });
+
+  it('岗位信息：打开导入弹窗显示拖拽上传区', () => {
+    renderPage();
+    openCardModal('岗位信息');
+    expect(screen.getByRole('dialog', { name: /导入岗位信息/ })).toBeTruthy();
     expect(screen.getByText(/拖拽文件或图片到这里/)).toBeTruthy();
     expect(screen.getByText(/自动 OCR/)).toBeTruthy();
   });
 
-  it('fills JD textarea with OCR text after dropping image', async () => {
+  it('岗位信息：拖入图片后 OCR 文本填入编辑框', async () => {
     renderPage();
-    openJdModal();
+    openCardModal('岗位信息');
     const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
     const file = new File(['x'], 'jd.png', { type: 'image/png' });
     fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
@@ -99,9 +117,9 @@ describe('CreateInterviewPage 面试间准备页', () => {
     expect(screen.queryByText(/图片识别失败|未识别到文字/)).toBeNull();
   });
 
-  it('rejects files larger than 10MB without calling OCR', async () => {
+  it('岗位信息：超过 10MB 的文件被拒绝且不调用 OCR', async () => {
     renderPage();
-    openJdModal();
+    openCardModal('岗位信息');
     const dropzone = screen.getByRole('button', { name: '上传岗位 JD' });
     const bigFile = new File(['x'.repeat(10 * 1024 * 1024 + 1)], 'big.png', {
       type: 'image/png',
@@ -113,51 +131,46 @@ describe('CreateInterviewPage 面试间准备页', () => {
     expect(recognizeImage).not.toHaveBeenCalled();
   });
 
-  it('简历拖拽上传：成功解析后关闭 Modal，卡片显示文件名', async () => {
+  it('简历：自己上传成功后关闭弹窗，卡片显示文件名', async () => {
     renderPage();
-    // 打开简历 Modal：先出「来源选择」，点「自己上传」进入上传弹窗
-    fireEvent.click(screen.getByRole('button', { name: '上传' }));
+    // 简历卡「导入」→ 来源选择 → 自己上传
+    openCardModal('个人简历');
+    expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
+    expect(screen.getByText(/自己上传/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /自己上传/ }));
     expect(screen.getByRole('dialog', { name: '导入简历' })).toBeTruthy();
     expect(screen.getByText('拖拽简历到这里，或点击选择文件')).toBeTruthy();
 
-    // 模拟拖入合法文件（.txt）
+    // 拖入合法文件（.txt）→ 解析成功自动关闭弹窗
     const file = new File(['简历内容'], 'resume.txt', { type: 'text/plain' });
     const dropzone = screen.getByRole('button', { name: '上传简历' });
     fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
-    // 解析成功 → Modal 自动关闭
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: '导入简历' })).toBeNull();
     });
-    // 卡片显示文件名，按钮变为「替换」
+    // 卡片显示文件名
     expect(screen.getByText('resume.txt')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '替换' })).toBeTruthy();
   });
 
-  it('选择题库：打开弹窗可勾选题目', async () => {
+  it('选择题库：打开弹窗可勾选题目，完成后卡片显示计数', async () => {
     renderPage();
-    // 「选择题库」卡的「导入」按钮打开题库弹窗
-    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    openCardModal('选择题库');
     expect(screen.getByRole('dialog', { name: '选择题库' })).toBeTruthy();
     await waitFor(() => {
       expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy();
     });
-    // 勾选一题（限定在弹窗内的 .bank-pick-question）
     const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
     fireEvent.click(bankItem!);
     expect(bankItem?.className).toContain('is-selected');
+    // 完成 → 卡片显示已选计数与推荐范围
+    fireEvent.click(screen.getByRole('button', { name: '完成' }));
+    expect(screen.getByText(/共 1 题 · 建议 5~8 题/)).toBeTruthy();
   });
 
-  it('未填简历时开始面试被拦截并提示', () => {
+  it('未选择岗位时开始面试被拦截并提示', () => {
     renderPage();
-    // 先填 JD，否则先报「请填写岗位信息」
-    openJdModal();
-    const ta = screen.getByLabelText('岗位 JD') as HTMLTextAreaElement;
-    fireEvent.change(ta, { target: { value: '高级产品经理\n1. 负责增长方向...' } });
-    fireEvent.click(screen.getByRole('button', { name: '完成' }));
-    // 未填简历直接开始 → 提示上传简历
     fireEvent.click(screen.getByRole('button', { name: /开始模拟面试/ }));
-    expect(screen.getByText('请上传或填写简历')).toBeTruthy();
+    expect(screen.getByText('请选择面试岗位')).toBeTruthy();
   });
 
   it('题库勾选超过 10 题被阻止并提示', async () => {
@@ -178,7 +191,7 @@ describe('CreateInterviewPage 面试间准备页', () => {
       })),
     );
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    openCardModal('选择题库');
     await waitFor(() => expect(screen.getByText('题目 1')).toBeTruthy());
     // 勾选前 10 题
     for (let i = 1; i <= 10; i++) {
@@ -187,17 +200,8 @@ describe('CreateInterviewPage 面试间准备页', () => {
     // 第 11 题被阻止并提示
     fireEvent.click(screen.getByText('题目 11').closest('.bank-pick-item')!);
     expect(screen.getByText(/最多选择 10 题/)).toBeTruthy();
-    expect(screen.getByText(/共 10 题/)).toBeTruthy();
-  });
-
-  it('已选列表显示推荐范围提示', async () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '导入' }));
-    await waitFor(() => expect(screen.getByText('请介绍一个你主导的项目')).toBeTruthy());
-    const bankItem = screen.getByText('请介绍一个你主导的项目').closest('.bank-pick-item');
-    fireEvent.click(bankItem!);
     fireEvent.click(screen.getByRole('button', { name: '完成' }));
-    expect(screen.getByText(/建议 5~8 题/)).toBeTruthy();
+    expect(screen.getByText(/共 10 题/)).toBeTruthy();
   });
 
   it('所选题目来自同一项目时显示补全提示', async () => {
@@ -232,7 +236,7 @@ describe('CreateInterviewPage 面试间准备页', () => {
       },
     ]);
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: '导入' }));
+    openCardModal('选择题库');
     await waitFor(() => expect(screen.getByText('电商项目A')).toBeTruthy());
     fireEvent.click(screen.getByText('电商项目A').closest('.bank-pick-item')!);
     fireEvent.click(screen.getByText('电商项目B').closest('.bank-pick-item')!);
