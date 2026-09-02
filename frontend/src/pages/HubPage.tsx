@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { listInterviews, type InterviewListItem } from '../api/interviews';
-import { STATUS_LABELS } from '../lib/labels';
 import './hub-page.css';
 import TopBar from '../components/TopBar';
 
@@ -15,7 +14,6 @@ const CARD_TILTS = [-3.2, 1.6, -1.5, 2.8];
 function toDossier(item: InterviewListItem, index: number): {
   label: string;
   meta: string;
-  grade: string;
   tone: (typeof CARD_TONES)[number];
   tilt: number;
   id: number;
@@ -28,7 +26,6 @@ function toDossier(item: InterviewListItem, index: number): {
   return {
     label: `案件卷宗 / ${String(index + 1).padStart(2, '0')}`,
     meta: `${time} · ${title}`,
-    grade: item.score != null ? String(item.score) : STATUS_LABELS[item.status] ?? item.status,
     tone: CARD_TONES[index % CARD_TONES.length],
     tilt: CARD_TILTS[index % CARD_TILTS.length],
     id: item.id,
@@ -170,7 +167,6 @@ export default function HubPage() {
                       </div>
                       <footer>
                         <span>{d.meta}</span>
-                        <b>{d.grade}</b>
                       </footer>
                       <i />
                     </button>

@@ -61,14 +61,15 @@ describe('HubPage 工作台首页（v2.0 设计稿 #hub）', () => {
     expect(screen.getByRole('button', { name: /更多/ })).toBeTruthy();
   });
 
-  it('后端记录填充卷宗卡片（岗位与分数）', async () => {
+  it('后端记录填充卷宗卡片（岗位；不显示状态与分数）', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/前端工程师/)).toBeTruthy();
       expect(screen.getByText(/产品经理/)).toBeTruthy();
     });
-    // 已完成面试显示分数
-    expect(screen.getByText('86')).toBeTruthy();
+    // 设计稿一致：卷宗卡不显示状态/分数，仅岗位与日期
+    expect(screen.queryByText('86')).toBeNull();
+    expect(screen.queryByText('草稿')).toBeNull();
     expect(screen.getAllByText(/案件卷宗 \//).length).toBeGreaterThan(0);
   });
 
