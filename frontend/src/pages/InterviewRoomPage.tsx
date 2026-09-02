@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getToken } from '../api/client';
-import { endInterview, getInterview, type Persona } from '../api/interviews';
+import { endInterview, getInterview } from '../api/interviews';
 import { synthesizeSpeech, transcribeAudio } from '../api/speech';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -14,7 +14,6 @@ import {
   createAvatarController,
   type AvatarController,
 } from '../lib/avatar/avatarController';
-import { COMPANY_STYLE_LABELS, DIFFICULTY_LABELS, PERSONA_LABELS } from '../lib/labels';
 import { connectInterviewWS, type ServerMsg } from '../ws/interviewSocket';
 import { useBehaviorAnalysis } from '../behavior/useBehaviorAnalysis';
 import './InterviewPages.css';
@@ -23,9 +22,6 @@ import CameraPreview from '../components/CameraPreview';
 import InterviewerAvatar from '../components/InterviewerAvatar';
 import ConfirmModal from '../components/ConfirmModal';
 import TopBar from '../components/TopBar';
-
-// 面试时长不是硬性上限，仅为预估参考：时长随回答情况浮动，不强制结束。
-const ESTIMATED_MINUTES = 40;
 
 // TTS 单次合成长度上限（后端 maxTTSTextRunes=300）。超长问题拆成多段顺序朗读。
 const TTS_MAX_RUNES = 300;
@@ -79,16 +75,6 @@ interface Turn {
 }
 type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'sending';
 
-// 录音状态文案与配色：顶栏状态随语音链路实时变化，替代原来的静态"录音正常"。
-const VOICE_PHASE_META: Record<VoicePhase, { label: string; cls: string }> = {
-  // idle 并非"系统未工作"：语音链路空闲、系统正常运行、等待语音输入（如 AI 播报时）。
-  // 文案用"就绪"而非"待命"，避免与进行中的面试/摄像头分析状态矛盾。
-  idle: { label: '就绪', cls: 'is-idle' },
-  recording: { label: '录音中', cls: 'is-recording' },
-  transcribing: { label: '识别中', cls: 'is-transcribing' },
-  sending: { label: '发送中', cls: 'is-sending' },
-};
-
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -124,9 +110,9 @@ export default function InterviewRoomPage() {
   const [statusLine, setStatusLine] = useState('');
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState('');
-  const [persona, setPersona] = useState<Persona | null>(null);
-  const [difficulty, setDifficulty] = useState<string | null>(null);
-  const [companyStyle, setCompanyStyle] = useState<string | null>(null);
+  const [, setPersona] = useState<string | null>(null);
+  const [, setDifficulty] = useState<string | null>(null);
+  const [, setCompanyStyle] = useState<string | null>(null);
   const [jobTitle, setJobTitle] = useState<string>('');
   const [loadingInterview, setLoadingInterview] = useState(true);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');

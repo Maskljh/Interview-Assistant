@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
@@ -119,7 +119,7 @@ export default function CreateInterviewPage() {
   const [resumeFileName, setResumeFileName] = useState('');
   const [resumeFileUrl, setResumeFileUrl] = useState('');
   const [resumeParsing, setResumeParsing] = useState(false);
-  const [resumeError, setResumeError] = useState('');
+  const [, setResumeError] = useState('');
   // ── 选择题库 ──
   const [bankQuestions, setBankQuestions] = useState<Question[]>([]);
   const [bankLoading, setBankLoading] = useState(false);
@@ -433,10 +433,6 @@ export default function CreateInterviewPage() {
     setModal(null);
   }
 
-  /** 从已选列表移除一道题。 */
-  function removeQuestion(id: number) {
-    setSelectedIds((prev) => prev.filter((x) => x !== id));
-  }
 
   /** 选择/录入面试岗位（对话流弹窗确定）。 */
   function chooseJob(title: string) {
@@ -515,10 +511,6 @@ export default function CreateInterviewPage() {
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    await startInterviewFlow();
-  }
 
   // ── 对话流（设计稿 prep-dialogue）──
   // 岗位未选时第一轮问询人消息打字；选岗后转为静态，新增问询轮次各自打字。

@@ -49,7 +49,7 @@ export default function InterviewListPage() {
   const mockRows = useMemo(() => mockRecords.map(mockToRow), []);
   const [usingMock, setUsingMock] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
 
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
