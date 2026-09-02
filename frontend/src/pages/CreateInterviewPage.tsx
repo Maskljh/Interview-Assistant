@@ -17,7 +17,11 @@ import './prep-page.css';
 import TopBar from '../components/TopBar';
 import QuestionImportModal from '../components/QuestionImportModal';
 import { createPortal } from 'react-dom';
-import { commonInterviewJobs, mockJobInfoItems } from '../lib/mockData';
+import {
+  commonInterviewJobs,
+  mockJobInfoItems,
+  type MockJobInfoItem,
+} from '../lib/mockData';
 
 /** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
 const MAX_CLOUD_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -101,6 +105,13 @@ export default function CreateInterviewPage() {
   const [jdError, setJdError] = useState('');
   // 上传岗位信息图片 OCR 识别中（home-job-info-picker 头部按钮态）
   const [jobInfoRecognizing, setJobInfoRecognizing] = useState(false);
+  // 已保存的岗位信息列表（设计稿 home-job-info-picker saved tab，可手动录入新增）
+  const [jobInfoItems, setJobInfoItems] = useState<MockJobInfoItem[]>(mockJobInfoItems);
+  // 岗位信息弹窗当前 tab（设计稿 home-job-info-tabs：手动录入 / 已保存岗位）
+  const [jobInfoPickerTab, setJobInfoPickerTab] = useState<'manual' | 'saved'>('manual');
+  // 手动录入草稿（设计稿 home-job-info-manual 表单）
+  const [jobInfoDraftName, setJobInfoDraftName] = useState('');
+  const [jobInfoDraftContent, setJobInfoDraftContent] = useState('');
   // 当前选中的岗位信息（home-job-info-picker 高亮态）
   const [selectedJobInfoId, setSelectedJobInfoId] = useState('');
   // ── 个人简历 ──
@@ -339,6 +350,28 @@ export default function CreateInterviewPage() {
     }
   }
 
+  /** 手动录入岗位信息（设计稿 home-job-info-manual 确认录入）：
+   *  校验岗位名称/内容非空 → 存入已保存岗位列表并选中 → 归档到资料板。 */
+  function handleManualJobInfoSave() {
+    const name = jobInfoDraftName.trim();
+    const content = jobInfoDraftContent.trim();
+    if (!name || !content) return;
+    const item: MockJobInfoItem = {
+      id: `job-info-${Date.now()}`,
+      name,
+      content,
+      date: '刚刚录入',
+    };
+    setJobInfoItems((prev) => [item, ...prev]);
+    setSelectedJobInfoId(item.id);
+    setJobJd(`岗位名称：${item.name}\n${item.content}`);
+    setModal(null);
+    setJdError('');
+    setJobInfoDraftName('');
+    setJobInfoDraftContent('');
+    setJobInfoPickerTab('manual');
+  }
+
   /** 上传岗位信息图片（home-job-info-picker 头部按钮）：OCR 识别后填入岗位信息。 */
   async function handleJobInfoImage(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -506,7 +539,7 @@ export default function CreateInterviewPage() {
     materials.push({ label: '个人简历', title: resumeFileName });
   }
   if (jobJd.trim()) {
-    const selected = mockJobInfoItems.find((item) => item.id === selectedJobInfoId);
+    const selected = jobInfoItems.find((item) => item.id === selectedJobInfoId);
     materials.push({
       label: '岗位信息',
       title: selected ? selected.name : '已录入岗位情报',
@@ -643,7 +676,7 @@ export default function CreateInterviewPage() {
                           <b>岗位信息</b>
                           <span>
                             {jobJd.trim()
-                              ? mockJobInfoItems.find((i) => i.id === selectedJobInfoId)?.name || '已导入岗位信息'
+                              ? jobInfoItems.find((i) => i.id === selectedJobInfoId)?.name || '已导入岗位信息'
                               : '选择或上传岗位信息'}
                           </span>
                         </button>
@@ -1095,7 +1128,8 @@ export default function CreateInterviewPage() {
               </div>
             )}
 
-            {/* 导入岗位信息：设计稿 home-job-info-picker-dialog */}
+            {/* 导入岗位信息：设计稿 home-job-info-picker-dialog
+                双 tab：手动录入（表单）/ 已保存岗位（列表）；头部按钮上传图片识别 */}
             {modal === 'jd' && (
               <div className="question-dialog-backdrop">
                 <section
@@ -1107,7 +1141,7 @@ export default function CreateInterviewPage() {
                   <header className="question-add-dialog-head">
                     <div>
                       <h2>导入岗位信息</h2>
-                      <p>从已有的岗位信息里选择或新建导入岗位信息</p>
+                      <p>录入岗位情报，或从系统保存的岗位中选择</p>
                     </div>
                     <div className="home-resume-picker-head-actions">
                       <button
@@ -1118,7 +1152,7 @@ export default function CreateInterviewPage() {
                           document.getElementById('job-info-file-input')?.click()
                         }
                       >
-                        {jobInfoRecognizing ? '识别中…' : '上传岗位信息图片'}
+                        {jobInfoRecognizing ? '识别中…' : '上传图片识别'}
                       </button>
                       <button
                         type="button"
@@ -1133,10 +1167,60 @@ export default function CreateInterviewPage() {
                     </div>
                   </header>
                   <div className="question-add-dialog-rule" />
-                  <div className="home-resume-picker-body">
-                    {mockJobInfoItems.length ? (
+                  <nav className="home-job-info-tabs">
+                    <button
+                      type="button"
+                      className={jobInfoPickerTab === 'manual' ? 'active' : ''}
+                      onClick={() => {
+                        setJobInfoPickerTab('manual');
+                        setJdError('');
+                      }}
+                    >
+                      手动录入
+                    </button>
+                    <button
+                      type="button"
+                      className={jobInfoPickerTab === 'saved' ? 'active' : ''}
+                      onClick={() => {
+                        setJobInfoPickerTab('saved');
+                        setJdError('');
+                      }}
+                    >
+                      已保存岗位
+                    </button>
+                  </nav>
+                  <div className="home-job-info-picker-body">
+                    {jobInfoPickerTab === 'manual' ? (
+                      <div className="home-job-info-manual">
+                        <label>
+                          岗位名称
+                          <input
+                            value={jobInfoDraftName}
+                            onChange={(e) => setJobInfoDraftName(e.target.value)}
+                            placeholder="例如：产品经理"
+                            aria-label="岗位名称"
+                          />
+                        </label>
+                        <label>
+                          岗位内容
+                          <textarea
+                            value={jobInfoDraftContent}
+                            onChange={(e) =>
+                              setJobInfoDraftContent(e.target.value)
+                            }
+                            placeholder="请输入岗位信息"
+                            aria-label="岗位内容"
+                          />
+                        </label>
+                        <footer>
+                          <button type="button" onClick={handleManualJobInfoSave}>
+                            确认录入
+                          </button>
+                        </footer>
+                      </div>
+                    ) : jobInfoItems.length ? (
                       <div className="home-job-info-picker-list">
-                        {mockJobInfoItems.map((item) => {
+                        {jobInfoItems.map((item) => {
                           const active = item.id === selectedJobInfoId;
                           return (
                             <button
@@ -1163,8 +1247,8 @@ export default function CreateInterviewPage() {
                       </div>
                     ) : (
                       <div className="home-resume-picker-empty">
-                        <p>还没有岗位信息</p>
-                        <small>上传岗位信息图片后可在此选择使用</small>
+                        <p>还没有已保存的岗位信息</p>
+                        <small>可在“手动录入”中新增，或上传图片识别</small>
                       </div>
                     )}
                     {jdError && (

@@ -380,3 +380,19 @@
   right:0!important;
   left:0!important;
   height:64px!important;}
+/* =====================================================================
+   导入岗位信息弹窗（设计稿 home-job-info-picker-dialog）
+   双 tab：手动录入 / 已保存岗位；手动录入表单 + 确认录入
+   ===================================================================== */
+#design-root .home-job-info-tabs {display:flex;gap:18px;padding:0 24px;border-bottom:1px solid #e1e8ed}
+#design-root .home-job-info-tabs button {height:36px;border-bottom:2px solid transparent;background:transparent;color:#7b8794;font-size:12px;font-weight:600}
+#design-root .home-job-info-tabs button.active {border-color:#4879b8;color:#29465b}
+#design-root .home-job-info-picker-body {padding:17px 24px 22px}
+#design-root .home-job-info-manual {display:grid;gap:12px}
+#design-root .home-job-info-manual label {display:grid;gap:6px;color:#5f6b7a;font-size:12px}
+#design-root .home-job-info-manual input,#design-root .home-job-info-manual textarea {width:100%;margin:0;padding:8px 10px;border:1px solid #d9e0e8;border-radius:8px;background:#fff;color:#303945;font-size:12px;outline-color:#4879b8}
+#design-root .home-job-info-manual input {height:36px}
+#design-root .home-job-info-manual textarea {height:118px;resize:vertical}
+#design-root .home-job-info-manual footer {display:flex;justify-content:flex-end}
+#design-root .home-job-info-manual footer button {height:32px;padding:0 14px;border-radius:6px;background:#29465b;color:#fffdf7;font-size:12px;font-weight:700}
+#design-root .home-job-info-picker-body .home-resume-picker-empty {padding:16px 0}

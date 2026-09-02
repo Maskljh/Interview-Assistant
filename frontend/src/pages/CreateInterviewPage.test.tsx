@@ -110,20 +110,58 @@ describe('CreateInterviewPage 开始面试页（v2.0 对话引导式）', () => 
     expect(screen.getByText('本次面试岗位为“产品经理”')).toBeTruthy();
   });
 
-  it('岗位信息：走完对话流后打开导入弹窗显示岗位信息列表', () => {
+  it('岗位信息：打开导入弹窗默认显示手动录入表单与双 tab', () => {
     renderPage();
     proceedToUpload();
     fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
     expect(screen.getByRole('dialog', { name: '导入岗位信息' })).toBeTruthy();
-    expect(screen.getByText('从已有的岗位信息里选择或新建导入岗位信息')).toBeTruthy();
-    expect(screen.getByText('项目管理专员/主管')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '上传岗位信息图片' })).toBeTruthy();
+    expect(screen.getByText('录入岗位情报，或从系统保存的岗位中选择')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '上传图片识别' })).toBeTruthy();
+    // 双 tab：手动录入（默认选中）/ 已保存岗位
+    expect(screen.getByRole('button', { name: '手动录入' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '已保存岗位' })).toBeTruthy();
+    // 手动录入表单（岗位名称 + 岗位内容 + 确认录入）
+    expect(screen.getByLabelText('岗位名称')).toBeTruthy();
+    expect(screen.getByLabelText('岗位内容')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '确认录入' })).toBeTruthy();
   });
 
-  it('岗位信息：选择已有岗位信息后归档到资料板并关闭弹窗', () => {
+  it('岗位信息：手动录入岗位名称与内容后归档到资料板并关闭弹窗', () => {
     renderPage();
     proceedToUpload();
     fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
+    fireEvent.change(screen.getByLabelText('岗位名称'), {
+      target: { value: '测试工程师' },
+    });
+    fireEvent.change(screen.getByLabelText('岗位内容'), {
+      target: { value: '负责测试用例设计与执行' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '确认录入' }));
+    expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    // 资料板归档显示岗位信息名称与内容（导入选项回显 + 资料板归档两处）
+    expect(screen.getAllByText('测试工程师').length).toBeGreaterThan(0);
+    expect(screen.getByText(/负责测试用例设计与执行/)).toBeTruthy();
+  });
+
+  it('岗位信息：手动录入缺岗位名称或内容时不归档', () => {
+    renderPage();
+    proceedToUpload();
+    fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
+    fireEvent.click(screen.getByRole('button', { name: '确认录入' }));
+    // 空表单不关闭弹窗
+    expect(screen.getByRole('dialog', { name: '导入岗位信息' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('岗位内容'), {
+      target: { value: '只有内容没有名称' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '确认录入' }));
+    expect(screen.getByRole('dialog', { name: '导入岗位信息' })).toBeTruthy();
+  });
+
+  it('岗位信息：切到已保存岗位 tab 选择已有岗位后归档并关闭弹窗', () => {
+    renderPage();
+    proceedToUpload();
+    fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
+    fireEvent.click(screen.getByRole('button', { name: '已保存岗位' }));
     fireEvent.click(screen.getByText('项目管理专员/主管'));
     expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
     // 资料板归档显示岗位信息名称与内容（导入选项回显 + 资料板归档两处）
