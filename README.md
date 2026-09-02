@@ -2,43 +2,80 @@
 
 AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、通过 WebSocket 逐题**语音**作答（TTS 朗读 + 按住说话录音转写）、结束生成多维评分报告。支持题库、简历-JD 匹配预检、画像与成长分析，以及**可选的摄像头表情/行为信号分析**（本地运行，画面不上传）。
 
+---
+
 ## 目录
 
-- [Prerequisites（环境要求）](#prerequisites环境要求)
-- [Architecture（本地架构）](#architecture本地架构)
+- [技术栈](#技术栈)
+- [架构总览](#架构总览)
+- [环境要求](#环境要求)
 - [快速启动（Docker，推荐）](#快速启动docker推荐)
-- [1. 启动 MySQL 与 Redis（Docker）](#1-启动-mysql-与-redisdocker)
-- [2. 应用数据库迁移](#2-应用数据库迁移)
-- [3. 环境变量](#3-环境变量)
-- [4. 运行 API 服务](#4-运行-api-服务)
-- [5. 运行前端](#5-运行前端)
+- [详细启动步骤](#详细启动步骤)
+  - [1. Docker 基础设施（MySQL + Redis）](#1-docker-基础设施mysql--redis)
+  - [2. 数据库迁移](#2-数据库迁移)
+  - [3. 环境变量](#3-环境变量)
+  - [4. 运行后端 API](#4-运行后端-api)
+  - [5. 运行前端](#5-运行前端)
+- [MySQL / Redis 配置核对表](#mysql--redis-配置核对表)
+- [常见问题排查](#常见问题排查)
 - [功能总览](#功能总览)
 - [Demo 流程](#demo-流程)
-- [摄像头表情/行为信号分析（V14）](#摄像头表情行为信号分析v14)
-- [Backend tests](#backend-tests)
+- [摄像头表情/行为信号分析](#摄像头表情行为信号分析v14)
+- [测试](#测试)
 - [已知限制](#已知限制)
 - [项目结构](#项目结构)
 
-## Prerequisites（环境要求）
+---
 
-- **Docker Desktop**（推荐，MySQL/Redis 均通过容器运行）
-- **Go** 1.22+
-- **Node.js** 18+ 和 npm
-- **阿里云语音 Key（必填）**：语音是唯一的作答方式，缺省时 ASR/TTS 返回 `502`，无法正常作答。
-- 可选：DeepSeek API Key（出题/评分）、阿里云 OCR Key（图片导入）
+## 技术栈
 
-> **端口约定：本仓库通过 Docker 将 MySQL `3306`、Redis `6379` 映射到宿主机 `127.0.0.1`。** 请保持本机 3306/6379 端口不被其他本地服务占用（若本机装有旧 MySQL 服务请保持停止）。
+| 层 | 技术 | 说明 |
+|----|------|------|
+| 前端 | React 19 + Vite 8 + TypeScript | SPA，开发端口 5174 |
+| 后端 | Go 1.22+ / Gin | REST + WebSocket，默认端口 18080 |
+| 数据库 | MySQL 8.4（Docker） | 用户、会话、题目、轮次、行为信号 |
+| 缓存 | Redis 7（Docker） | 面试直播态、暂存 |
+| 语音 | 阿里云智能语音 NLS | ASR（录音转写）+ TTS（朗读题目），**唯一作答方式** |
+| 大模型 | DeepSeek | 出题、追问、评分报告 |
+| 登录 | WPS OAuth | **唯一登录方式**（账号密码接口已移除） |
+| 可选 | 阿里云 OCR（图片导入）、OSS（文件上传）、摄像头行为分析（浏览器本地 TensorFlow.js） | 见各节说明 |
 
-## Architecture（本地架构）
+---
+
+## 架构总览
+
+```
+┌─────────────┐   REST / WS    ┌──────────────┐    SQL      ┌─────────────┐
+│  前端 (Vite) │ ─────────────> │ 后端 (Go/Gin) │ ─────────> │ MySQL 8.4   │
+│  :5174      │                │  :18080      │             │ Docker :3306│
+└─────────────┘                └──────────────┘    Redis    └─────────────┘
+                                        │        ┌─────────> │ Redis 7     │
+                                        └───────> │  缓存/直播态  │ Docker :6379│
+                                        WPS OAuth │           └─────────────┘
+                                        DeepSeek  └──> 外部 API
+                                        阿里云语音
+```
 
 | 服务 | 默认地址 | 用途 |
 |------|----------|------|
 | API（Go/Gin） | `http://127.0.0.1:18080` | REST + WebSocket（前端默认同端口 18080） |
-| 前端（Vite） | `http://localhost:5174` | React SPA（开发端口 5174） |
-| MySQL 8 | `127.0.0.1:3306` | 用户、会话、题目、轮次、行为信号 |
-| Redis 7 | `127.0.0.1:6379` | 面试直播态、暂存 |
+| 前端（Vite） | `http://localhost:5174` | React SPA（开发端口 5174，由 `vite.config.ts` 固定） |
+| MySQL 8.4 | `127.0.0.1:3306`（Docker 映射） | 用户、会话、题目、轮次、行为信号 |
+| Redis 7 | `127.0.0.1:6379`（Docker 映射） | 面试直播态、暂存 |
 
-> **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端监听端口由 `.env` 的 `HTTP_ADDR` 决定（默认 `:18080`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname。
+> **端口约定**：MySQL `3306`、Redis `6379` 由 Docker 映射到宿主机。请确保本机 3306/6379 未被其他本地服务占用（若装有旧 MySQL 服务请保持停止）。
+
+---
+
+## 环境要求
+
+- **Docker Desktop**（推荐，MySQL/Redis 统一通过容器运行；本仓库不依赖本机自装数据库）
+- **Go** 1.22+
+- **Node.js** 18+ 和 npm
+- **阿里云语音 Key（必填）**：语音是唯一的作答方式，缺省时 ASR/TTS 返回 `502`，无法正常作答
+- 可选：DeepSeek API Key（出题/评分）、阿里云 OCR Key（图片导入）、OSS Key（文件上传）、WPS 开放平台应用（登录）
+
+---
 
 ## 快速启动（Docker，推荐）
 
@@ -46,36 +83,80 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 bash start-dev.sh
 ```
 
-一键完成：拉起 Docker 引擎 → `docker compose up -d`（MySQL + Redis）→ 等待就绪 → 首次自动执行全部数据库迁移 → 编译并后台启动后端（`:18080`）。之后前端按第 5 节启动即可。
+一键完成以下全部步骤：
 
-> **Windows 用户**：请先启动 Docker Desktop（首次需等待引擎就绪），脚本会自动检测并拉起。若本机装有旧 MySQL 服务，请保持其停止以免占用 3306 端口。
+1. 检测 Docker 引擎，未运行则自动拉起 Docker Desktop 并等待就绪（最多 120 秒）
+2. `docker compose up -d` 启动 MySQL + Redis 容器
+3. 等待 MySQL 就绪（`mysqladmin ping` 轮询）
+4. **首次启动自动执行全部数据库迁移**（检测到 `interview` 库无表时）
+5. 自动停止已占 18080 端口的旧后端进程
+6. 编译后端（`backend/server_docker.exe`，Go 缓存写入 `backend/.gotmp/`）
+7. 后台启动后端并轮询确认监听 `:18080`
 
-## 1. 启动 MySQL 与 Redis（Docker）
+启动后访问：
 
-仓库根目录 `docker-compose.yml` 定义了两个服务，统一通过 Docker 运行：
+- 前端：http://localhost:5174
+- 后端健康检查：http://127.0.0.1:18080/healthz （应返回 `{"ok":true}`）
+
+> **Windows 用户**：请先安装并启动 Docker Desktop（首次需等待引擎就绪），脚本会自动检测与拉起。
+> 若本机装有旧 MySQL 服务，请保持其停止以免占用 3306 端口。
+
+---
+
+## 详细启动步骤
+
+### 1. Docker 基础设施（MySQL + Redis）
+
+仓库根目录 `docker-compose.yml` 定义了两个服务：
+
+```yaml
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456      # root 密码（与 .env 的 MYSQL_DSN 一致）
+      MYSQL_DATABASE: interview        # 自动创建 interview 库
+    ports: ["3306:3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]   # 数据持久化卷
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+volumes:
+  mysql_data:
+```
+
+手动启动（脚本内部也是执行这条命令）：
 
 ```bash
 docker compose up -d
 ```
 
-- **MySQL 8.4**：`root` / `123456`，数据库 `interview`，数据卷 `mysql_data` 持久化
-- **Redis 7**：映射 `127.0.0.1:6379`
+常用运维命令：
 
-> 密码与 `.env` 的 `MYSQL_DSN` 一致（`root:123456@tcp(127.0.0.1:3306)/interview`）；如修改密码，请同步修改 `.env`。
+```bash
+docker compose ps            # 查看容器状态
+docker compose logs -f mysql # 查看 MySQL 日志
+docker compose stop          # 停止容器（数据保留）
+docker compose down          # 停止并移除容器（数据卷保留）
+docker compose down -v       # ⚠️ 停止并删除数据卷（清空全部数据，慎用）
+```
 
-> 需要重置数据库时：`docker compose down -v`（删除数据卷，慎用）。
+**验证连接**：
 
-> 不使用 Docker 的旧方式（本机自装 MySQL/Redis）仍可通过手动安装服务并保持端口 3306/6379 可达来运行，但**仓库统一推荐 Docker**，`.env` 已按容器映射配置，无需改动。
+```bash
+docker exec interviewassistant-mysql-1 mysql -uroot -p123456 -e "SELECT 1; SHOW DATABASES;"
+docker exec interviewassistant-redis-1 redis-cli ping    # 应返回 PONG
+```
 
-## 2. 应用数据库迁移
+> **密码说明**：root 密码统一为 `123456`。如需修改，请同步修改 `docker-compose.yml` 的 `MYSQL_ROOT_PASSWORD`、根目录 `.env` 的 `MYSQL_DSN`、`backend/internal/config/config.go` 的默认值（三处保持一致）。
 
-按编号顺序应用 `backend/migrations/` 下的**全部**迁移（`001_init.sql` … `017_wps_oauth_columns.sql`）：
+### 2. 数据库迁移
 
-- **全新数据库**：每个文件执行一次。
-- **已有数据库**：只应用当前 schema 之后新增的文件（例如 `013_resume_files.sql` 新增 `users.username` 列与 `resume_files` 表；`014_job_title.sql` 新增 `interview_sessions.job_title` 列与 `question_usage` 表）。
-- **016/017（WPS 能力）**：`016_wps_tokens.sql` 持久化 WPS access/refresh token（云文档选简历、报告发邮箱）；`017_wps_oauth_columns.sql` 幂等补齐 `users` 的 `wps_openid` / `user_id` / `nickname` / `avatar_url` 列并给 `wps_openid` 加唯一索引。这两列组原先依赖一份未纳入仓库的迁移，017 使其在干净环境也能完整建表。
+迁移脚本位于 `backend/migrations/`，按编号顺序执行（`001_init.sql` … `018_question_kind.sql`）。
 
-从仓库根目录（Docker MySQL，密码 `123456`）：
+**通常无需手动执行**：`start-dev.sh` 在首次启动（`interview` 库无表）时自动应用全部迁移。
+
+手动重跑（Docker MySQL，密码 `123456`）：
 
 ```bash
 for f in backend/migrations/*.sql; do
@@ -83,24 +164,24 @@ for f in backend/migrations/*.sql; do
 done
 ```
 
-> **通常无需手动执行**：`start-dev.sh` 会在首次启动（`interview` 库无表）时自动应用全部迁移。仅当需要手动重跑时才用上面的命令。迁移是幂等的（`IF NOT EXISTS` / `ADD COLUMN`），但建议按顺序只执行一次。
+迁移是幂等的（`IF NOT EXISTS` / `ADD COLUMN`），但建议只在全新库上按顺序执行一次。
 
-## 3. 环境变量
+### 3. 环境变量
 
-服务端**优先读进程环境变量**（`os.Getenv`）；启动时会自动加载仓库根目录的 `.env`（`internal/config/config.go` 用 `godotenv` 加载当前目录及上一级目录的 `.env`，进程环境变量优先）。`.env.example` 是变量模板，本地复制为 `.env` 后按需填写。运行前也可手动设置（PowerShell 用 `$env:VAR=...`，bash 用 `export VAR=...`），手动设置会覆盖 `.env` 中的值。
+服务端**优先读进程环境变量**（`os.Getenv`）；启动时自动加载仓库根目录的 `.env`（`internal/config/config.go` 用 `godotenv` 加载当前目录及上一级目录的 `.env`，进程环境变量优先）。`.env.example` 是变量模板，本地复制为 `.env` 后按需填写。
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `JWT_SECRET` | **是** | — | JWT 访问令牌签名密钥 |
-| `WPS_CLIENT_ID` | 是 | — | WPS 开放平台应用 ID（登录唯一方式，缺省时 WPS 登录返回 503） |
+| `HTTP_ADDR` | 否 | `:18080` | API 监听地址 |
+| `MYSQL_DSN` | 否 | `root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4&loc=Local` | MySQL 连接串（**与 Docker 容器密码 123456 对齐**） |
+| `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址（Docker 映射端口） |
+| `WPS_CLIENT_ID` | 是 | — | WPS 开放平台应用 ID（登录唯一方式，缺省时登录返回 503） |
 | `WPS_CLIENT_SECRET` | 是 | — | WPS 开放平台应用密钥 |
 | `WPS_REDIRECT_URI` | 否 | `http://127.0.0.1:18365/callback` | WPS 授权回调地址（须与开放平台登记一致） |
 | `WPS_CALLBACK_ADDR` | 否 | `:18365` | WPS 回调专用监听端口 |
 | `WPS_SCOPE` | 否 | `kso.user_base.read` | WPS 授权范围 |
 | `WPS_FRONTEND_REDIRECT` | 否 | `http://localhost:5174` | 授权成功后前端跳转地址 |
-| `HTTP_ADDR` | 否 | `:18080` | API 监听地址（默认 `:18080`） |
-| `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；Docker 容器密码为 `123456`，仓库 `.env` 已配置 `root:123456@...`） |
-| `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址 |
 | `DEEPSEEK_API_KEY` | 否* | — | DeepSeek Key，用于出题与报告 |
 | `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com` | DeepSeek API 地址 |
 | `DEEPSEEK_MODEL` | 否 | `deepseek-chat` | 模型名 |
@@ -117,20 +198,21 @@ done
 | `OSS_ACCESS_KEY_SECRET` | 否‡ | — | OSS AccessKey Secret |
 
 \* 无 `DEEPSEEK_API_KEY`：开始面试返回 `502`、报告不可用；增删改查/归属校验仍正常。
-
-**登录方式**：本应用已切换为 **WPS OAuth 唯一登录**（`/api/auth/wps/authorize|called|exchange`），账号密码注册/登录接口已移除。前端登录页只显示 WPS 授权入口；未配置 `WPS_CLIENT_ID/SECRET` 时授权接口返回 `503`。首次 WPS 登录会按 openid 自动创建用户。
-
 \*\* **必填**（语音是唯一作答方式）：缺阿里云语音变量时 `/api/speech/asr`、`/api/speech/tts` 返回 `502`，语音房间无法录音/播报，面试无法正常进行。
-
-\† 缺 OCR Key：图片导入返回 `502`（提示改用文字粘贴）；文字导入正常。两者均回退到共享的 `ALIYUN_ACCESS_KEY_ID/SECRET`。
-
+\† 缺 OCR Key：图片导入返回 `502`（提示改用文字粘贴）；文字导入正常。
 \‡ 缺 OSS 配置：简历/JD 文件上传（`/api/uploads`、`/api/resumes`）返回 `502`，但直接填写 JD 文本不受影响。
 
-**PowerShell（Windows）：**
+**复制模板（推荐）**：
+
+```bash
+cp .env.example .env   # 然后编辑填写各项 Key
+```
+
+**PowerShell（Windows）手动设置**：
 
 ```powershell
 $env:JWT_SECRET = "dev-change-me"
-# 数据库在 3306；Docker MySQL 密码 123456（与 .env 一致，通常无需重复设置）：
+# Docker MySQL/Redis（与 .env 一致，通常无需重复设置）：
 $env:MYSQL_DSN = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 $env:REDIS_ADDR = "127.0.0.1:6379"
 # WPS 登录（必填，唯一登录方式）：
@@ -142,32 +224,18 @@ $env:REDIS_ADDR = "127.0.0.1:6379"
 # $env:ALIYUN_ACCESS_KEY_ID = "LTAI..."
 # $env:ALIYUN_ACCESS_KEY_SECRET = "..."
 # $env:ALIYUN_NLS_APP_KEY = "..."
-# 图片导入 OCR 需要：
-# $env:ALIYUN_OCR_ACCESS_KEY_ID = "LTAI..."   # 缺省回退 ALIYUN_ACCESS_KEY_ID
-# $env:ALIYUN_OCR_ACCESS_KEY_SECRET = "..."
 ```
 
-**bash / zsh：**
+**bash / zsh**：
 
 ```bash
 export JWT_SECRET=dev-change-me
 # Docker MySQL/Redis（与 .env 一致，通常无需重复设置）：
 export MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
 export REDIS_ADDR=127.0.0.1:6379
-# WPS 登录（必填，唯一登录方式）：
-# export WPS_CLIENT_ID=AK...
-# export WPS_CLIENT_SECRET=...
-# export DEEPSEEK_API_KEY=sk-...
-# 语音作答（必填，唯一作答方式）：
-# export ALIYUN_ACCESS_KEY_ID=LTAI...
-# export ALIYUN_ACCESS_KEY_SECRET=...
-# export ALIYUN_NLS_APP_KEY=...
-# 图片导入 OCR：
-# export ALIYUN_OCR_ACCESS_KEY_ID=LTAI...   # 缺省回退 ALIYUN_ACCESS_KEY_ID
-# export ALIYUN_OCR_ACCESS_KEY_SECRET=...
 ```
 
-## 4. 运行 API 服务
+### 4. 运行后端 API
 
 > **推荐用一键脚本**：`bash start-dev.sh` 会自动编译并后台启动后端（`backend/server_docker.exe`，日志 `backend/server_docker.log`）。
 
@@ -175,10 +243,15 @@ export REDIS_ADDR=127.0.0.1:6379
 
 ```bash
 cd backend
-GOTMPDIR="$PWD/../backend/.gotmp" go run ./cmd/server   # 或 go build -o server_docker.exe ./cmd/server && ./server_docker.exe
+# 方式一：直接运行
+go run ./cmd/server
+# 方式二：编译后运行（推荐，进程更可控）
+go build -o server_docker.exe ./cmd/server && ./server_docker.exe
 ```
 
-> **Windows 注意**：若 `C:\tmp` 被同名文件占用（非目录），Go 构建会报 `mkdir C:\tmp...: cannot find the path`，请用 `GOTMPDIR`/`GOCACHE` 指向有效目录（如 `backend/.gotmp`），或删除该占位文件后重建目录。
+> **Windows 注意**：若 `C:\tmp` 被同名文件占用（非目录），Go 构建会报 `mkdir C:\tmp...: cannot find the path`。解决方案：
+> 1. 删除该占位文件后重建目录（推荐，一劳永逸）；或
+> 2. 构建时指定有效临时目录：`GOTMPDIR="$PWD/.gotmp" go build ./cmd/server`
 
 验证：
 
@@ -187,18 +260,16 @@ curl http://127.0.0.1:18080/healthz
 # {"ok":true}
 ```
 
-Windows PowerShell 下 `curl` 若被 `Invoke-WebRequest` 别名占用，请用 `curl.exe`。
+> Windows PowerShell 下 `curl` 若被 `Invoke-WebRequest` 别名占用，请用 `curl.exe`。
 
-### CORS
+**CORS**：REST 响应允许来源 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://localhost:5174`、`http://127.0.0.1:5174`（带 `Authorization`/`Content-Type` 头）。WebSocket 通过 `?token=` 携带 JWT（无 CORS 预检）。
 
-REST 响应允许来源 `http://localhost:5173`、`http://127.0.0.1:5173`、`http://localhost:5174`、`http://127.0.0.1:5174`（带 `Authorization`/`Content-Type` 头）。WebSocket 通过 `?token=` 携带 JWT（无 CORS 预检）。
-
-## 5. 运行前端
+### 5. 运行前端
 
 ```bash
 cd frontend
 cp .env.example .env   # 或设置 VITE_API_BASE
-npm install
+npm install            # 首次需要
 npm run dev            # 默认 http://localhost:5174
 ```
 
@@ -207,6 +278,45 @@ npm run dev            # 默认 http://localhost:5174
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `VITE_API_BASE` | 跟随当前页面 hostname（默认 `:18080`） | 后端 REST 基址（WS 源由此推导） |
+
+---
+
+## MySQL / Redis 配置核对表
+
+仓库内所有涉及 MySQL/Redis 的配置已统一（root 密码 `123456`、MySQL 3306、Redis 6379、库 `interview`）：
+
+| 文件 | 位置 | 值 | 状态 |
+|------|------|----|------|
+| `docker-compose.yml` | `MYSQL_ROOT_PASSWORD` | `123456` | ✅ |
+| `docker-compose.yml` | `MYSQL_DATABASE` | `interview` | ✅ |
+| `docker-compose.yml` | `ports` | `3306:3306` / `6379:6379` | ✅ |
+| `.env`（生效） | `MYSQL_DSN` | `root:123456@tcp(127.0.0.1:3306)/interview?...` | ✅ |
+| `.env`（生效） | `REDIS_ADDR` | `127.0.0.1:6379` | ✅ |
+| `.env.example` | `MYSQL_DSN` / `REDIS_ADDR` | 同上 | ✅ |
+| `backend/internal/config/config.go` | 默认 `MySQLDSN` / `RedisAddr` | `root:123456@...` / `127.0.0.1:6379` | ✅ |
+| `start-dev.sh` | 密码获取 | 自动从 `docker-compose.yml` 读取 | ✅ |
+| `backend/migrations/*.sql` | 内嵌密码 | 无（仅建表/改表语句） | ✅ |
+| `frontend/src/api/client.ts` | 后端地址 | `:18080` | ✅ |
+
+> 修改密码时请同步改 4 处：`docker-compose.yml`、`.env`、`.env.example`、`config.go` 默认值。
+
+---
+
+## 常见问题排查
+
+| 现象 | 原因 | 解决 |
+|------|------|------|
+| 后端启动报 `dial tcp 127.0.0.1:3306: connect: connection refused` | MySQL 容器未启动 | `docker compose up -d` 后等待就绪，或运行 `bash start-dev.sh` |
+| 3306/6379 端口被占用 | 本机装了旧 MySQL/Redis 服务 | 停止本机服务（`sc stop MySQL`），或改 compose 端口映射 |
+| Go 构建报 `mkdir C:\tmp...` | `C:\tmp` 被同名文件占用 | 删除占位文件重建目录，或设置 `GOTMPDIR` |
+| 登录接口返回 503 | 未配置 WPS 凭证 | 在 `.env` 配置 `WPS_CLIENT_ID` / `WPS_CLIENT_SECRET` |
+| 语音无法作答（502） | 缺阿里云语音 Key | 配置 `ALIYUN_ACCESS_KEY_ID/SECRET/NLS_APP_KEY` |
+| 开始面试返回 502 | 缺 DeepSeek Key | 配置 `DEEPSEEK_API_KEY` |
+| 图片导入 502 | 缺 OCR Key | 配置 OCR Key 或改用文字粘贴 |
+| 文件上传 502 | 缺 OSS 配置 | 配置 OSS 或直接填写 JD 文本 |
+| `docker compose up` 提示镜像拉取慢 | 网络原因 | 配置 Docker 镜像加速器后重试 |
+
+---
 
 ## 功能总览
 
@@ -219,6 +329,8 @@ npm run dev            # 默认 http://localhost:5174
 - **画像与成长分析**：基于历史面试的薄弱维度画像、成长趋势。
 - **摄像头表情/行为信号分析（可选，V14）**：见下节。
 
+---
+
 ## Demo 流程
 
 1. **登录**：打开 `/login`，点击 WPS 授权入口完成 OAuth 登录。
@@ -229,9 +341,11 @@ npm run dev            # 默认 http://localhost:5174
 6. **结束**：正常结束（WS `done`）或强制结束（HTTP）。
 7. **报告**：查看四维评分、优缺点、建议；如勾选了摄像头分析，另有「行为信号（辅助参考）」卡片。
 
+---
+
 ## 摄像头表情/行为信号分析（V14）
 
-创建面试时勾选「开启摄像头分析（可选）」（默认关闭）后，面试期间在**浏览器本地**对摄像头画面做实时分析，作为报告中的**辅助反馈**——**不参与四维评分**，不引入数字人形象。面试全程为语音作答，勾选后分析始终生效。
+创建面试时勾选「开启摄像头分析（可选）」（默认关闭）后，面试期间在**浏览器本地**对摄像头画面做实时分析，作为报告中的**辅助反馈**——**不参与四维评分**。面试全程为语音作答，勾选后分析始终生效。
 
 ### 工作原理（隐私优先）
 
@@ -251,17 +365,20 @@ npm run dev            # 默认 http://localhost:5174
 - **静默降级**：浏览器不支持 / 模型加载失败 / 用户拒绝权限 / 摄像头被遮 → 不启分析，面试正常进行，报告不显示该卡片。
 - **提示**：启发式规则为近似估计，报告明确标注「本指标基于表情动作统计，仅供参考，不计入评分」。
 
-## Backend tests
+---
 
-多数后端集成测试需要可达的 MySQL（使用 `interview` 库并只清理自己的测试用户）。通过 `MYSQL_DSN` 指向实例（仓库 Docker 容器密码为 `123456`）：
+## 测试
+
+后端集成测试需要可达的 MySQL（使用 `interview` 库并只清理自己的测试用户）。通过 `MYSQL_DSN` 指向实例（仓库 Docker 容器密码为 `123456`）：
 
 ```bash
+# 先确保 Docker MySQL 已启动（bash start-dev.sh 或 docker compose up -d）
 MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./... -p 1
 ```
 
-数据库与其他进程/并行任务共享时建议加 `-p 1`，避免偶发的 MySQL `Error 1213` 死锁。`V14` 新增的 `internal/behavior` 测试（幂等保存、归属校验、校验边界、无记录返回 `available:false`）同样需要真实 MySQL。
+数据库与其他进程/并行任务共享时建议加 `-p 1`，避免偶发的 MySQL `Error 1213` 死锁。
 
-前端测试（沙箱内需本地 preload，非沙箱环境直接）：
+前端测试：
 
 ```bash
 cd frontend
@@ -269,6 +386,8 @@ npm run test   # vitest
 npm run lint   # oxlint
 npx tsc -b     # 类型检查
 ```
+
+---
 
 ## 已知限制
 
@@ -279,6 +398,8 @@ npx tsc -b     # 类型检查
 - **A3/A6 需要 `DEEPSEEK_API_KEY`**：完整端到端验收（开始面试 + 评分报告）需要有效 DeepSeek Key。
 - **语音服务为硬依赖**：语音是唯一作答方式，阿里云语音（ASR/TTS）不可用时面试无法作答/播报。
 - **表情分析为启发式**：非科学级情绪识别；光照差/侧脸/遮挡时关键点检测可能失败（报「未检测到清晰人脸」）。升级路径是本地小型 ONNX 情绪模型（仍不上传画面）。
+
+---
 
 ## 项目结构
 
@@ -297,7 +418,7 @@ backend/                  Go API（Gin）、迁移、内部包
     expression/           表达分析（语速/口头禅/句长）
     upload/               OSS 服务端代理上传/读取（HMAC-SHA1 签名）
     ws/                   WebSocket 直播
-  migrations/             001..017 数据库迁移（015 = WPS OAuth + username 补齐；016 = WPS token 持久化；017 = WPS OAuth 用户列补齐）
+  migrations/             001..018 数据库迁移（015 = WPS OAuth；016 = WPS token 持久化；017 = WPS OAuth 用户列补齐；018 = 题目 kind 字段）
 frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis

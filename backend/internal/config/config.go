@@ -44,7 +44,7 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		HTTPAddr:              getenv("HTTP_ADDR", ":18080"),
-		MySQLDSN:              getenv("MYSQL_DSN", "root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4&loc=Local"),
+		MySQLDSN:              getenv("MYSQL_DSN", "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4&loc=Local"),
 		RedisAddr:             getenv("REDIS_ADDR", "127.0.0.1:6379"),
 		JWTSecret:             os.Getenv("JWT_SECRET"),
 		WPSClientID:           os.Getenv("WPS_CLIENT_ID"),
