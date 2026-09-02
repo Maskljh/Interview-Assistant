@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ApiError } from '../api/client';
+import { ApiError, getApiBase, getToken } from '../api/client';
 import {
   deleteQuestion,
   deleteQuestions,
@@ -17,9 +17,9 @@ import {
   type MockJobInfoItem,
   type MockQuestion,
 } from '../lib/mockData';
-import type { ResumeFile } from '../api/resumes';
+import { listResumes, type ResumeFile } from '../api/resumes';
 import './InterviewPages.css';
-import DesignSidebar from '../components/DesignSidebar';
+import TopBar from '../components/TopBar';
 import { recognizeImage } from '../api/ocr';
 import ConfirmModal from '../components/ConfirmModal';
 import QuestionImportModal from '../components/QuestionImportModal';
@@ -58,15 +58,16 @@ const SORT_LABELS: Record<string, string> = {
 
 /** 主页面：面试信息管理（题库 / 简历 / 岗位信息 3 tab）。 */
 export default function ManagePage() {
-  const [activeTab, setActiveTab] = useState<ManageTab>('question');
+  const [activeTab, setActiveTab] = useState<ManageTab>('resume');
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const compute = () => {
-      const workspaceWidth = Math.max(window.innerWidth - 218, 1);
-      const scale = Math.min(workspaceWidth / 938, window.innerHeight / 692);
+      // v2.0：顶栏（64px）占满整宽，画布从视口宽度计算、高度扣除顶栏
+      const workspaceWidth = Math.max(window.innerWidth, 1);
+      const scale = Math.min(workspaceWidth / 938, (window.innerHeight - 64) / 692);
       const fit = Math.max(scale, 0.2);
       root.style.setProperty('--home-fit', fit.toFixed(4));
       root.style.setProperty('--home-canvas-width', `${(workspaceWidth / fit).toFixed(2)}px`);
@@ -85,28 +86,20 @@ export default function ManagePage() {
     <div id="design-root" ref={rootRef}>
       <section className="manage screen">
         <section className="home-page management-page">
-          <DesignSidebar active="manage" />
+          <TopBar active="manage" />
           <div className="home-main management-main">
             <img className="home-glow" src={homeGlow} alt="" />
             <header className="home-banner management-banner">
               <img src={homeLogo} alt="面知" />
               <div>
-                <h1>面知，把每一场模拟变成下一次可验证的进步</h1>
-                <p>面试可定制、历史可复盘、进步可感知</p>
+                <small className="management-kicker">CASEROOM</small>
+                <h1>面试信息管理</h1>
+                <p>管理简历、岗位信息与题库，为每次模拟提供定制化方案。</p>
               </div>
             </header>
             <section className="management-card">
               <div className="management-layout">
                 <div className="management-tabs" role="tablist" aria-label="面试信息管理分类">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === 'question'}
-                    className={activeTab === 'question' ? 'active' : ''}
-                    onClick={() => setActiveTab('question')}
-                  >
-                    题库管理
-                  </button>
                   <button
                     type="button"
                     role="tab"
@@ -124,6 +117,15 @@ export default function ManagePage() {
                     onClick={() => setActiveTab('job')}
                   >
                     岗位信息管理
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'question'}
+                    className={activeTab === 'question' ? 'active' : ''}
+                    onClick={() => setActiveTab('question')}
+                  >
+                    题库管理
                   </button>
                 </div>
                 {activeTab === 'question' ? (
@@ -744,6 +746,135 @@ function QuestionBankPanel() {
   );
 }
 
+/** 懒加载 pdfjs：只在真正渲染 PDF 预览时加载，减小首屏体积、规避测试环境 DOMMatrix 缺失。 */
+async function loadPdfjs() {
+  const pdfjs = await import('pdfjs-dist');
+  const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  return pdfjs;
+}
+
+function isPdfName(name: string): boolean {
+  return /\.pdf$/i.test(name);
+}
+
+/**
+ * 内嵌简历预览：点击某条简历后，右侧面板直接渲染该简历的真实预览。
+ * - PDF：pdfjs 逐页渲染为图片（还原真实排版），加载失败回退到 resume_text 文本；
+ * - docx/txt/md 等：直接展示解析后的 resume_text 文本。
+ */
+function ResumeInlinePreview({ resume }: { resume: ResumeFile }) {
+  const [pages, setPages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [pdfFailed, setPdfFailed] = useState(false);
+  const cancelRef = useRef(false);
+  const isPdf = isPdfName(resume.file_url || resume.name);
+
+  useEffect(() => {
+    cancelRef.current = false;
+    setPages([]);
+    setError('');
+    setPdfFailed(false);
+    if (!isPdf) return;
+
+    const renderPdf = async (data: ArrayBuffer) => {
+      const { getDocument } = await loadPdfjs();
+      const pdf = await getDocument({ data }).promise;
+      const rendered: string[] = [];
+      for (let i = 1; i <= pdf.numPages; i += 1) {
+        if (cancelRef.current) break;
+        const page = await pdf.getPage(i);
+        const base = page.getViewport({ scale: 1 });
+        // 按设备像素比放大渲染，避免高分屏上预览模糊；上限 2 防止超大 canvas。
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const scale = (560 / base.width) * dpr;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+        rendered.push(canvas.toDataURL('image/png'));
+      }
+      if (!cancelRef.current) setPages(rendered);
+      await pdf.cleanup().catch(() => {});
+    };
+
+    setLoading(true);
+    (async () => {
+      try {
+        const fileUrl = resume.file_url;
+        if (fileUrl) {
+          const full = fileUrl.startsWith('http')
+            ? fileUrl
+            : `${getApiBase()}${fileUrl}`;
+          const token = getToken();
+          const res = await fetch(full, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!res.ok) throw new Error(`fetch ${res.status}`);
+          await renderPdf(await res.arrayBuffer());
+        }
+      } catch {
+        if (!cancelRef.current) {
+          // PDF 加载/渲染失败时回退到文本预览（简历库 resume_text 仍可用）。
+          if ((resume.resume_text || '').trim()) setPdfFailed(true);
+          else setError('无法加载简历文件，请稍后重试');
+        }
+      } finally {
+        if (!cancelRef.current) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelRef.current = true;
+    };
+  }, [resume.id, resume.file_url, resume.name, isPdf]);
+
+  // 非 PDF：直接展示解析文本。
+  if (!isPdf) {
+    const text = (resume.resume_text || '').trim();
+    return (
+      <div className="resume-inline-preview">
+        {text ? (
+          <pre className="resume-inline-text">{text}</pre>
+        ) : (
+          <span className="resume-inline-empty">该简历没有可预览的文本内容</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="resume-inline-preview">
+      {loading && <span className="resume-inline-loading">正在加载简历…</span>}
+      {error && <span className="resume-inline-error">{error}</span>}
+      {!loading && !error && !pdfFailed && pages.length === 0 && (
+        <span className="resume-inline-empty">PDF 中没有可渲染的页面</span>
+      )}
+      {!loading && !error && !pdfFailed && pages.map((src, i) => (
+        <img
+          key={src.slice(0, 32) + String(i)}
+          src={src}
+          alt={`简历第 ${i + 1} 页`}
+          className="resume-inline-page"
+        />
+      ))}
+      {!loading && !error && pdfFailed && (resume.resume_text || '').trim() && (
+        <>
+          <span className="resume-inline-note">PDF 预览失败，已展示文本内容</span>
+          <pre className="resume-inline-text">{resume.resume_text}</pre>
+        </>
+      )}
+      {!loading && !error && pdfFailed && !(resume.resume_text || '').trim() && (
+        <span className="resume-inline-empty">该简历没有可预览的文本内容</span>
+      )}
+    </div>
+  );
+}
+
 /** ────────── 简历管理面板 ────────── */
 function ResumeManagementPanel() {
   const [resumes, setResumes] = useState<ResumeFile[]>(mockResumeFiles);
@@ -755,6 +886,22 @@ function ResumeManagementPanel() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 进入面板时从后端加载简历库（含 file_url/resume_text），失败则回退到演示数据
+  useEffect(() => {
+    let cancelled = false;
+    listResumes()
+      .then((items) => {
+        if (cancelled || !items.length) return;
+        setResumes(items);
+      })
+      .catch(() => {
+        // 后端不可用时保留 mock 演示数据，不阻塞面板
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visible = useMemo(
     () =>
@@ -774,12 +921,13 @@ function ResumeManagementPanel() {
     setUploading(true);
     setError('');
     try {
-      await extractResumeText(file);
+      const text = await extractResumeText(file);
       const next: ResumeFile = {
         id: Date.now(),
         name: file.name,
         file_url: '',
         size_bytes: file.size,
+        resume_text: text,
         updated_at: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
       };
       setResumes((prev) => [next, ...prev]);
@@ -912,16 +1060,7 @@ function ResumeManagementPanel() {
           {selected && <small>{selected.name}</small>}
         </div>
         {selected ? (
-          <div className="resume-preview-paper">
-            <span>PDF</span>
-            <strong>{selected.name}</strong>
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-            <em>文件预览</em>
-          </div>
+          <ResumeInlinePreview resume={selected} />
         ) : (
           <div className="resume-preview-empty">
             <span>选择简历进行预览</span>
@@ -943,6 +1082,7 @@ function ResumeManagementPanel() {
         }}
         onCancel={() => setDeleteId(null)}
       />
+
     </section>
   );
 }

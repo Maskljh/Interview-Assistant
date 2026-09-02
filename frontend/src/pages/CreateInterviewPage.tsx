@@ -772,11 +772,6 @@ export default function CreateInterviewPage() {
                       ? '正在创建面试…'
                       : '开始面试'}
                 </button>
-                {phase === 'generating' && (
-                  <p className="start-hint">
-                    正在根据岗位信息与简历生成面试题目，通常需要十几秒到一分钟，请耐心等待…
-                  </p>
-                )}
               </aside>
 
               <input

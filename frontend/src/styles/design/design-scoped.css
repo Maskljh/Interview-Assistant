@@ -360,7 +360,7 @@
 #design-root .home .interview-card .small-button, #design-root .home .interview-card .start-button {background:#5f6b7a}
 #design-root /* Interview-information management workspace. */
 .manage.screen {height:100vh;height:100dvh;min-height:0;overflow:hidden}
-#design-root .manage .home-page {position:relative;height:100%;min-height:0;overflow:hidden}
+#design-root .manage .home-page {position:relative;height:100%;min-height:0;overflow:hidden;background:#eee4d5!important}
 #design-root .manage .sidebar {width:218px}
 #design-root .manage .home-main {position:absolute;top:0;left:218px;width:var(--home-canvas-width,938px);height:692px;margin:0;min-width:0;padding:0;transform:scale(var(--home-fit,1));transform-origin:top left}
 #design-root .manage .home-glow {top:-86px;left:-70px;width:315px;opacity:.8}
@@ -982,3 +982,272 @@
 #design-root .record-list button {height:27px;border:1px solid #c8d7e8;border-radius:6px;background:#fffdf7;color:#4879b8;font-size:10px;font-weight:600}
 /* ---- 补充样式：认证错误提示（React 页注入） ---- */
 #design-root .auth-error {margin-top:12px;color:#d2403f;font-size:12px;line-height:1.6;text-align:left}
+
+/* ════════════════════════════════════════════════════════════════
+   v2.0 「日光档案室」主题 — 面试信息管理页覆盖块
+   依据：面知UI-v2.0.html（主题 A 最终级联值，getComputedStyle 权威提取）
+   作用域：#design-root .manage + .topbar，不影响其他页面
+   ════════════════════════════════════════════════════════════════ */
+/* ---- TopBar：藏蓝顶栏（v2.0 以顶栏替代侧边栏） ---- */
+#design-root .topbar {position:fixed;z-index:50;top:0;right:0;left:0;height:64px;display:flex;align-items:center;padding:0 34px;border-bottom:1px solid rgba(220,232,241,.42);background:#29465b;box-shadow:none;color:#fffdf7}
+#design-root .topbar>b {display:flex;align-items:center;gap:8px;min-width:275px;font:700 23px/1 Georgia,"Times New Roman","Noto Serif SC",serif;letter-spacing:.5px;color:#fffdf7}
+#design-root .topbar-mark {display:block;width:24px;height:24px;object-fit:contain;flex:0 0 auto;margin-left:-6px;transform:translateY(1px)}
+#design-root .topbar>b>span {white-space:nowrap;align-self:flex-end}
+#design-root .topbar>b small {color:#dce8f1;font:700 9px/1 Inter,"Microsoft YaHei",sans-serif;letter-spacing:1.2px;white-space:nowrap;margin:0 0 1px 3px;align-self:flex-end}
+#design-root .topbar nav {display:flex;align-self:stretch;align-items:stretch;gap:4px;position:absolute;top:0;left:50%;height:100%;transform:translateX(-50%)}
+#design-root .topbar nav button {position:relative;min-width:98px;padding:0 15px;background:transparent;color:#c6d5df;font-size:13px;font-weight:600;white-space:nowrap}
+#design-root .topbar nav button:hover {color:#fffdf8;background:transparent}
+#design-root .topbar nav button.selected {color:#fffdf7}
+#design-root .topbar nav button.selected::after {content:"";position:absolute;right:15px;bottom:0;left:15px;height:3px;background:#dce8f1}
+#design-root .topbar-profile {display:flex;align-items:center;gap:8px;margin-left:auto;color:#fffdf7;font-size:12px}
+#design-root .topbar-profile>span {display:grid;width:27px;height:27px;place-items:center;border-radius:50%;background:transparent;border:2px solid #dce8f1;color:#fff;font:700 12px "Noto Serif SC",serif;overflow:hidden}
+#design-root .topbar-profile>span img {width:100%;height:100%;border-radius:50%;object-fit:cover}
+#design-root .topbar-profile strong {font-size:12px;color:inherit}
+#design-root .topbar-profile button {margin-left:5px;padding:6px 9px;border:1px solid rgba(215,197,168,.45);background:transparent;color:#dce8f1;font-size:11px}
+#design-root .topbar-profile button:hover {border-color:#9a7b45;color:#dce8f1}
+@media (max-width:780px) {
+  #design-root .topbar {height:58px;padding:0 16px}
+  #design-root .topbar>b {min-width:auto;font-size:20px}
+  #design-root .topbar>b small, #design-root .topbar-profile strong {display:none}
+  #design-root .topbar nav {margin-left:18px;overflow:auto;position:static;transform:none}
+  #design-root .topbar nav button {min-width:auto;padding:0 10px;font-size:12px}
+  #design-root .topbar-profile {margin-left:10px}
+}
+
+/* ---- 管理页画布：顶栏下移 + 日光纸底斜纹 ---- */
+#design-root .manage .home-page {position:relative;height:100%;min-height:0;overflow:hidden}
+#design-root .manage .home-main {position:absolute;top:64px;left:0;width:var(--home-canvas-width,938px);height:692px;margin:0;min-width:0;padding:0;transform:scale(var(--home-fit,1));transform-origin:top left;background-color:#eee4d5;background-image:repeating-linear-gradient(74deg,transparent 0,transparent 23px,rgba(41,70,91,.028) 24px,rgba(41,70,91,.028) 26px,transparent 27px,transparent 30px)}
+#design-root .manage .home-glow {display:none}
+
+/* ---- 档案盒 banner：kicker + 标题 + CONFIDENTIAL 印章 ---- */
+#design-root .manage .management-banner {position:absolute;top:64px;right:84px;left:84px;width:auto;height:60px;padding:0;border:0;background:transparent;box-shadow:none;z-index:2;pointer-events:none;display:flex;align-items:center;justify-content:flex-start;gap:20px}
+#design-root .manage .management-banner img {display:none}
+#design-root .manage .management-banner>div {display:block}
+#design-root .management-kicker {display:block;color:#6e8da6;font:700 9px/1 "JetBrains Mono","Cascadia Mono","Courier New",monospace;letter-spacing:1.3px}
+#design-root .manage .home-banner h1 {margin:4px 0 1px;color:#29465b;font:700 23px/1 Georgia,"Times New Roman","Noto Serif SC",serif;letter-spacing:.2px}
+#design-root .manage .home-banner p {margin:0;color:#78828a;font-size:11px;line-height:1.25}
+#design-root .manage .management-banner::before {content:"CONFIDENTIAL";position:absolute;top:27px;right:0;padding:7px 11px;border:1px solid #8ea9bd;background:rgba(255,253,247,.82);color:#6e8da6;font:700 11px/1 "JetBrains Mono","Cascadia Mono","Courier New",monospace;letter-spacing:1.6px;transform:rotate(5deg);box-shadow:1px 2px 0 rgba(41,70,91,.08)}
+#design-root .manage .management-banner::after {display:none}
+
+/* ---- 档案盒 management-card：棕色标签 + 硬阴影 ---- */
+#design-root .manage .management-card {position:absolute;top:44px;right:64px;bottom:28px;left:64px;width:auto;height:auto;margin:0;padding:112px 22px 22px;border:1px solid #b9c9d5;border-radius:9px;background:#fffdf7;box-shadow:9px 11px 0 rgba(94,72,51,.13),0 8px 16px rgba(41,70,91,.1);overflow:visible;display:block}
+#design-root .manage .management-card::before {content:"";position:absolute;top:-15px;left:50%;width:166px;height:28px;border:1px solid #8f6544;background:#a87852;box-shadow:0 2px 3px rgba(94,72,51,.16);z-index:1;transform:translateX(-50%)}
+#design-root .manage .management-card::after {display:none}
+#design-root .manage .management-layout {position:relative;z-index:2;display:grid;grid-template-rows:38px minmax(0,1fr);gap:14px;min-height:0}
+
+/* ---- 档案文件夹 tabs ---- */
+#design-root .manage .management-tabs {display:flex;align-items:end;gap:7px;border-bottom:1px solid #d8d0c3}
+#design-root .manage .management-tabs button {flex:0 0 auto;height:38px;padding:0 16px;border:1px solid transparent;border-bottom:0;border-radius:9px 9px 0 0;background:transparent;color:#657782;font-size:12px;font-weight:600;white-space:nowrap}
+#design-root .manage .management-tabs button.active {position:relative;border-color:#d2c8b8;background:#f7f1e5;color:#29465b;font-weight:700}
+#design-root .manage .management-tabs button.active::after {content:"";display:block;position:absolute;right:0;bottom:-1px;left:0;height:1px;background:#fffdf7}
+#design-root .manage .management-tabs button:not(.active):hover {background:#f7f1e5;color:#29465b}
+#design-root .manage .management-tabs button:active {transform:translateY(1px)}
+
+/* ---- 档案戳按钮（硬阴影） ---- */
+#design-root .manage .management-action {border-radius:1px!important;background:#29465b!important;box-shadow:3px 3px 0 #a9c1b2!important;color:#fff!important}
+#design-root .manage .management-action:active {transform:translate(1px,1px)!important;box-shadow:2px 2px 0 #a9c1b2!important}
+#design-root .dialog-actions .management-action {border-radius:1px;background:#29465b;box-shadow:3px 3px 0 #a9c1b2;color:#fff}
+
+/* ---- 题库面板：档案纸色调 ---- */
+#design-root .manage .question-bank-page {grid-template-rows:30px minmax(0,1fr);row-gap:12px}
+#design-root .manage .question-tools {height:30px;align-items:flex-start;gap:12px;position:relative;z-index:2}
+#design-root .manage .question-search {width:260px;height:30px;padding:0 12px;border:1px solid #d9e0e8;border-radius:8px;background:#fffdf7;color:#5f6b7a;font-size:11px}
+#design-root .manage .question-search input {color:#29465b}
+#design-root .manage .question-search>span {color:#5f6b7a;font-size:11px;font-weight:600;white-space:nowrap}
+#design-root .manage .question-filters {align-items:flex-start;gap:10px}
+#design-root .manage .question-custom-select {height:30px;border-color:#c7d7e7;background:#f5f2ec}
+#design-root .manage .question-table {border-top-color:#d8d0c3}
+#design-root .manage .question-table-head {background:#f7f1e5}
+#design-root .manage .question-bank-group .question-table {border-color:#d8d0c3;background:#fffdf7}
+#design-root .manage .question-row {grid-template-columns:32px 54px minmax(280px,600px) minmax(150px,1fr) 104px}
+#design-root .manage .question-row strong {color:#29465b}
+#design-root .manage .question-row-actions {justify-content:flex-start}
+/* ---- v2.0：成长看板入口隐藏（与设计稿一致） ---- */
+#design-root .topbar nav [data-action="growth"] {display:none!important}
+/* ---- v2.0：右侧内嵌简历预览（点击简历后直接渲染真实预览） ---- */
+#design-root .manage .resume-inline-preview {display:grid;align-content:start;justify-items:center;gap:11px;min-height:0;padding:14px 12px;overflow:auto;border:1px solid #e4e7ea;border-radius:6px;background:#f5f2ec;scrollbar-color:#c7c1b7 transparent;scrollbar-width:thin}
+#design-root .manage .resume-inline-preview::-webkit-scrollbar {width:5px}
+#design-root .manage .resume-inline-preview::-webkit-scrollbar-thumb {border-radius:4px;background:#c7c1b7}
+#design-root .manage .resume-inline-page {width:100%;max-width:560px;border:1px solid #e2e0da;border-radius:4px;box-shadow:0 2px 6px rgba(94,72,51,.10)}
+#design-root .manage .resume-inline-text {width:100%;max-width:560px;margin:0;padding:12px 14px;font-size:12px;line-height:1.7;color:#3a4149;white-space:pre-wrap;word-break:break-word;background:#fffdf9;border:1px solid #e4e7ea;border-radius:6px}
+#design-root .manage .resume-inline-loading, #design-root .manage .resume-inline-error, #design-root .manage .resume-inline-empty {justify-self:center;padding:26px 0;color:#89939d;font-size:12px}
+#design-root .manage .resume-inline-error {color:#a06a67}
+#design-root .manage .resume-inline-note {width:100%;max-width:560px;margin:0 0 2px;padding:6px 10px;font-size:11px;color:#8a6d3b;background:#fdf6e3;border:1px solid #ecd9a8;border-radius:6px}
+/* =====================================================================
+   v2.0 面试间：深蓝审讯室三栏（面试材料 / 视频听证 / 实时点评）
+   与设计稿 #interview 页面一致；保留全部功能（数字人/摄像头/语音/控制）。
+   ===================================================================== */
+#design-root .interview.screen {background:#eee4d5}
+#design-root .interview .workspace-page, #design-root .interview .workspace-main {background:#eee4d5}
+#design-root .interview .workspace-main {top:64px!important;left:0!important;width:var(--home-canvas-width,938px);height:692px;transform:scale(var(--home-fit,1));transform-origin:top left}
+#design-root .interview .workspace-main::before {display:none!important}
+#design-root .interview .workspace-banner {display:none!important}
+
+/* ── 房间卡：深蓝审讯室墙 + 硬阴影 ── */
+#design-root .interview .room-card.intel-room.interview-room {position:absolute!important;top:32px!important;right:64px!important;bottom:28px!important;left:64px!important;height:620px!important;padding:0!important;overflow:hidden;border:1px solid #38596c!important;border-radius:10px!important;background-color:#203e50!important;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0,rgba(255,255,255,.028) 1px,transparent 1px,transparent 5px)!important;box-shadow:7px 9px 0 rgba(94,72,51,.07),0 8px 16px rgba(41,70,91,.08)!important}
+
+/* ── 顶栏：LIVE INTERVIEW / 面试间 + 返回 ── */
+#design-root .interview .room-case-head {height:72px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;margin:0!important;padding:14px 22px!important;border:0!important;border-bottom:1px solid rgba(190,211,220,.2)!important;background-color:#17303f!important;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0,rgba(255,255,255,.028) 1px,transparent 1px,transparent 5px)!important;box-shadow:none!important}
+#design-root .interview .room-case-head small {display:block!important;color:#a9c6d5!important;font:700 9px/1 var(--font-data)!important;letter-spacing:1px!important}
+#design-root .interview .room-case-head h2 {margin:4px 0 0!important;color:#f2f6f4!important;font:700 22px/1 Georgia,"Times New Roman","Noto Serif SC",serif!important;letter-spacing:0!important}
+#design-root .interview .room-actions {display:flex;align-items:center;gap:6px;margin-left:5px;padding-left:9px;border-left:1px solid rgba(190,211,220,.2)}
+#design-root .interview .room-back {height:25px!important;padding:0 9px!important;border:1px solid rgba(190,211,220,.35)!important;border-radius:3px!important;background:rgba(255,255,255,.06)!important;color:#dbe8eb!important;font-size:10px!important;font-weight:400!important;box-shadow:none!important}
+
+/* ── 三栏网格 ── */
+#design-root .interview .room-grid {position:absolute!important;top:72px!important;right:0!important;bottom:0!important;left:0!important;display:grid!important;grid-template-columns:20% minmax(0,1fr) 25%!important;grid-template-rows:minmax(0,1fr)!important;align-items:stretch!important;gap:0!important;height:auto!important;margin:0!important;padding:0!important;border:0!important;background-color:#203e50!important;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0,rgba(255,255,255,.028) 1px,transparent 1px,transparent 5px)!important;box-shadow:none!important}
+/* ── 左栏：面试材料（便签纸） ── */
+#design-root .interview .interview-materials {display:flex;flex-direction:column;align-self:stretch!important;height:100%!important;min-height:0!important;padding:45px 15px 18px!important;background:rgba(18,49,64,.22)!important;border-right:1px solid rgba(190,211,220,.2)!important;min-width:0}
+#design-root .interview .interview-materials>small, #design-root .interview .live-feedback>header small {display:block;color:#a9c6d5;font:700 9px/1 var(--font-data);letter-spacing:1px}
+#design-root .interview .interview-materials h3, #design-root .interview .live-feedback h3 {margin:7px 0 16px;color:#f2f6f4;font:700 17px/1 Georgia,"Times New Roman","Noto Serif SC",serif}
+#design-root .interview .material-note {position:relative;margin-top:14px;padding:18px 20px!important;background:#fffdf7!important;border:1px solid #dbe2e9!important;border-radius:10px!important;box-shadow:4px 5px 0 rgba(41,70,91,.12);transform:rotate(-.7deg)}
+#design-root .interview .material-note:before {content:"";position:absolute;top:-8px;left:50%;width:11px;height:11px;border-radius:50%;background:#b85a50;box-shadow:0 1px 2px rgba(0,0,0,.25);transform:translateX(-50%)}
+#design-root .interview .material-note p {margin:0;padding:0 0 9px;color:#657782;font-size:10px;line-height:1.4}
+#design-root .interview .material-note p:last-child {padding-bottom:0}
+#design-root .interview .material-note small {display:block;color:#7b8f9e;font:700 8px/1 var(--font-data);letter-spacing:.7px}
+#design-root .interview .material-note strong {display:block;overflow:hidden;margin-top:3px;color:#405565;font-size:11px;white-space:nowrap;text-overflow:ellipsis}
+#design-root .interview .interview-materials>footer {display:none!important}
+/* ── 中栏：视频听证 ── */
+#design-root .interview .video-hearing {display:grid;grid-template-rows:27px minmax(0,1fr) 82px;grid-template-columns:minmax(0,1fr);align-self:stretch!important;height:100%!important;min-height:0!important;gap:0;min-width:0;padding:18px!important;background:transparent!important;border-right:0!important}
+#design-root .interview .video-status {display:flex;align-items:center;gap:9px;justify-content:flex-start;min-width:0;color:#c9dbe4;font:700 9px/1 var(--font-data);letter-spacing:.7px}
+#design-root .interview .video-status time {padding-left:9px;border-left:1px solid rgba(190,211,220,.25);color:#f2f6f4}
+#design-root .interview .video-status time:before {content:"";display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:#d86d63;box-shadow:0 0 0 3px rgba(216,109,99,.13);vertical-align:middle}
+#design-root .interview .video-status i, #design-root .interview .video-status span {display:none!important}
+#design-root .interview .video-status-actions {display:none!important}
+#design-root .interview .video-status-actions .voice-room-phase {color:#a9c6d5;font:700 8px/1 var(--font-data);letter-spacing:.7px;white-space:nowrap;display:none!important}
+#design-root .interview .video-status-actions .voice-room-tts-btn, #design-root .interview .video-status-actions .video-avatar-btn, #design-root .interview .video-status-actions .video-record-btn {height:25px;padding:0 9px;border:1px solid rgba(190,211,220,.35);border-radius:3px;background:rgba(255,255,255,.06);color:#dbe8eb;font-size:10px;font-weight:400;white-space:nowrap}
+#design-root .interview .video-status-actions .video-record-btn {border-color:#dbe8eb;background:#f1f5f2;color:#29465b;font-weight:600}
+#design-root .interview .video-status-actions .video-record-btn.is-recording {border-color:#d86d63;background:#d86d63;color:#fff}
+#design-root .interview .video-status-actions .video-avatar-btn.is-on {border-color:#dbe8eb;color:#f2f6f4}
+#design-root .interview .video-status-actions .video-avatar-btn:disabled, #design-root .interview .video-status-actions .voice-room-tts-btn:disabled {opacity:.5;cursor:not-allowed}
+#design-root .interview .video-status-actions .voice-room-retry {display:inline-flex;align-items:center;gap:6px}
+#design-root .interview .video-status-actions .voice-room-retry .interview-inline-link {color:#ffb4a8;font-size:9px}
+
+/* 视频窗口对 */
+#design-root .interview .video-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-height:0;padding:0;background:transparent;box-shadow:none;border:0!important;border-radius:0!important}
+#design-root .interview .video-frame {position:relative;overflow:hidden;min-height:0;border:1px solid rgba(190,211,220,.42);border-radius:10px;background:#183545!important;box-shadow:none!important;padding:0!important;margin:0!important}
+#design-root .interview .video-frame header {position:absolute;z-index:3;top:9px;right:10px;left:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#dce8f1;font:700 8px/1 var(--font-data);letter-spacing:.7px}
+#design-root .interview .video-frame header em {display:flex!important;align-items:center!important;gap:8px!important;color:#d7e6eb!important;font-style:normal!important}
+#design-root .interview .video-frame header em b {font:600 8px/1 var(--font-data)!important;color:#4879b8!important}
+#design-root .interview .video-frame header em i {color:#ff8b7d!important;font:700 9px/1 var(--font-data)!important;font-style:normal!important}
+#design-root .interview .video-frame header em i:before {content:"";display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:#d86d63;box-shadow:0 0 0 3px rgba(216,109,99,.13);vertical-align:middle}
+#design-root .interview .video-frame header em .cam-status-icons {display:inline-flex;align-items:center;gap:7px;color:#4879b8!important}
+#design-root .interview .video-frame header em .cam-status-icons svg {display:block}
+#design-root .interview .video-frame footer {position:absolute;z-index:3;right:10px;bottom:9px;left:10px;color:#b8ccd7;font-size:9px}
+#design-root .interview .video-frame-body {position:absolute;inset:0;padding:22px 8px 26px;display:flex;align-items:stretch}
+/* 当前问题卡 */
+#design-root .interview .live-question {margin:14px 0 0!important;padding:18px 20px!important;border:1px solid #dbe2e9!important;border-radius:10px!important;background:#fffdf7!important;box-shadow:none!important;min-width:0}
+#design-root .interview .live-question small {display:block;color:#547a96!important;font:700 8px/1 var(--font-data)!important;letter-spacing:.7px!important;opacity:1!important}
+#design-root .interview .live-question p {margin:6px 0 0!important;color:#29465b!important;font-size:11px!important;line-height:1.45!important;font-weight:600!important;opacity:1!important;white-space:normal}
+#design-root .interview .live-question footer {display:none!important}
+
+/* ── 右栏：实时点评 ── */
+#design-root .interview .live-feedback {display:flex!important;flex-direction:column;align-self:stretch!important;height:100%!important;min-height:0!important;min-width:0;padding:45px 15px 14px!important;background:rgba(18,49,64,.22)!important;border-left:1px solid rgba(190,211,220,.2)!important}
+#design-root .interview .live-feedback>header {padding-right:0!important;padding-bottom:11px;border:0!important;border-bottom:0!important}
+#design-root .interview .live-feedback>header small {color:#a9c6d5!important}
+#design-root .interview .live-feedback>header h3 {color:#f2f6f4!important}
+#design-root .interview .feedback-list {display:grid;align-content:start;gap:9px;max-height:348px;overflow:auto;margin-top:12px;padding-right:3px;scrollbar-color:rgba(190,211,220,.35) transparent;scrollbar-width:thin}
+#design-root .interview .feedback-list::-webkit-scrollbar {width:5px}
+#design-root .interview .feedback-list::-webkit-scrollbar-thumb {border-radius:4px;background:rgba(190,211,220,.35)}
+#design-root .interview .feedback-item {position:relative;padding:18px 20px!important;border:1px solid #dbe2e9!important;border-radius:10px!important;background:rgba(15,42,55,.74)!important;background-image:none!important}
+#design-root .interview .feedback-item.pending {border:1px solid #dbe2e9!important;border-radius:10px!important;background:rgba(15,42,55,.74)!important;background-image:none!important}
+#design-root .interview .feedback-item strong {display:block;color:#eef5f5;font-size:10px;font-weight:700}
+#design-root .interview .feedback-item p {margin:4px 0 0;color:#c2d2d9;font-size:10px;line-height:1.45}
+#design-root .interview .feedback-item time {display:block;margin-top:5px;color:#89a7b6;font:700 8px/1 var(--font-data)}
+#design-root .interview .feedback-item .interview-loading {color:#89a7b6;font-size:10px}
+
+/* 右栏底部操作按钮（暂停 / 跳过 / 结束） */
+#design-root .interview .feedback-actions {display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:12px}
+#design-root .interview .feedback-actions button {height:24px;padding:0 8px;border:1px solid rgba(190,211,220,.35);border-radius:3px;background:rgba(255,255,255,.06);color:#dbe8eb;font-size:10px;font-weight:400;white-space:nowrap}
+#design-root .interview .feedback-actions button:disabled {opacity:.5;cursor:not-allowed}
+#design-root .interview .feedback-actions .end {border-color:#dbe8eb;background:#f1f5f2;color:#29465b;font-weight:600}
+
+/* ── 数字人 / 摄像头在视频窗内的适配 ── */
+#design-root .interview .video-frame-body .ir-avatar {flex:1;min-width:0;min-height:0;border:0;border-radius:0;background:transparent}
+#design-root .interview .video-frame-body .ir-avatar-head {display:none!important}
+#design-root .interview .video-frame-body .ir-avatar-stage {flex:1;height:auto;min-height:0;background:#183545!important}
+#design-root .interview .video-frame-body .ir-avatar-stage-inner {width:100%;height:100%}
+#design-root .interview .video-frame-body .room-camera {flex:1;min-width:0;min-height:0;padding:0;border:0;border-radius:0;background:transparent;display:flex;flex-direction:column;justify-content:center}
+#design-root .interview .video-frame-body .room-camera .room-card-title {display:none}
+#design-root .interview .video-frame-body .room-camera-frame {width:100%;height:100%;aspect-ratio:auto;border:0;border-radius:0;background:transparent}
+#design-root .interview .video-frame-body .room-camera-video {position:relative;z-index:2;width:100%;height:100%;object-fit:cover;display:block}
+#design-root .interview .video-frame-body .room-camera-placeholder, #design-root .interview .video-frame-body .room-camera-error {display:none!important}
+#design-root .interview .video-frame-body .interview-loading {align-self:center;width:100%;color:#b8ccd7;font-size:10px;text-align:center}
+/* ── 状态提示区（断线 / 致命错误 / 行为分析 / 暂存） ── */
+#design-root .interview .interview-room-status {position:absolute;z-index:6;right:14px;bottom:10px;left:14px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;pointer-events:none}
+#design-root .interview .interview-room-status>* {pointer-events:auto}
+#design-root .interview .interview-room-status .interview-error, #design-root .interview .interview-room-status .interview-room-status {margin:0;color:#c2d2d9;font-size:9px;line-height:1.5;text-align:right}
+#design-root .interview .interview-room-status .interview-room-pending {color:#e8c987}
+#design-root .interview .interview-room-status .behavior-light {display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;vertical-align:middle}
+#design-root .interview .interview-room-status .behavior-light--ok {background:#7fc9a0}
+#design-root .interview .interview-room-status .behavior-light--mid {background:#e8c987}
+#design-root .interview .interview-room-status .behavior-light--high {background:#e8887c}
+#design-root .interview .ir-disconnect {margin:0;padding:8px 12px;border:1px solid rgba(232,136,124,.35);border-radius:6px;background:rgba(60,22,26,.5);box-shadow:none}
+#design-root .interview .ir-disconnect p {margin:0 0 6px;color:#f0b4ae;font-size:10px;line-height:1.5}
+#design-root .interview .ir-disconnect-actions {display:flex;align-items:center;gap:12px}
+#design-root .interview .ir-disconnect .interview-inline-link {color:#c9dbe4;font-size:10px}
+#design-root .interview .ir-disconnect .interview-submit {height:26px;padding:0 12px;border:1px solid #dbe8eb;border-radius:4px;background:#f1f5f2;color:#29465b;font-size:10px;font-weight:600}
+
+/* 右栏转写空态 / 错误（深色底适配） */
+#design-root .interview .feedback-list .interview-room-error {padding:10px 12px;border:1px solid rgba(232,136,124,.35);border-radius:6px;background:rgba(60,22,26,.5)}
+#design-root .interview .feedback-list .interview-room-error .interview-error {margin:0 0 6px;color:#f0b4ae;font-size:10px}
+#design-root .interview .feedback-list .interview-room-error .interview-submit {height:24px;padding:0 10px;border:1px solid #dbe8eb;border-radius:4px;background:#f1f5f2;color:#29465b;font-size:10px}
+#design-root .interview .feedback-list .interview-room-error .interview-inline-link {margin-left:10px;color:#c9dbe4;font-size:10px}
+#design-root .interview .feedback-list .interview-loading {margin:8px 0;color:#89a7b6;font-size:10px}
+
+/* 旧布局残留清理（新结构不再输出这些节点） */
+#design-root .interview .room-card {display:block!important}
+#design-root .interview .room-card>i {display:none!important}
+/* 数字人加载/失败遮罩：背景与视频窗口一致，保留功能提示文字 */
+#design-root .interview .video-frame-body .ir-avatar-mask {background:#183545!important;font-size:10px;gap:6px}
+#design-root .interview .video-frame-body .ir-avatar-mask--error {color:#ffb4a8!important}
+
+/* ═══ 面试记录页 v2.0（records）═══ */
+#design-root .records.screen {background:#eee4d5!important}
+#design-root .records .home-page {position:relative;height:100%;min-height:0;overflow:hidden;padding-top:64px!important;background:#eee4d5!important}
+#design-root .records .records-main {position:absolute;top:64px!important;left:0!important;width:var(--home-canvas-width,938px);height:692px;margin:0;min-width:0;padding:0;transform:scale(var(--home-fit,1));transform-origin:top left;background-color:#eee4d5!important;background-image:repeating-linear-gradient(74deg,transparent 0,transparent 23px,rgba(41,70,91,.028) 24px,rgba(41,70,91,.028) 26px,transparent 27px,transparent 30px)!important;box-shadow:none;border:0}
+#design-root .records .records-card {position:absolute;top:44px!important;right:64px;left:64px;height:620px!important;padding:22px 22px!important;border:1px solid #d2c8b8!important;border-radius:9px!important;background:#fffdf7!important;box-shadow:9px 11px 0 rgba(94,72,51,.13),0 8px 16px rgba(41,70,91,.1)!important;overflow:visible}
+#design-root .records .records-card:before {content:"";position:absolute;top:-15px;left:50%;width:166px;height:28px;box-sizing:content-box;border:1px solid #8f6544;background:#a87852;box-shadow:0 2px 3px rgba(94,72,51,.16);transform:translateX(-50%)}
+#design-root .records .records-card:after {display:none!important}
+#design-root .records .records-card-head {display:block!important;padding-bottom:10px;border-bottom:1px solid #d8d0c3}
+#design-root .records .records-card-head small {display:block;color:#6e8da6;font:700 9px/1 var(--font-data);letter-spacing:1px}
+#design-root .records .records-card-head h2 {margin:5px 0 2px!important;color:#29465b!important;font:700 23px/1 Georgia,"Times New Roman","Noto Serif SC",serif!important;letter-spacing:.2px!important}
+#design-root .records .records-card-head p {margin:0!important;color:#78828a!important;font-size:11px!important;line-height:1.35!important}
+#design-root .records .records-metrics {display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px}
+#design-root .records .records-metrics article {position:relative;padding:9px 12px;border:1px solid #d7e2e8;background:#f7fbfd}
+#design-root .records .records-metrics small {display:block;color:#7b8f9e;font:700 8px/1 var(--font-data);letter-spacing:.7px}
+#design-root .records .records-metrics strong {display:inline-block;margin-top:5px;color:#29465b;font:700 22px/1 var(--font-data)}
+#design-root .records .records-metrics span {margin-left:4px;color:#7b8f9e;font-size:10px}
+#design-root .records .records-layout {display:grid;grid-template-columns:1.08fr .92fr;gap:15px;min-height:0;height:357px;margin-top:13px}
+#design-root .records .records-history, #design-root .records .records-growth {min-height:0;border:1px solid #d7e2e8;background:#fffdf7}
+#design-root .records .records-history {padding:14px;height:100%;max-height:100%;box-sizing:border-box;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(84,122,150,.45) transparent}
+#design-root .records .records-history::-webkit-scrollbar {width:6px}
+#design-root .records .records-history::-webkit-scrollbar-track {background:transparent}
+#design-root .records .records-history::-webkit-scrollbar-thumb {background:rgba(84,122,150,.45);border-radius:3px}
+#design-root .records .records-history::-webkit-scrollbar-thumb:hover {background:rgba(84,122,150,.7)}
+#design-root .records .records-history>header, #design-root .records .records-growth>header {display:flex;align-items:baseline;justify-content:space-between}
+#design-root .records .records-history h3, #design-root .records .records-growth h3, #design-root .records .records-abilities h3 {margin:0;color:#29465b;font:700 14px/1.2 "Noto Serif SC",Georgia,serif}
+#design-root .records .records-history header small, #design-root .records .records-growth header small {color:#7b8f9e;font-size:9px}
+#design-root .records .records-history>button {display:grid;grid-template-columns:minmax(0,1fr) 42px 32px 52px;gap:8px;align-items:center;width:100%;padding:11px 7px;border:0;border-bottom:1px solid #e5ecef;background:transparent;color:#405565;text-align:left;font-size:11px}
+#design-root .records .records-history>button:last-child {border-bottom:0}
+#design-root .records .records-history button span b {display:block;font-size:11px}
+#design-root .records .records-history button span small {display:block;margin-top:3px;color:#7b8f9e;font-size:9px}
+#design-root .records .records-history button i {color:#6f8d7d;font-size:9px;font-style:normal}
+#design-root .records .records-history button strong {color:#29465b;font:700 14px/1 var(--font-data)}
+#design-root .records .records-history button em {color:#547a96;font-size:9px;font-style:normal}
+#design-root .records .records-history button:hover {background:#f2f7fa}
+#design-root .records .records-history .interview-loading, #design-root .records .records-history .record-empty {margin:16px 0 0;color:#7b8f9e;font-size:11px}
+#design-root .records .records-growth {display:grid;grid-template-rows:auto 106px auto 1fr;padding:14px}
+#design-root .records .records-bars {display:flex;align-items:end;gap:12px;height:100px;margin:4px 6px 0;padding:0 10px;border-bottom:1px solid #d7e2e8}
+#design-root .records .records-bars i {display:block;width:14px;border-radius:3px 3px 0 0;background:#b8c9d2}
+#design-root .records .records-bars i.latest {background:#547a96}
+#design-root .records .records-abilities {margin-top:11px}
+#design-root .records .records-abilities>h3 {font-size:12px}
+#design-root .records .records-abilities p {display:grid;grid-template-columns:62px minmax(0,1fr) 22px;align-items:center;gap:7px;margin:6px 0;color:#657782;font-size:9px}
+#design-root .records .records-abilities p i {height:5px;overflow:hidden;background:#e0e9ec}
+#design-root .records .records-abilities p i b {display:block;height:100%;background:#6e8da6}
+#design-root .records .records-abilities p em {color:#405565;font:700 9px/1 var(--font-data);font-style:normal;text-align:right}
+#design-root .records .records-growth footer {align-self:end;margin-top:10px;padding-top:9px;border-top:1px solid #d8d0c3}
+#design-root .records .records-growth footer b {color:#29465b;font-size:10px}
+#design-root .records .records-growth footer p {margin:4px 0 0;color:#657782;font-size:9px;line-height:1.45}
+/* 隐藏旧版 dash 残留 */
+#design-root .records .dash, #design-root .records .dash-metrics, #design-root .records .record-list {display:none!important}

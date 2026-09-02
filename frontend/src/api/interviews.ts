@@ -47,6 +47,8 @@ export interface InterviewQuestion {
   id: number;
   seq: number;
   question: string;
+  /** self_intro=开场白 / bank=题库题 / generated=AI 生成补全题 */
+  kind?: string;
   intent: string | null;
   asked: boolean;
 }

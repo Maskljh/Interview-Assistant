@@ -4,7 +4,7 @@ import { ApiError } from '../api/client';
 import { listInterviews, type InterviewListItem } from '../api/interviews';
 import { STATUS_LABELS } from '../lib/labels';
 import './InterviewPages.css';
-import DesignSidebar from '../components/DesignSidebar';
+import TopBar from '../components/TopBar';
 import { mockRecords, type MockRecord } from '../lib/mockData';
 
 /** 把面试列表项渲染为记录行数据。 */
@@ -57,8 +57,9 @@ export default function InterviewListPage() {
     const root = rootRef.current;
     if (!root) return;
     const compute = () => {
-      const workspaceWidth = Math.max(window.innerWidth - 218, 1);
-      const scale = Math.min(workspaceWidth / 938, window.innerHeight / 692);
+      const workspaceWidth = Math.max(window.innerWidth, 1);
+      const workspaceHeight = Math.max(window.innerHeight - 64, 1);
+      const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
       const fit = Math.max(scale, 0.2);
       root.style.setProperty('--home-fit', fit.toFixed(4));
       root.style.setProperty('--home-canvas-width', `${(workspaceWidth / fit).toFixed(2)}px`);
@@ -141,57 +142,88 @@ export default function InterviewListPage() {
   return (
     <div id="design-root" ref={rootRef}>
       <section className="records screen">
-        <section className="workspace-page">
-          <DesignSidebar active="records" />
-          <main className="workspace-main">
-            <section className="dash">
-              <h1>面试记录</h1>
-              <p>沉淀每一次模拟面试，回看表现与复盘建议</p>
-              <div className="dash-metrics">
-                <b>
-                  累计模拟
+        <section className="home-page records-page">
+          <TopBar active="records" />
+          <main className="records-main">
+            <section className="records-card">
+              <header className="records-card-head">
+                <div>
+                  <small>INTERVIEW HISTORY</small>
+                  <h2>历史面试记录</h2>
+                  <p>沉淀每一次模拟，复盘成长线索与能力变化。</p>
+                </div>
+              </header>
+
+              <div className="records-metrics">
+                <article>
+                  <small>累计模拟</small>
                   <strong>{metrics.total}</strong>
-                  <small>次</small>
-                </b>
-                <b>
-                  最近表现
+                  <span>次</span>
+                </article>
+                <article>
+                  <small>平均表现</small>
                   <strong>{metrics.recent ?? '—'}</strong>
-                  <small>分</small>
-                </b>
-                <b>
-                  本周练习
+                  <span>平均分</span>
+                </article>
+                <article>
+                  <small>本周练习</small>
                   <strong>{metrics.week}</strong>
-                  <small>次</small>
-                </b>
+                  <span>次</span>
+                </article>
               </div>
-              {error && <p className="interview-error" role="alert">{error}</p>}
-              <article className="record-list">
-                <h2>历史记录</h2>
-                {loading ? (
-                  <p className="interview-loading">加载中…</p>
-                ) : rows.length === 0 ? (
-                  <p className="record-empty">还没有面试记录，开始你的第一场练习吧。</p>
-                ) : (
-                  rows.map((r) => (
-                    <p key={r.id}>
-                      <b title={r.title}>{r.title}</b>
-                      <span>{r.time}</span>
-                      <i>{r.status}</i>
-                      <strong>{r.score ?? '—'}</strong>
-                      <span className="record-actions">
-                        <button type="button" onClick={() => openReport(r.id)}>
-                          查看复盘
-                        </button>
-                      </span>
-                    </p>
-                  ))
-                )}
-              </article>
+
+              <div className="records-layout">
+                <article className="records-history">
+                  <header>
+                    <h3>历史记录</h3>
+                    <small>点击查看面试报告</small>
+                  </header>
+                  {loading ? (
+                    <p className="interview-loading">加载中…</p>
+                  ) : rows.length === 0 ? (
+                    <p className="record-empty">还没有面试记录，开始你的第一场练习吧。</p>
+                  ) : (
+                    rows.map((r) => (
+                      <button key={r.id} type="button" onClick={() => openReport(r.id)}>
+                        <span>
+                          <b>{r.title}</b>
+                          <small>{r.time}</small>
+                        </span>
+                        <i>{r.status}</i>
+                        <strong>{r.score ?? '—'}</strong>
+                        <em>查看报告</em>
+                      </button>
+                    ))
+                  )}
+                </article>
+
+                <aside className="records-growth">
+                  <header>
+                    <h3>成长轨迹</h3>
+                    <small>近 30 天练习趋势</small>
+                  </header>
+                  <div className="records-bars">
+                    {[35, 54, 43, 70, 82, 97, 110].map((h, i) => (
+                      <i key={i} className={i === 6 ? 'latest' : ''} style={{ height: `${h}px` }} />
+                    ))}
+                  </div>
+                  <section className="records-abilities">
+                    <h3>能力维度</h3>
+                    <p><span>岗位匹配度</span><i><b style={{ width: '86%' }} /></i><em>86</em></p>
+                    <p><span>业务能力</span><i><b style={{ width: '82%' }} /></i><em>82</em></p>
+                    <p><span>逻辑分析</span><i><b style={{ width: '76%' }} /></i><em>76</em></p>
+                    <p><span>表达沟通</span><i><b style={{ width: '71%' }} /></i><em>71</em></p>
+                  </section>
+                  <footer>
+                    <b>本周成长建议</b>
+                    <p>优先补强「应变能力」：进行 2 次追问型模拟并记录回答结构。</p>
+                  </footer>
+                </aside>
+              </div>
             </section>
           </main>
         </section>
       </section>
-
     </div>
   );
 }
