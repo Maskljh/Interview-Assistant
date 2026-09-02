@@ -6,7 +6,8 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 
 - [Prerequisites（环境要求）](#prerequisites环境要求)
 - [Architecture（本地架构）](#architecture本地架构)
-- [1. 启动 MySQL 与 Redis](#1-启动-mysql-与-redis)
+- [快速启动（Docker，推荐）](#快速启动docker推荐)
+- [1. 启动 MySQL 与 Redis（Docker）](#1-启动-mysql-与-redisdocker)
 - [2. 应用数据库迁移](#2-应用数据库迁移)
 - [3. 环境变量](#3-环境变量)
 - [4. 运行 API 服务](#4-运行-api-服务)
@@ -20,13 +21,13 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 
 ## Prerequisites（环境要求）
 
+- **Docker Desktop**（推荐，MySQL/Redis 均通过容器运行）
 - **Go** 1.22+
 - **Node.js** 18+ 和 npm
-- **MySQL 8**（本机 3306 或 Docker），**Redis 7**（本机 6379 或 Docker）
 - **阿里云语音 Key（必填）**：语音是唯一的作答方式，缺省时 ASR/TTS 返回 `502`，无法正常作答。
 - 可选：DeepSeek API Key（出题/评分）、阿里云 OCR Key（图片导入）
 
-> **端口约定：本仓库默认使用 MySQL `3306`、Redis `6379`。** 请确保本机 MySQL 监听 `127.0.0.1:3306`（或通过 Docker 映射到 3306）。
+> **端口约定：本仓库通过 Docker 将 MySQL `3306`、Redis `6379` 映射到宿主机 `127.0.0.1`。** 请保持本机 3306/6379 端口不被其他本地服务占用（若本机装有旧 MySQL 服务请保持停止）。
 
 ## Architecture（本地架构）
 
@@ -39,25 +40,32 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 
 > **端口说明：** `vite.config.ts` 固定开发/预览端口为 **5174**（5173 常被占用）；后端监听端口由 `.env` 的 `HTTP_ADDR` 决定（默认 `:18080`）。`frontend/src/api/client.ts` 自动跟随当前页面 hostname。
 
-## 1. 启动 MySQL 与 Redis
+## 快速启动（Docker，推荐）
 
-### 方案 A — Docker Compose（本仓库）
+```bash
+bash start-dev.sh
+```
+
+一键完成：拉起 Docker 引擎 → `docker compose up -d`（MySQL + Redis）→ 等待就绪 → 首次自动执行全部数据库迁移 → 编译并后台启动后端（`:18080`）。之后前端按第 5 节启动即可。
+
+> **Windows 用户**：请先启动 Docker Desktop（首次需等待引擎就绪），脚本会自动检测并拉起。若本机装有旧 MySQL 服务，请保持其停止以免占用 3306 端口。
+
+## 1. 启动 MySQL 与 Redis（Docker）
+
+仓库根目录 `docker-compose.yml` 定义了两个服务，统一通过 Docker 运行：
 
 ```bash
 docker compose up -d
 ```
 
-启动 MySQL（`root` / `root`，数据库 `interview`）与 Redis，均映射到默认端口（MySQL 3306、Redis 6379）。
+- **MySQL 8.4**：`root` / `123456`，数据库 `interview`，数据卷 `mysql_data` 持久化
+- **Redis 7**：映射 `127.0.0.1:6379`
 
-### 方案 B — 已有本机 MySQL
+> 密码与 `.env` 的 `MYSQL_DSN` 一致（`root:123456@tcp(127.0.0.1:3306)/interview`）；如修改密码，请同步修改 `.env`。
 
-如果你已在 `127.0.0.1:3306` 运行 MySQL，创建数据库并把 `MYSQL_DSN` 指向它（密码按你的实际环境，如本机为 `123456`）：
+> 需要重置数据库时：`docker compose down -v`（删除数据卷，慎用）。
 
-```sql
-CREATE DATABASE IF NOT EXISTS interview CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自己的实例）。
+> 不使用 Docker 的旧方式（本机自装 MySQL/Redis）仍可通过手动安装服务并保持端口 3306/6379 可达来运行，但**仓库统一推荐 Docker**，`.env` 已按容器映射配置，无需改动。
 
 ## 2. 应用数据库迁移
 
@@ -67,23 +75,15 @@ Redis 仍需在 `REDIS_ADDR` 可达（可用 compose 只启动 Redis，或你自
 - **已有数据库**：只应用当前 schema 之后新增的文件（例如 `013_resume_files.sql` 新增 `users.username` 列与 `resume_files` 表；`014_job_title.sql` 新增 `interview_sessions.job_title` 列与 `question_usage` 表）。
 - **016/017（WPS 能力）**：`016_wps_tokens.sql` 持久化 WPS access/refresh token（云文档选简历、报告发邮箱）；`017_wps_oauth_columns.sql` 幂等补齐 `users` 的 `wps_openid` / `user_id` / `nickname` / `avatar_url` 列并给 `wps_openid` 加唯一索引。这两列组原先依赖一份未纳入仓库的迁移，017 使其在干净环境也能完整建表。
 
-从仓库根目录（Docker MySQL）：
+从仓库根目录（Docker MySQL，密码 `123456`）：
 
 ```bash
 for f in backend/migrations/*.sql; do
-  docker compose exec -T mysql mysql -uroot -proot interview < "$f"
+  docker compose exec -T mysql mysql -uroot -p123456 interview < "$f"
 done
 ```
 
-外部 MySQL：
-
-```bash
-for f in backend/migrations/*.sql; do
-  mysql -h 127.0.0.1 -u root -p interview < "$f"
-done
-```
-
-> 本机 MySQL 密码示例：`root` / `123456`（见下节）。迁移是幂等的（`IF NOT EXISTS` / `ADD COLUMN` 在已应用时按文档说明处理），但建议按顺序只执行一次。
+> **通常无需手动执行**：`start-dev.sh` 会在首次启动（`interview` 库无表）时自动应用全部迁移。仅当需要手动重跑时才用上面的命令。迁移是幂等的（`IF NOT EXISTS` / `ADD COLUMN`），但建议按顺序只执行一次。
 
 ## 3. 环境变量
 
@@ -99,7 +99,7 @@ done
 | `WPS_SCOPE` | 否 | `kso.user_base.read` | WPS 授权范围 |
 | `WPS_FRONTEND_REDIRECT` | 否 | `http://localhost:5174` | 授权成功后前端跳转地址 |
 | `HTTP_ADDR` | 否 | `:18080` | API 监听地址（默认 `:18080`） |
-| `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；本机密码 `123456` 时改为 `root:123456@...`） |
+| `MYSQL_DSN` | 否 | `root:root@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4` | MySQL 连接串（**端口 3306**；Docker 容器密码为 `123456`，仓库 `.env` 已配置 `root:123456@...`） |
 | `REDIS_ADDR` | 否 | `127.0.0.1:6379` | Redis 地址 |
 | `DEEPSEEK_API_KEY` | 否* | — | DeepSeek Key，用于出题与报告 |
 | `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com` | DeepSeek API 地址 |
@@ -130,7 +130,7 @@ done
 
 ```powershell
 $env:JWT_SECRET = "dev-change-me"
-# 数据库在 3306；本机 MySQL 密码 123456：
+# 数据库在 3306；Docker MySQL 密码 123456（与 .env 一致，通常无需重复设置）：
 $env:MYSQL_DSN = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 $env:REDIS_ADDR = "127.0.0.1:6379"
 # WPS 登录（必填，唯一登录方式）：
@@ -151,6 +151,7 @@ $env:REDIS_ADDR = "127.0.0.1:6379"
 
 ```bash
 export JWT_SECRET=dev-change-me
+# Docker MySQL/Redis（与 .env 一致，通常无需重复设置）：
 export MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4'
 export REDIS_ADDR=127.0.0.1:6379
 # WPS 登录（必填，唯一登录方式）：
@@ -168,10 +169,16 @@ export REDIS_ADDR=127.0.0.1:6379
 
 ## 4. 运行 API 服务
 
+> **推荐用一键脚本**：`bash start-dev.sh` 会自动编译并后台启动后端（`backend/server_docker.exe`，日志 `backend/server_docker.log`）。
+
+手动运行：
+
 ```bash
 cd backend
-go run ./cmd/server
+GOTMPDIR="$PWD/../backend/.gotmp" go run ./cmd/server   # 或 go build -o server_docker.exe ./cmd/server && ./server_docker.exe
 ```
+
+> **Windows 注意**：若 `C:\tmp` 被同名文件占用（非目录），Go 构建会报 `mkdir C:\tmp...: cannot find the path`，请用 `GOTMPDIR`/`GOCACHE` 指向有效目录（如 `backend/.gotmp`），或删除该占位文件后重建目录。
 
 验证：
 
@@ -246,7 +253,7 @@ npm run dev            # 默认 http://localhost:5174
 
 ## Backend tests
 
-多数后端集成测试需要可达的 MySQL（使用 `interview` 库并只清理自己的测试用户）。通过 `MYSQL_DSN` 指向实例（默认 `root:root@tcp(127.0.0.1:3306)/interview`；本机密码为 `123456` 时请相应修改）：
+多数后端集成测试需要可达的 MySQL（使用 `interview` 库并只清理自己的测试用户）。通过 `MYSQL_DSN` 指向实例（仓库 Docker 容器密码为 `123456`）：
 
 ```bash
 MYSQL_DSN='root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4' go test ./... -p 1
@@ -295,6 +302,7 @@ frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis
   src/pages/              创建、面试间、报告、题库、成长等页面
-docker-compose.yml        MySQL(3306) + Redis(6379)
+docker-compose.yml        MySQL(3306, 密码 123456) + Redis(6379)，统一 Docker 运行
+start-dev.sh              一键启动：Docker 引擎 → 容器 → 自动迁移 → 后端
 .env.example              环境变量模板
 ```
