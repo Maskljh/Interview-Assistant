@@ -13,12 +13,10 @@ import { uploadFile } from '../api/uploads';
 import { listResumes, type ResumeFile } from '../api/resumes';
 import { listCloudFiles, importCloudFile, type WpsCloudFile } from '../api/wps';
 import './InterviewPages.css';
-import './CreateInterviewPage.css';
-import DesignSidebar from '../components/DesignSidebar';
+import './prep-page.css';
+import TopBar from '../components/TopBar';
 import QuestionImportModal from '../components/QuestionImportModal';
 import { createPortal } from 'react-dom';
-import homeGlow from '../assets/design/homeGlow.svg';
-import homeLogo from '../assets/design/homeLogo.png';
 import { commonInterviewJobs, mockJobInfoItems } from '../lib/mockData';
 
 /** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
@@ -51,14 +49,54 @@ function base64ToFile(base64: string, name: string, mimeType: string): File {
   return new File([bytes], name, { type });
 }
 
+/**
+ * 问询人消息打字动画：active 时逐字显示（prep-typing 光标），否则直接显示全文。
+ * 尊重 prefers-reduced-motion；jsdom 等无 matchMedia 的环境直接显示全文，保证测试稳定。
+ */
+function TypingText({ text, active }: { text: string; active: boolean }) {
+  // jsdom 等测试环境 matchMedia 未实现：视为 reduced，直接显示全文保证测试稳定
+  const reduced =
+    typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [shown, setShown] = useState(active && !reduced ? '' : text);
+  const completed = useRef(!active || reduced);
+
+  useEffect(() => {
+    if (!active || reduced) {
+      setShown(text);
+      completed.current = true;
+      return;
+    }
+    if (completed.current) return;
+    setShown('');
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setShown(text.slice(0, index));
+      if (index >= text.length) {
+        window.clearInterval(timer);
+        completed.current = true;
+      }
+    }, 42);
+    return () => window.clearInterval(timer);
+  }, [text, active, reduced]);
+
+  const typing = active && !completed.current;
+  return (
+    <span className={typing ? 'prep-typing' : undefined}>
+      {typing ? shown : text}
+    </span>
+  );
+}
+
 export default function CreateInterviewPage() {
   const navigate = useNavigate();
-  // ── 面试岗位（设计稿：必选下拉/输入）──
+  // ── 面试岗位（设计稿：prep 对话流弹窗选择）──
   const [jobTitle, setJobTitle] = useState('');
-  const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
   const [jobDraft, setJobDraft] = useState('');
   const [commonJobs, setCommonJobs] = useState<string[]>(commonInterviewJobs);
-  // ── 岗位信息（JD）：设计稿 home 岗位卡内联编辑 + 导入选择器 ──
+  // 岗位信息（JD）：设计稿 home 岗位卡内联编辑 + 导入选择器
   const [jobJd, setJobJd] = useState('');
   const [jdError, setJdError] = useState('');
   // 上传岗位信息图片 OCR 识别中（home-job-info-picker 头部按钮态）
@@ -76,7 +114,7 @@ export default function CreateInterviewPage() {
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  // 已选题目详情（用于卡片内列表展示）
+  // 已选题目详情（用于右侧资料板列表展示）
   const selectedQuestions = useMemo(
     () =>
       selectedIds
@@ -102,11 +140,13 @@ export default function CreateInterviewPage() {
   const [error, setError] = useState('');
   // 提交阶段：creating=正在创建会话；generating=正在生成题目（LLM 可能耗时较长，需明确提示）
   const [phase, setPhase] = useState<'creating' | 'generating' | null>(null);
-  // 模态编辑态（设计稿 home 对话框）：resumePick=选择简历、resumeImportMethod=上传简历、
-  // wpsCloud=从 WPS 云文档选择、jd=导入岗位信息、bank=选择题库
+  // 模态编辑态（设计稿 home 对话框）：job=选择岗位、resumePick=选择简历、
+  // resumeImportMethod=上传简历、wpsCloud=从 WPS 云文档选择、jd=导入岗位信息、bank=选择题库
   const [modal, setModal] = useState<
-    'resumePick' | 'resumeImportMethod' | 'wpsCloud' | 'jd' | 'bank' | null
+    'job' | 'resumePick' | 'resumeImportMethod' | 'wpsCloud' | 'jd' | 'bank' | null
   >(null);
+  // 对话引导流：是否需要上传个人简历/岗位信息/题集（设计稿 prep-answer-options）
+  const [prepUploadChoice, setPrepUploadChoice] = useState<'yes' | 'no' | null>(null);
   const [libraryResumes, setLibraryResumes] = useState<ResumeFile[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState('');
@@ -124,8 +164,10 @@ export default function CreateInterviewPage() {
     const root = rootRef.current;
     if (!root) return;
     const compute = () => {
-      const workspaceWidth = Math.max(window.innerWidth - 218, 1);
-      const scale = Math.min(workspaceWidth / 938, window.innerHeight / 692);
+      // 设计稿 updateHomeFit：顶栏占 64px，画布基准 938×692
+      const workspaceWidth = Math.max(window.innerWidth, 1);
+      const workspaceHeight = Math.max(window.innerHeight - 64, 1);
+      const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
       const fit = Math.max(scale, 0.2);
       root.style.setProperty('--home-fit', fit.toFixed(4));
       root.style.setProperty('--home-canvas-width', `${(workspaceWidth / fit).toFixed(2)}px`);
@@ -363,7 +405,7 @@ export default function CreateInterviewPage() {
     setSelectedIds((prev) => prev.filter((x) => x !== id));
   }
 
-  /** 选择/录入面试岗位。 */
+  /** 选择/录入面试岗位（对话流弹窗确定）。 */
   function chooseJob(title: string) {
     const value = title.trim();
     if (!value) return;
@@ -371,15 +413,31 @@ export default function CreateInterviewPage() {
     setJobDraft(value);
     setError('');
     if (!commonJobs.includes(value)) setCommonJobs((prev) => [value, ...prev]);
-    setJobDropdownOpen(false);
+    setModal(null);
   }
 
   function removeCommonJob(job: string) {
     setCommonJobs((prev) => prev.filter((j) => j !== job));
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  /** 重置对话（设计稿 prep-reset）：清空岗位与全部归档。 */
+  function handlePrepReset() {
+    setJobTitle('');
+    setJobDraft('');
+    setJobJd('');
+    setSelectedJobInfoId('');
+    setResumeText('');
+    setResumeFileName('');
+    setResumeFileUrl('');
+    setResumeError('');
+    setSelectedIds([]);
+    setPrepUploadChoice(null);
+    setError('');
+    setModal(null);
+  }
+
+  /** 创建面试并进入面试间（开始面试按钮与表单共用）。 */
+  async function startInterviewFlow() {
     setError('');
     const title = jobTitle.trim();
     if (!title) {
@@ -424,228 +482,294 @@ export default function CreateInterviewPage() {
     }
   }
 
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    await startInterviewFlow();
+  }
+
+  // ── 对话流（设计稿 prep-dialogue）──
+  // 岗位未选时第一轮问询人消息打字；选岗后转为静态，新增问询轮次各自打字。
+  const jobTurnTyping = !jobTitle;
+  const uploadTurnTyping = Boolean(jobTitle) && !prepUploadChoice;
+  const uploadReplyTyping = Boolean(jobTitle) && prepUploadChoice === 'yes';
+  const readyTurnTyping = prepUploadChoice === 'no';
+  // 右侧资料板（设计稿 prep-right / INTERVIEW MATERIALS）
+  const materials: { label: string; title: string; detail?: string; list?: string[] }[] = [];
+  if (jobTitle) {
+    materials.push({
+      label: '目标岗位',
+      title: jobTitle,
+      detail: '本轮问讯将围绕该岗位的职责与判断展开。',
+    });
+  }
+  if (resumeFileName) {
+    materials.push({ label: '个人简历', title: resumeFileName });
+  }
+  if (jobJd.trim()) {
+    const selected = mockJobInfoItems.find((item) => item.id === selectedJobInfoId);
+    materials.push({
+      label: '岗位信息',
+      title: selected ? selected.name : '已录入岗位情报',
+      detail: jobJd.trim(),
+    });
+  }
+  if (selectedQuestions.length > 0) {
+    materials.push({
+      label: '面试题集',
+      title: selectedQuestions[0].job_tag || '未命名题库',
+      list: selectedQuestions.map((q) => q.question),
+    });
+  }
+
   return (
     <div id="design-root" ref={rootRef}>
       <section className="home screen">
-        <section className="home-page">
-          <DesignSidebar active="home" />
-          <div className="home-main">
-            <img className="home-glow" src={homeGlow} alt="" />
-            <header className="home-banner">
-              <img src={homeLogo} alt="面知" />
-              <div>
-                <h1>面知，把每一场模拟变成下一次可验证的进步</h1>
-                <p>面试可定制、历史可复盘、进步可感知</p>
-              </div>
-            </header>
-
-            <section className="interview-card">
-              <h2>面试间准备</h2>
-              <i className="title-rule" />
-              <p className="intro">
-                选择面试岗位开始面试，上传简历、岗位信息或选择意向题库后可进一步进行定制化面试
-              </p>
-
-              {/* 面试岗位（必选）：下拉选择/输入 */}
-              <div className="required-field">
-                <div className="field-title">
-                  <h3>面试岗位</h3>
-                  <span className="field-note required-note">必选</span>
+        <section className="home-page prep-page">
+          <TopBar active="hub" />
+          <main className="home-main prep-main">
+            <section className="prep-chat">
+              <header className="room-case-head">
+                <div>
+                  <small className="prep-kicker">PRE-INTERVIEW</small>
+                  <h2>面试材料准备</h2>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setJobDropdownOpen((v) => !v)}
-                  aria-expanded={jobDropdownOpen}
+                  className="prep-back"
+                  onClick={() => navigate('/welcome', { replace: true })}
                 >
-                  <span
-                    className={`job-placeholder${error === '请选择面试岗位' ? ' job-error' : ''}`}
-                  >
-                    {jobTitle || (error === '请选择面试岗位' ? '请选择面试岗位' : '点击选择')}
-                  </span>
-                  <span className="job-arrow">▽</span>
+                  返回首页
                 </button>
-                {jobDropdownOpen && (
-                  <div className="home-job-dropdown">
-                    <div>
-                      <input
-                        value={jobDraft}
-                        onChange={(e) => setJobDraft(e.target.value)}
-                        placeholder="输入面试岗位"
-                        aria-label="输入面试岗位"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => chooseJob(jobDraft)}
-                      >
-                        确定
-                      </button>
-                    </div>
-                    <p>常用岗位</p>
-                    <section>
-                      {commonJobs.map((job) => (
-                        <span className="home-job-tag" key={job}>
-                          <button
-                            type="button"
-                            onClick={() => chooseJob(job)}
-                          >
-                            {job}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeCommonJob(job)}
-                            aria-label={`删除${job}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </section>
-                  </div>
-                )}
-              </div>
+              </header>
 
-              <div className="optional-grid">
-                {/* 个人简历（可选） */}
-                <article className="optional-card resume-card">
-                  <div className="optional-card-head">
-                    <div className="field-title">
-                      <h3>个人简历</h3>
-                      <span className="field-note optional-note">可选</span>
-                    </div>
-                  </div>
-                  <div className={`optional-empty resume-file-name${resumeFileName ? ' has-file' : ''}`}>
-                    {resumeFileName || '暂未上传文件'}
-                  </div>
-                  <input
-                    id="resume-file-input"
-                    type="file"
-                    accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = '';
-                      if (file) void handleResumeFile(file);
-                    }}
-                  />
-                  {resumeError && (
-                    <p className="resume-upload-error" role="alert">
-                      {resumeError}
+              <section className="prep-dialogue" aria-label="问询人引导对话">
+                <button
+                  type="button"
+                  className="prep-reset"
+                  aria-label="重置对话"
+                  title="重置对话"
+                  onClick={handlePrepReset}
+                >
+                  ↻
+                </button>
+
+                {/* 第一轮：选择岗位 */}
+                <article className="prep-turn">
+                  <b className="prep-avatar" aria-label="问询人">
+                    ⌕
+                  </b>
+                  <div className="prep-bubble">
+                    <small>面知</small>
+                    <p>
+                      <TypingText text="请选择本次面试岗位" active={jobTurnTyping} />
                     </p>
-                  )}
-                  <button
-                    type="button"
-                    className="small-button resume-upload"
-                    onClick={() => void openResumePick()}
-                  >
-                    导入
-                  </button>
-                </article>
-
-                {/* 岗位信息（可选）：导入 + 内联编辑 */}
-                <article className="optional-card job-card">
-                  <div className="optional-card-head">
-                    <div className="field-title">
-                      <h3>岗位信息</h3>
-                      <span className="field-note optional-note">可选</span>
-                    </div>
-                    <div className="optional-actions">
-                      <button
-                        type="button"
-                        className="small-button"
-                        onClick={() => setModal('jd')}
-                      >
-                        导入
-                      </button>
-                    </div>
-                  </div>
-                  <div className="optional-preview job-info-editor">
-                    <textarea
-                      className="job-info-content"
-                      value={jobJd}
-                      onChange={(e) => setJobJd(e.target.value)}
-                      placeholder=" "
-                      aria-label="岗位信息"
-                    />
-                    <span className="job-info-empty">暂无岗位信息，请输入或导入</span>
-                  </div>
-                  <input
-                    id="job-info-file-input"
-                    type="file"
-                    accept=".jpg,.jpeg,.png"
-                    hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = '';
-                      if (file) void handleJobInfoImage(file);
-                    }}
-                  />
-                </article>
-
-                {/* 选择题库（可选） */}
-                <article className="optional-card question-card">
-                  <div className="optional-card-head">
-                    <div className="field-title">
-                      <h3>选择题库</h3>
-                      <span className="field-note optional-note">可选</span>
-                    </div>
-                    {selectedQuestions.length > 0 && (
-                      <span className="question-total">
-                        共 {selectedQuestions.length} 题
-                      </span>
-                    )}
                     <button
                       type="button"
-                      className="small-button"
-                      onClick={() => void openBankPicker()}
+                      className="prep-choice"
+                      onClick={() => {
+                        setJobDraft(jobTitle);
+                        setModal('job');
+                      }}
                     >
-                      导入
+                      <b>面试岗位</b>
+                      <span>{jobTitle || '选择本次面试岗位'}</span>
                     </button>
                   </div>
-                  {selectedQuestions.length > 0 ? (
-                    <div className="home-selected-question-list">
-                      {selectedQuestions.map((item, index) => (
-                        <article key={item.id}>
-                          <span>{String(index + 1).padStart(2, '0')}</span>
-                          <p title={item.question}>{item.question}</p>
-                          <button
-                            type="button"
-                            onClick={() => removeQuestion(item.id)}
-                          >
-                            删除
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="optional-preview">暂无题目，请导入</div>
-                  )}
                 </article>
-              </div>
 
-              {/* 开始模拟面试 */}
-              <form onSubmit={handleSubmit}>
+                {/* 用户回复岗位 */}
+                {jobTitle && (
+                  <article className="prep-turn prep-turn-user">
+                    <div className="prep-bubble">
+                      <p>本次面试岗位为“{jobTitle}”</p>
+                    </div>
+                    <b className="prep-avatar-user" aria-label="用户头像" />
+                  </article>
+                )}
+
+                {/* 第二轮：是否需要上传 */}
+                {jobTitle && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText
+                          text="是否需要上传个人简历、面试岗位信息或面试题集？"
+                          active={uploadTurnTyping}
+                        />
+                      </p>
+                      <div className="prep-answer-options">
+                        <button type="button" onClick={() => setPrepUploadChoice('yes')}>
+                          需要上传
+                        </button>
+                        <button type="button" onClick={() => setPrepUploadChoice('no')}>
+                          暂不需要
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )}
+
+                {/* 用户回复上传选择 */}
+                {prepUploadChoice && (
+                  <article className="prep-turn prep-turn-user">
+                    <div className="prep-bubble">
+                      <p>{prepUploadChoice === 'yes' ? '需要上传' : '暂不需要'}</p>
+                    </div>
+                    <b className="prep-avatar-user" aria-label="用户头像" />
+                  </article>
+                )}
+
+                {/* 第三轮 yes：选择要上传的面试信息 */}
+                {prepUploadChoice === 'yes' && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText text="请选择需要上传的面试信息" active={uploadReplyTyping} />
+                      </p>
+                      <div className="prep-import-options">
+                        <button type="button" onClick={() => void openResumePick()}>
+                          <b>个人简历</b>
+                          <span>{resumeFileName || '选择或上传简历'}</span>
+                        </button>
+                        <button type="button" onClick={() => setModal('jd')}>
+                          <b>岗位信息</b>
+                          <span>
+                            {jobJd.trim()
+                              ? mockJobInfoItems.find((i) => i.id === selectedJobInfoId)?.name || '已导入岗位信息'
+                              : '选择或上传岗位信息'}
+                          </span>
+                        </button>
+                        <button type="button" onClick={() => void openBankPicker()}>
+                          <b>面试题集</b>
+                          <span>
+                            {selectedQuestions.length > 0
+                              ? selectedQuestions[0].job_tag || '未命名题库'
+                              : '选择或导入题集'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )}
+
+                {/* 第三轮 no：就绪提示 */}
+                {prepUploadChoice === 'no' && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble prep-ready">
+                      <small>面知</small>
+                      <p>
+                        <TypingText
+                          text="好的，面试间已准备就绪，请点击右侧按钮开启面试。"
+                          active={readyTurnTyping}
+                        />
+                      </p>
+                    </div>
+                  </article>
+                )}
+              </section>
+
+              {/* 右侧资料板（设计稿 prep-right 便签归档） */}
+              <aside className="prep-right">
+                <h2 className="prep-materials-title">INTERVIEW MATERIALS</h2>
+                {materials.length === 0 ? (
+                  <article className="prep-empty-note">
+                    文件板等待资料归档
+                    <br />
+                    从左侧补充后将在这里显示
+                  </article>
+                ) : (
+                  materials.map((note) => (
+                    <article
+                      key={note.label}
+                      className="prep-note"
+                      data-prep-material={
+                        note.label === '岗位信息'
+                          ? 'job'
+                          : note.label === '面试题集'
+                            ? 'questions'
+                            : undefined
+                      }
+                    >
+                      <small>{note.label}</small>
+                      <strong>{note.title}</strong>
+                      {note.list ? (
+                        <ol>
+                          {note.list.map((item) => (
+                            <li key={item}>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : note.detail ? (
+                        <p>{note.detail}</p>
+                      ) : null}
+                    </article>
+                  ))
+                )}
                 {error && error !== '请选择面试岗位' && (
-                  <p className="interview-error">{error}</p>
+                  <p className="interview-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                {error === '请选择面试岗位' && (
+                  <p className="interview-error" role="alert">
+                    请先在左侧选择面试岗位
+                  </p>
                 )}
                 <button
-                  type="submit"
-                  className="start-button"
+                  type="button"
+                  className="prep-note-start"
                   disabled={phase !== null || resumeParsing}
+                  onClick={() => void startInterviewFlow()}
                 >
                   {phase === 'generating'
                     ? '正在生成题目…'
                     : phase === 'creating'
                       ? '正在创建面试…'
-                      : '开始模拟面试'}
+                      : '开始面试'}
                 </button>
                 {phase === 'generating' && (
                   <p className="start-hint">
                     正在根据岗位信息与简历生成面试题目，通常需要十几秒到一分钟，请耐心等待…
                   </p>
                 )}
-              </form>
+              </aside>
+
+              <input
+                id="resume-file-input"
+                type="file"
+                accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void handleResumeFile(file);
+                }}
+              />
+              <input
+                id="job-info-file-input"
+                type="file"
+                accept=".jpg,.jpeg,.png"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void handleJobInfoImage(file);
+                }}
+              />
             </section>
-          </div>
+          </main>
         </section>
       </section>
 
@@ -656,6 +780,84 @@ export default function CreateInterviewPage() {
         if (!portalHost) return null;
         return createPortal(
           <>
+            {/* 选择面试岗位：设计稿 home-job-picker-dialog（prep 对话流弹窗） */}
+            {modal === 'job' && (
+              <div className="question-dialog-backdrop">
+                <section
+                  className="question-add-dialog home-job-picker-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="选择面试岗位"
+                >
+                  <header className="question-add-dialog-head">
+                    <div>
+                      <h2>选择面试岗位</h2>
+                      <p>输入目标岗位，或从常用岗位中直接选择</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="关闭"
+                      onClick={() => setModal(null)}
+                    >
+                      ×
+                    </button>
+                  </header>
+                  <div className="question-add-dialog-rule" />
+                  <div className="home-job-picker-body">
+                    <div className="prep-job-dropdown">
+                      <div>
+                        <input
+                          value={jobDraft}
+                          onChange={(e) => setJobDraft(e.target.value)}
+                          placeholder="输入面试岗位"
+                          aria-label="输入面试岗位"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              chooseJob(jobDraft);
+                              setPrepUploadChoice(null);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            chooseJob(jobDraft);
+                            setPrepUploadChoice(null);
+                          }}
+                        >
+                          确定
+                        </button>
+                      </div>
+                      <p>常用岗位</p>
+                      <section>
+                        {commonJobs.map((job) => (
+                          <span className="prep-job-tag" key={job}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                chooseJob(job);
+                                setPrepUploadChoice(null);
+                              }}
+                            >
+                              {job}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeCommonJob(job)}
+                              aria-label={`删除${job}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </section>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
             {/* 选择简历：设计稿 home-resume-picker-dialog */}
             {modal === 'resumePick' && (
               <div className="question-dialog-backdrop">

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">面知丝带标志</title>
+  <desc id="desc">一条平滑上扬的蓝色丝带与一枚淡紫色圆点。</desc>
+  <defs>
+    <linearGradient id="ribbon" x1="185" y1="954" x2="1068" y2="412" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3048F7"/>
+      <stop offset="0.58" stop-color="#3C55FF"/>
+      <stop offset="1" stop-color="#4E68FF"/>
+    </linearGradient>
+    <linearGradient id="dot" x1="954" y1="207" x2="1103" y2="357" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9BDFF"/>
+      <stop offset="1" stop-color="#AC98F4"/>
+    </linearGradient>
+  </defs>
+  <path d="M 207 954 C 291 769 373 590 478 590 C 588 590 635 856 776 856 C 916 856 1002 619 1048 445" stroke="url(#ribbon)" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1083" cy="278" r="65" fill="url(#dot)"/>
+</svg>

@@ -19,36 +19,27 @@ function renderPage() {
   );
 }
 
-describe('measure computed styles vs Figma', () => {
+describe('measure computed styles vs Figma (v2.0 prep 对话引导式)', () => {
   it('dump styles', () => {
     const { container } = renderPage();
     const selectors: Record<string, string[]> = {
-      '品牌 slogan': ['.prep-new-slogan'],
-      '品牌 sub': ['.prep-new-slogan-sub'],
-      '面板标题': ['.prep-new-title'],
-      '副标题': ['.prep-new-subtitle'],
-      '卡片标题': ['.prep-new-card-title'],
-      '岗位占位条': ['.prep-new-job-field'],
-      '岗位文本': ['.prep-new-job-text'],
-      '简历卡': ['.prep-new-card--resume'],
-      '上传按钮': ['.prep-new-btn--upload'],
-      '岗位信息卡': ['.prep-new-card--jd'],
-      'JD 区': ['.prep-new-jd-area'],
-      'JD 空文本': ['.prep-new-jd-empty'],
-      '选择按钮': ['.prep-new-btn--select'],
-      '保存按钮': ['.prep-new-btn--save'],
-      '题库卡': ['.prep-new-card--bank'],
-      '题库区': ['.prep-new-bank-area'],
-      '导入按钮': ['.prep-new-card--bank .prep-new-btn--import'],
-      '开始按钮': ['.prep-new-start'],
-      '通用按钮': ['.prep-new-btn'],
-      '侧边栏': ['.app-sidebar'],
-      '侧边品牌': ['.app-sidebar-brand'],
-      '侧边导航项': ['.app-sidebar-item'],
-      '侧边用户名': ['.app-sidebar-username'],
-      '侧边useid': ['.app-sidebar-useid'],
-      '退出': ['.app-sidebar-logout'],
-      '面板容器': ['.prep-new-panel'],
+      '顶栏': ['.topbar'],
+      '顶栏品牌': ['.topbar>b'],
+      '顶栏导航项': ['.topbar nav button'],
+      '顶栏用户': ['.topbar-profile'],
+      '对话容器': ['.prep-chat'],
+      '对话标题': ['.room-case-head'],
+      '对话区': ['.prep-dialogue'],
+      '问询人气泡': ['.prep-turn:not(.prep-turn-user) .prep-bubble'],
+      '问询头像': ['.prep-avatar'],
+      '岗位选择条': ['.prep-choice'],
+      '岗位标签': ['.prep-choice b'],
+      '岗位占位': ['.prep-choice span'],
+      '资料板': ['.prep-right'],
+      '资料标题': ['.prep-materials-title'],
+      '归档卡片': ['.prep-note'],
+      '开始按钮': ['.prep-note-start'],
+      '重置按钮': ['.prep-reset'],
     };
     const out: string[] = [];
     for (const [label, sels] of Object.entries(selectors)) {
