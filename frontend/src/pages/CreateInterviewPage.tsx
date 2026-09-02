@@ -536,7 +536,7 @@ export default function CreateInterviewPage() {
                 <button
                   type="button"
                   className="prep-back"
-                  onClick={() => navigate('/welcome', { replace: true })}
+                  onClick={() => navigate('/interviews/new', { replace: true })}
                 >
                   返回首页
                 </button>

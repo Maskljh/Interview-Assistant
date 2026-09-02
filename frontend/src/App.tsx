@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import CreateInterviewPage from './pages/CreateInterviewPage';
+import HubPage from './pages/HubPage';
 import NotFoundPage from './pages/NotFoundPage';
 import InterviewDetailPage from './pages/InterviewDetailPage';
 import InterviewListPage from './pages/InterviewListPage';
@@ -40,6 +41,14 @@ export default function App() {
           <Route path="/questions" element={<Navigate to="/manage" replace />} />
           <Route
             path="/interviews/new"
+            element={
+              <ProtectedRoute>
+                <HubPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviews/new/prep"
             element={
               <ProtectedRoute>
                 <CreateInterviewPage />
