@@ -840,6 +840,7 @@ export default function CreateInterviewPage() {
                     <div className="prep-job-dropdown">
                       <div>
                         <input
+                          autoFocus
                           value={jobDraft}
                           onChange={(e) => setJobDraft(e.target.value)}
                           placeholder="输入面试岗位"
