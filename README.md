@@ -93,6 +93,12 @@ bash start-dev.sh
 6. 编译后端（`backend/server_docker.exe`，Go 缓存写入 `backend/.gotmp/`）
 7. 后台启动后端并轮询确认监听 `:18080`
 
+> **脚本启动的容器**：`start-dev.sh` 只操作**当前项目** `Interview Assistant` 下的 `docker-compose.yml`，生成并启动的容器固定为
+> - `interviewassistant-mysql-1`（MySQL，3306）
+> - `interviewassistant-redis-1`（Redis，6379）
+>
+> 运行后可用 `docker ps` 确认。**它不会启动机器上其他项目的容器**（如 `candimate-*`）——若 `docker ps` 里出现其他前缀（candimate、reservation 等）的容器且占用了相同端口，那是另外的项目自行拉起的，与本脚本无关，需先将其停止或改端口（见下方排查表）。
+
 启动后访问：
 
 - 前端：http://localhost:5174
@@ -307,7 +313,9 @@ npm run dev            # 默认 http://localhost:5174
 | 现象 | 原因 | 解决 |
 |------|------|------|
 | 后端启动报 `dial tcp 127.0.0.1:3306: connect: connection refused` | MySQL 容器未启动 | `docker compose up -d` 后等待就绪，或运行 `bash start-dev.sh` |
-| 3306/6379 端口被占用 | 本机装了旧 MySQL/Redis 服务 | 停止本机服务（`sc stop MySQL`），或改 compose 端口映射 |
+| `docker compose up -d` 后容器无宿主机端口映射（`docker ps` 只显示 `3306/tcp` 而无 `0.0.0.0:3306->3306/tcp`），后端连不上 MySQL | 端口被占用导致绑定失败 | 停止占用方后 `docker compose down` 再 `docker compose up -d`（重建以恢复映射） |
+| 同一台机器上另一个项目（如 `candimate-*`）的容器占用 3306/6379/18080 | 多项目端口撞车：另一项目的 compose 也映射到相同端口且已在运行 | 先停掉另一项目容器（`docker stop candimate-backend candimate-mysql candimate-redis`）再启动本项目；若需同时运行，为其中一方改 compose 端口映射 |
+| 3306/6379 端口被本机服务占用（如 `[::1]:3306` 被本机 MySQL 监听） | 本机装了旧 MySQL/Redis 服务，与 Docker 映射冲突 | 停止本机服务释放端口后重启容器；Windows 可 `netstat -ano | grep :3306` 找 PID 后结束，或 `sc stop MySQL` |
 | Go 构建报 `mkdir C:\tmp...` | `C:\tmp` 被同名文件占用 | 删除占位文件重建目录，或设置 `GOTMPDIR` |
 | 登录接口返回 503 | 未配置 WPS 凭证 | 在 `.env` 配置 `WPS_CLIENT_ID` / `WPS_CLIENT_SECRET` |
 | 语音无法作答（502） | 缺阿里云语音 Key | 配置 `ALIYUN_ACCESS_KEY_ID/SECRET/NLS_APP_KEY` |
