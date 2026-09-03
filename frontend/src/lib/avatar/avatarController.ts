@@ -191,6 +191,12 @@ export function createAvatarController(
     },
 
     async speak(blob: Blob): Promise<SpeakResult> {
+      // 数字人仍在初始化（loading）时，先等待 init 落定再决策：
+      // 等到的若是 ready 则走数字人口型，失败则回退纯语音。
+      // 避免首段音频在模型加载完成前被误判为不可用（否则会出现"有时动嘴、有时纯语音"）。
+      if (status === 'loading' && initPromise) {
+        await initPromise.catch(() => undefined);
+      }
       if (status !== 'ready' || !engine) return 'fallback';
       let buffer: AudioBuffer;
       try {

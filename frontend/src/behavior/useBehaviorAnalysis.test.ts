@@ -145,6 +145,54 @@ describe('useBehaviorAnalysis', () => {
     expect(result.current.status).toBe('idle');
   });
 
+  it('camera open 进行中 stop() 会释放随后打开的摄像头（防结束面试后摄像头残留）', async () => {
+    // 控制 cameraFeed 的完成时机：start() 挂起在摄像头打开这一步
+    let resolveCamera: ((c: { video: HTMLVideoElement; stream: MediaStream; stop: () => void }) => void) | null = null;
+    const openStream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+    const stopTrack = vi.fn();
+    const cam = {
+      video: { videoWidth: 640, videoHeight: 480 } as HTMLVideoElement,
+      stream: openStream,
+      stop: () => { for (const t of openStream.getTracks()) (t as { stop(): void }).stop(); },
+    };
+    const { result } = renderHook(() =>
+      useBehaviorAnalysis({
+        enabled: true,
+        sessionId: 1,
+        cameraFeed: () =>
+          new Promise((res) => {
+            resolveCamera = res;
+          }),
+        detectorLoader: () =>
+          Promise.resolve({
+            load: vi.fn().mockResolvedValue(undefined),
+            detect: vi.fn().mockResolvedValue(fakeLandmarks()),
+            dispose: vi.fn(),
+          } as never),
+        raf: () => 1,
+        cancelRaf: vi.fn(),
+      }),
+    );
+
+    // 启动，但不等待摄像头打开完成
+    let startPromise: Promise<void> | null = null;
+    await act(async () => {
+      startPromise = result.current.start();
+    });
+    // 在摄像头仍处于打开中时调用 stop（模拟面试结束）
+    await act(async () => {
+      await result.current.stop();
+    });
+    // 随后摄像头才真正打开——start() 内部应检查 runningRef 并立即释放
+    await act(async () => {
+      resolveCamera?.(cam as never);
+      await startPromise;
+    });
+
+    expect(stopTrack).toHaveBeenCalled(); // 刚打开的摄像头轨道必须被 stop
+    expect(result.current.status).toBe('idle');
+  });
+
   it('swallows save errors without throwing', async () => {
     vi.mocked(saveBehavior).mockRejectedValueOnce(new Error('network'));
     const { result } = renderHook(() =>

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { saveBehavior, type BehaviorPayload } from '../api/behavior';
 import { BehaviorAggregator, type FrameSignal } from './aggregator';
 import {
@@ -44,6 +44,8 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
   const aggRef = useRef<BehaviorAggregator | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const lastLiveRef = useRef(0);
+  // 始终指向最新的 cleanup，供卸载 effect 只读调用（不随渲染重建而重新触发）
+  const cleanupRef = useRef<() => void>(() => {});
 
   const getRaf = () => opts.raf ?? ((cb) => requestAnimationFrame(cb));
   const getCancelRaf = () => opts.cancelRaf ?? ((id) => cancelAnimationFrame(id));
@@ -63,17 +65,17 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
     runningRef.current = false;
     setCameraStream(null);
   }, [getCancelRaf]);
+  cleanupRef.current = cleanup;
 
   const stop = useCallback(async () => {
-    if (!runningRef.current) {
-      setStatus('idle');
-      return;
-    }
+    const wasRunning = runningRef.current;
     const agg = aggRef.current;
+    // 无论是否在运行都执行 cleanup：cleanup 幂等且 null 安全，
+    // 确保任何结束路径（含异常/重复 stop）都能释放摄像头轨道。
     cleanup();
     setStatus('idle');
     setLiveStress(null);
-    if (!agg) return;
+    if (!wasRunning || !agg) return;
     const payload: BehaviorPayload = agg.build();
     if (payload.face_detected_frames < 2) return; // not enough data
     try {
@@ -82,6 +84,12 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
       // silent: never block navigation/report
     }
   }, [cleanup, opts.sessionId]);
+
+  // 组件卸载兜底：无论父组件是否调用了 stop()，离开页面时都释放摄像头。
+  // 通过 ref 读最新 cleanup，避免因 cleanup 引用变化导致每次渲染都触发清理。
+  useEffect(() => {
+    return () => cleanupRef.current();
+  }, []);
 
   const start = useCallback(async () => {
     if (!opts.enabled || runningRef.current) return;
@@ -95,14 +103,36 @@ export function useBehaviorAnalysis(opts: UseBehaviorOptions): BehaviorAnalysis 
         opts.cameraFeed != null
           ? await opts.cameraFeed()
           : await startCameraFeed();
+      // 摄像头打开的异步期间若 stop() 已被调用（面试结束），runningRef 会被置 false。
+      // 此时必须立即释放刚打开的摄像头轨道，否则摄像头在结束流程之后才打开并泄漏。
+      if (!runningRef.current) {
+        for (const track of camera.stream.getTracks()) track.stop();
+        setCameraStream(null);
+        return;
+      }
       cameraRef.current = camera;
       setCameraStream(camera.stream);
       const detector =
         opts.detectorLoader != null
           ? await opts.detectorLoader()
           : await loadFaceLandmarkDetector();
+      // 模型加载同样是异步的，若期间被 stop，需释放已开的摄像头
+      if (!runningRef.current) {
+        for (const track of camera.stream.getTracks()) track.stop();
+        cameraRef.current = null;
+        setCameraStream(null);
+        detector.dispose();
+        return;
+      }
       detectorRef.current = detector;
       await detector.load();
+      if (!runningRef.current) {
+        for (const track of camera.stream.getTracks()) track.stop();
+        cameraRef.current = null;
+        setCameraStream(null);
+        detector.dispose();
+        return;
+      }
       setStatus('running');
 
       const loop = () => {

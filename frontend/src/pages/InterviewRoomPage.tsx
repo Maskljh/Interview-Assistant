@@ -384,6 +384,8 @@ const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
           doneRef.current = true;
           setThinking(false);
           setVoicePhase('idle');
+          // 会话收尾：立即关闭摄像头，不阻塞后续结束语播报/跳转
+          void behaviorStopRef.current().catch(() => undefined);
           if (msg.content) {
             appendTurn('interviewer', msg.content);
             if (!ttsMutedRef.current) {
@@ -392,10 +394,6 @@ const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
               setStatusLine('');
             }
           }
-          await Promise.race([
-            behaviorStopRef.current(),
-            new Promise((resolve) => setTimeout(resolve, 3000)),
-          ]);
           navigate(`/interviews/${interviewId}/report`, { replace: true });
           break;
         case 'error':
@@ -418,10 +416,8 @@ const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
           setThinking(false);
           setVoicePhase('idle');
           stopVoice();
-          await Promise.race([
-            behaviorStopRef.current(),
-            new Promise((resolve) => setTimeout(resolve, 3000)),
-          ]);
+          // 立即关闭摄像头，不依赖 await 阻塞跳转
+          void behaviorStopRef.current().catch(() => undefined);
           navigate(`/interviews/${interviewId}/report`, { replace: true });
           break;
       }
@@ -748,12 +744,11 @@ const scale = Math.min(workspaceWidth / 938, workspaceHeight / 692);
     voiceCancelRef.current = false;
     voiceActiveRef.current = false;
     setVoicePhase('idle');
+    // 点击确认结束的瞬间就关闭摄像头（行为分析 stop 内的 cleanup 是同步释放 track 的），
+    // 不再依赖后续网络请求（endInterview）的结果——避免报告生成慢或失败时摄像头一直不关。
+    void behaviorStopRef.current().catch(() => undefined);
     try {
       await endInterview(interviewId);
-      await Promise.race([
-        behaviorStopRef.current(),
-        new Promise((resolve) => setTimeout(resolve, 3000)),
-      ]);
       if (!doneRef.current) {
         doneRef.current = true;
         navigate(`/interviews/${interviewId}/report`, { replace: true });
