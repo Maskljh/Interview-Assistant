@@ -1,9 +1,13 @@
 services:
   mysql:
     image: mysql:8.4
+    # 容器时区对齐本地（东八区），与后端 DSN 的 loc=Local 保持一致，
+    # 避免 created_at（CURRENT_TIMESTAMP 生成）与 started_at（Go 写入）相差 8 小时。
+    command: ["mysqld", "--default-time-zone=+08:00"]
     environment:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: interview
+      TZ: Asia/Shanghai
     ports: ["3306:3306"]
     volumes: ["mysql_data:/var/lib/mysql"]
   redis:
