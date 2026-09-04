@@ -203,6 +203,7 @@
    设计稿 report-card 只有：标题行 + meta + 综合表现/亮点改进 +
    能力维度/关键证据建议 + 退出。以下隐藏发送邮箱、重新生成、
    表达分析/行为信号附加区。 */
+.rp-emailbar,
 .rp-email,
 .rp-email-success,
 .rp-extra,

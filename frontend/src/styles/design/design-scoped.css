@@ -1251,3 +1251,61 @@
 #design-root .records .records-growth footer p {margin:4px 0 0;color:#657782;font-size:9px;line-height:1.45}
 /* 隐藏旧版 dash 残留 */
 #design-root .records .dash, #design-root .records .dash-metrics, #design-root .records .record-list {display:none!important}
+
+/* =====================================================================
+   Report v2.0 — 设计稿「结案报告」一比一复刻覆盖块
+   结构：report-case-file（深蓝横幅）+ room-case-head + closed-report-paper（米白纸张）
+   权威值来源：面知UI-v2.0.html #report（getComputedStyle @ 1258×668, scale≈0.87）
+   ===================================================================== */
+/* —— 整体外壳：深蓝案件卷宗 —— */
+
+/* —— 报告卷宗外壳：report-card 深蓝横幅（top32/right64/bottom40/left64） —— */
+#design-root .report .report-card{ position:absolute !important;top:32px !important;right:64px !important;bottom:40px !important;left:64px !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;background:#203e50 !important;border:1px solid #38596c !important;border-radius:10px !important;box-shadow:7px 9px 0 rgba(17,42,55,.2) !important }
+/* —— 深蓝头部横幅 —— */
+#design-root .report .room-case-head{ display:flex !important;align-items:center !important;justify-content:space-between !important;gap:14px !important;flex:none !important;height:72px !important;padding:0 24px !important;background:#17303f !important;border-bottom:1px solid rgba(255,255,255,.06) !important }
+#design-root .report .room-case-head .head-logo{ flex:none !important;font:700 20px/1 var(--font-data) !important;color:#f2f6f4 !important;letter-spacing:1px !important }
+#design-root .report .room-case-head .head-mid{ flex:1 !important;min-width:0 !important }
+#design-root .report .room-case-head small{ display:block !important;font:500 9px/1.4 var(--font-data) !important;letter-spacing:2.2px !important;color:#a9c6d5 !important;text-transform:uppercase !important }
+#design-root .report .room-case-head h2{ margin:4px 0 0 !important;font-family:Georgia,'Times New Roman',serif !important;font-size:22px !important;font-weight:700 !important;color:#f2f6f4 !important;line-height:1.1 !important }
+#design-root .report .room-case-head .report-exit{ flex:none !important;position:static !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:6px !important;margin:0 !important;padding:6px 14px !important;right:auto !important;bottom:auto !important;left:auto !important;top:auto !important;border:1px solid #547a96 !important;border-radius:6px !important;background:rgba(84,122,150,.16) !important;color:#cfe0e8 !important;font:600 10px/1 var(--font-data) !important;cursor:pointer !important;transition:.15s !important }
+#design-root .report .room-case-head .report-exit:hover{ background:rgba(84,122,150,.3) !important;color:#fff !important }
+/* —— 米白结案纸张 —— */
+#design-root .report .closed-report-paper{ flex:1 !important;display:flex !important;flex-direction:column !important;margin:18px 40px 6px !important;padding:26px 30px 22px !important;position:relative !important;overflow:hidden !important;background-color:#fffdf7 !important;background-image:repeating-linear-gradient(0deg,rgba(181,160,139,.10) 0 1px,transparent 1px 26px) !important;background-size:100% 100% !important;border:12px solid #b5a08b !important;border-radius:2px !important;box-shadow:5px 7px 0 rgba(7,28,39,.2) !important }
+/* CLOSED 印章 */
+#design-root .report .closed-report-paper::before{ display:none !important }
+/* 纸张头部 */
+#design-root .report .closed-report-paper header{ flex:none !important;margin-bottom:14px !important }
+#design-root .report .closed-report-paper header small{ display:block !important;font:500 9px/1.6 var(--font-data) !important;color:#a08a74 !important;letter-spacing:1px !important }
+#design-root .report .closed-report-paper header h3{ margin:6px 0 2px !important;font-family:Georgia,'Times New Roman',serif !important;font-size:18px !important;font-weight:700 !important;color:#29465b !important }
+#design-root .report .closed-report-paper header p{ margin:0 !important;color:#657782 !important;font-size:10px !important }
+/* 综合判断 */
+#design-root .report .report-paper-summary{ flex:none !important;display:grid !important;grid-template-columns:118px minmax(0,1fr) !important;align-items:center !important;gap:18px !important;padding:12px 0 !important;border-top:1px solid #e2d7c6 !important }
+#design-root .report .report-paper-summary strong{ font:800 29px/1 var(--font-data) !important;color:#29465b !important;white-space:nowrap !important }
+#design-root .report .report-paper-summary strong em{ font-style:normal !important;font-size:15px !important;color:#8296a5 !important;margin-left:2px !important }
+#design-root .report .report-paper-summary p{ margin:0 !important;color:#405565 !important;font-size:11px !important;line-height:1.65 !important;white-space:pre-line !important }
+/* 能力判断 */
+#design-root .report .paper-abilities{ flex:none !important;padding:12px 0 !important;border-top:1px solid #e2d7c6 !important }
+#design-root .report .paper-abilities>h4{ margin:0 0 10px !important;color:#29465b !important;font-size:12px !important;font-weight:700 !important }
+#design-root .report .paper-abilities p{ display:grid !important;grid-template-columns:54px minmax(0,1fr) 22px !important;align-items:center !important;gap:8px !important;margin:7px 0 !important }
+#design-root .report .paper-abilities p i{ display:block !important;height:5px !important;overflow:hidden !important;background:#dae4e8 !important }
+#design-root .report .paper-abilities p i b{ display:block !important;height:100% !important;background:#547a96 !important }
+#design-root .report .paper-abilities p span{ font:600 9px/1 var(--font-data) !important;color:#29465b !important }
+#design-root .report .paper-abilities p em{ color:#29465b !important;font:700 9px/1 var(--font-data) !important;font-style:normal !important;text-align:right !important }
+/* 三列：本场亮点/本场不足/下一步行动 */
+#design-root .report .report-paper-grid{ flex:1 !important;display:grid !important;grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:20px !important;margin-top:8px !important;padding-top:14px !important;border-top:1px solid #e2d7c6 !important;min-height:0 !important }
+#design-root .report .report-paper-grid > div h4{ margin:0 0 8px !important;color:#29465b !important;font-size:12px !important;font-weight:700 !important }
+#design-root .report .report-paper-grid > div p{ margin:0 !important;color:#526976 !important;font-size:10px !important;line-height:1.7 !important;white-space:pre-line !important }
+/* 底部邮件区 + 附加分析 */
+#design-root .report .rp-emailbar{ display:none !important }
+#design-root .report .rp-emailbar input{ flex:1 !important;min-width:0 !important;padding:7px 10px !important;border:1px solid #547a96 !important;border-radius:6px !important;background:rgba(255,255,255,.06) !important;color:#f2f6f4 !important;font-size:11px !important;outline:none !important }
+#design-root .report .rp-emailbar input::placeholder{ color:#a9c6d5 !important }
+#design-root .report .rp-emailbar button{ flex:none !important;padding:7px 16px !important;border:none !important;border-radius:6px !important;background:#547a96 !important;color:#fff !important;font:600 11px/1 var(--font-data) !important;cursor:pointer !important }
+#design-root .report .rp-emailbar button:hover{ background:#6e8da6 !important }
+#design-root .report .rp-extra{ display:none !important }
+#design-root .report .rp-extra .rp-extra-h{ display:block !important;margin-bottom:6px !important;color:#a9c6d5 !important;font-weight:700 !important;font-size:11px !important }
+/* —— report 外壳：topbar 布局（与面试/记录页一致，画布置于顶栏之下） —— */
+#design-root .report .workspace-main {top:64px!important;left:0!important;width:var(--home-canvas-width,938px)!important;height:692px!important;transform:scale(var(--home-fit,1))!important;transform-origin:top left!important;background:#f5f2ec!important}
+#design-root .report .workspace-main::before {display:none!important}
+
+/* 隐藏旧版残留 */
+#design-root .report .report-top, #design-root .report .report-bottom, #design-root .report .report-title{ display:none!important }
