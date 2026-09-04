@@ -31,6 +31,25 @@ vi.mock('../api/interviews', () => ({
   createInterviewFromBank: vi.fn(async () => ({ id: 1 })),
   startInterview: vi.fn(async () => ({ id: 1 })),
 }));
+// 岗位库 API mock：列表返回一条已保存岗位；手动录入创建后返回带真实 id 的记录
+vi.mock('../api/jobinfo', () => ({
+  listJobInfo: vi.fn(async () => [
+    {
+      id: 1,
+      name: '项目管理专员/主管',
+      content: '负责公司各类项目全流程管理',
+      created_at: '2026-08-27 10:00',
+    },
+  ]),
+  createJobInfo: vi.fn(async (name: string, content: string) => ({
+    id: 99,
+    name,
+    content,
+    created_at: '2026-09-04 10:00',
+  })),
+  updateJobInfo: vi.fn(async () => undefined),
+  deleteJobInfo: vi.fn(async () => undefined),
+}));
 
 function renderPage() {
   return render(
@@ -126,7 +145,7 @@ describe('CreateInterviewPage 开始面试页（v2.0 对话引导式）', () => 
     expect(screen.getByRole('button', { name: '确认录入' })).toBeTruthy();
   });
 
-  it('岗位信息：手动录入岗位名称与内容后归档到资料板并关闭弹窗', () => {
+  it('岗位信息：手动录入岗位名称与内容后归档到资料板并关闭弹窗', async () => {
     renderPage();
     proceedToUpload();
     fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
@@ -137,7 +156,9 @@ describe('CreateInterviewPage 开始面试页（v2.0 对话引导式）', () => 
       target: { value: '负责测试用例设计与执行' },
     });
     fireEvent.click(screen.getByRole('button', { name: '确认录入' }));
-    expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    });
     // 资料板归档显示岗位信息名称与内容（导入选项回显 + 资料板归档两处）
     expect(screen.getAllByText('测试工程师').length).toBeGreaterThan(0);
     expect(screen.getByText(/负责测试用例设计与执行/)).toBeTruthy();
@@ -157,13 +178,19 @@ describe('CreateInterviewPage 开始面试页（v2.0 对话引导式）', () => 
     expect(screen.getByRole('dialog', { name: '导入岗位信息' })).toBeTruthy();
   });
 
-  it('岗位信息：切到已保存岗位 tab 选择已有岗位后归档并关闭弹窗', () => {
+  it('岗位信息：切到已保存岗位 tab 选择已有岗位后归档并关闭弹窗', async () => {
     renderPage();
     proceedToUpload();
     fireEvent.click(screen.getByRole('button', { name: /岗位信息/ }));
     fireEvent.click(screen.getByRole('button', { name: '已保存岗位' }));
+    // 已保存岗位列表从岗位库异步加载
+    await waitFor(() => {
+      expect(screen.getByText('项目管理专员/主管')).toBeTruthy();
+    });
     fireEvent.click(screen.getByText('项目管理专员/主管'));
-    expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '导入岗位信息' })).toBeNull();
+    });
     // 资料板归档显示岗位信息名称与内容（导入选项回显 + 资料板归档两处）
     expect(screen.getAllByText('项目管理专员/主管').length).toBeGreaterThan(0);
     expect(screen.getByText(/负责公司各类项目全流程管理/)).toBeTruthy();

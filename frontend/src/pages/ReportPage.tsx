@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { mockReport } from '../lib/mockData';
+
 import {
   getInterview,
   getReport,
@@ -116,7 +116,7 @@ export default function ReportPage() {
   }, []);
 
   const [feedback, setFeedback] = useState<InterviewFeedback | null>(null);
-  const [usingMock, setUsingMock] = useState(false);
+
   const [available, setAvailable] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
@@ -233,23 +233,13 @@ export default function ReportPage() {
           setAvailable(false);
           startPolling();
         }
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          // mock 演示模式：后端不可用，按设计稿渲染静态报告
-          if (!cancelled) {
-            setUsingMock(true);
-            setAvailable(true);
-            setInterviewMeta({
-              job_title: '高级产品经理 · 增长方向',
-              job_jd: '',
-              created_at: '2026-08-14T10:00:00',
-              started_at: '2026-08-14T10:00:00',
-              ended_at: '2026-08-14T10:30:00',
-            });
-          }
-        } else if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : '加载报告失败');
-        }
+      } catch (err) {
+        if (!cancelled) {
+
+          setError(err instanceof ApiError ? err.message : '加载报告失败');
+
+        }
+
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -401,55 +391,6 @@ export default function ReportPage() {
                     {retrying ? '重试中…' : '重新生成报告'}
                   </button>
                 </div>
-              ) : usingMock ? (
-                <>
-                  <div className="report-top">
-                    <article>
-                      <small>综合表现</small>
-                      <strong>
-                        {mockReport.score}
-                        <em> / 100</em>
-                      </strong>
-                      <p className="rp-score-note">{mockReport.summary}</p>
-                    </article>
-                    <article>
-                      <h3>本场亮点</h3>
-                      <b className="rp-top-line--good">{mockReport.highlights}</b>
-                      <h3>优先改进</h3>
-                      <span>{mockReport.improvements}</span>
-                    </article>
-                  </div>
-                  <div className="report-bottom">
-                    <article>
-                      <h3>能力维度</h3>
-                      {mockReport.dimensions.map((d) => (
-                        <p key={d.name}>
-                          <span className="rp-dim-label">{d.name}</span>
-                          <span className="rp-dim-track">
-                            <i style={{ width: `${d.value}%` }} />
-                          </span>
-                          <b className="rp-dim-value">{d.value}</b>
-                        </p>
-                      ))}
-                    </article>
-                    <article>
-                      <h3>关键证据</h3>
-                      <p>{mockReport.evidence}</p>
-                      <p>{mockReport.evidenceDetail}</p>
-                      <h3>下一轮训练建议</h3>
-                      <p dangerouslySetInnerHTML={{ __html: mockReport.next }} />
-                      <div className="rp-actions">
-                        <button
-                          type="button"
-                          className="report-exit"
-                          onClick={() => navigate(fromTrends ? '/trends' : '/history')}
-                        >
-                          退出
-                        </button>
-                      </div>
-                    </article>
-                  </div>
-                </>
               ) : feedback ? (
                 <>
                   <div className="report-top">
@@ -501,8 +442,7 @@ export default function ReportPage() {
                     {/* 关键证据 + 下一轮训练建议 + 发邮件 + 退出 */}
                     <article>
                       <h3>关键证据</h3>
-                      <p>{mockReport.evidence}</p>
-                      <p>{mockReport.evidenceDetail}</p>
+                      <p>暂无关键证据数据</p>
                       <h3>下一轮训练建议</h3>
                       <p>
                         {feedback.suggestions.length > 0

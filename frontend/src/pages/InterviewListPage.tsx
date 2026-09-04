@@ -5,7 +5,6 @@ import { listInterviews, type InterviewListItem } from '../api/interviews';
 import { STATUS_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import TopBar from '../components/TopBar';
-import { mockRecords, type MockRecord } from '../lib/mockData';
 
 /** 把面试列表项渲染为记录行数据。 */
 function toRecordRow(item: InterviewListItem): {
@@ -31,25 +30,11 @@ function toRecordRow(item: InterviewListItem): {
   };
 }
 
-function mockToRow(r: MockRecord, index: number): {
-  title: string;
-  time: string;
-  status: string;
-  score: number | null;
-  id: number;
-  statusKey: string;
-} {
-  return { title: r.title, time: r.time, status: '已完成', score: r.score, id: -index - 1, statusKey: 'completed' };
-}
-
 export default function InterviewListPage() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
-  // mock 演示行（id 为负数），静态只读
-  const mockRows = useMemo(() => mockRecords.map(mockToRow), []);
-  const [usingMock, setUsingMock] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [, setError] = useState('');
+  const [error, setError] = useState('');
 
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -75,7 +60,6 @@ export default function InterviewListPage() {
     };
   }, []);
 
-
   useEffect(() => {
     let cancelled = false;
 
@@ -86,16 +70,10 @@ export default function InterviewListPage() {
         const data = await listInterviews();
         if (!cancelled) {
           setInterviews(data);
-          setUsingMock(false);
         }
       } catch (err) {
         if (!cancelled) {
-          // 后端不可用：用演示记录兜底，保证页面可看。
-          // mock 演示模式下后端 401 属预期：不显示错误条，直接回退演示数据。
-          if (!(err instanceof ApiError && err.status === 401)) {
-            setError(err instanceof ApiError ? err.message : '加载面试列表失败');
-          }
-          setUsingMock(true);
+          setError(err instanceof ApiError ? err.message : '加载面试列表失败');
         }
       } finally {
         if (!cancelled) {
@@ -110,16 +88,10 @@ export default function InterviewListPage() {
     };
   }, []);
 
-  const rows = useMemo(() => {
-    if (usingMock) return mockRows;
-    return interviews.map(toRecordRow);
-  }, [mockRows, interviews, usingMock]);
+  const rows = useMemo(() => interviews.map(toRecordRow), [interviews]);
 
   // dash-metrics：累计模拟 / 最近表现 / 本周练习
   const metrics = useMemo(() => {
-    if (usingMock) {
-      return { total: 12, recent: 86, week: 3 };
-    }
     const scored = interviews.filter((i) => i.score != null);
     const latest = interviews[0]?.score ?? null;
     const now = new Date();
@@ -133,7 +105,7 @@ export default function InterviewListPage() {
       recent: latest ?? (scored.length > 0 ? Math.round(scored.reduce((a, b) => a + (b.score ?? 0), 0) / scored.length) : null),
       week: weekCount,
     };
-  }, [interviews, usingMock]);
+  }, [interviews]);
 
   function openReport(id: number) {
     navigate(`/interviews/${id}/report`);
@@ -171,6 +143,8 @@ export default function InterviewListPage() {
                   <span>次</span>
                 </article>
               </div>
+
+              {error && <p className="interview-error" role="alert">{error}</p>}
 
               <div className="records-layout">
                 <article className="records-history">

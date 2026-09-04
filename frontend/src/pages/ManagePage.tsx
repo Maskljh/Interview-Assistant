@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { ApiError, getApiBase, getToken } from '../api/client';
 import {
   deleteQuestion,
@@ -9,15 +10,20 @@ import {
   type Question,
 } from '../api/questions';
 import { extractResumeText } from '../lib/resumeParse';
-import { uploadFile } from '../api/uploads';
 import {
-  mockQuestions,
-  mockResumeFiles,
-  mockJobInfoItems,
-  type MockJobInfoItem,
-  type MockQuestion,
-} from '../lib/mockData';
-import { listResumes, type ResumeFile } from '../api/resumes';
+  deleteResume,
+  listResumes,
+  renameResume,
+  uploadResume,
+  type ResumeFile,
+} from '../api/resumes';
+import {
+  createJobInfo,
+  deleteJobInfo,
+  listJobInfo,
+  updateJobInfo,
+  type JobInfoItem,
+} from '../api/jobinfo';
 import './InterviewPages.css';
 import TopBar from '../components/TopBar';
 import { recognizeImage } from '../api/ocr';
@@ -47,10 +53,6 @@ function toDisplayQuestion(q: Question): DisplayQuestion {
   };
 }
 
-function mockToDisplay(q: MockQuestion): DisplayQuestion {
-  return { id: q.id, bank: q.bank, content: q.content, tags: q.tags, created: '' };
-}
-
 const SORT_LABELS: Record<string, string> = {
   'created-desc': '添加时间：从新到旧',
   'created-asc': '添加时间：从旧到新',
@@ -58,7 +60,16 @@ const SORT_LABELS: Record<string, string> = {
 
 /** 主页面：面试信息管理（题库 / 简历 / 岗位信息 3 tab）。 */
 export default function ManagePage() {
-  const [activeTab, setActiveTab] = useState<ManageTab>('resume');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTabParam = searchParams.get('tab');
+  // tab 状态持久化到 URL 查询参数（/manage?tab=job 等），刷新后停留在当前 tab。
+  const activeTab: ManageTab =
+    activeTabParam === 'question' || activeTabParam === 'job' || activeTabParam === 'resume'
+      ? activeTabParam
+      : 'resume';
+  const setActiveTab = (tab: ManageTab) => {
+    setSearchParams({ tab }, { replace: true });
+  };
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -182,18 +193,9 @@ function QuestionBankPanel() {
     setError('');
     try {
       const items = await listQuestions();
-      if (items.length === 0) {
-        // 后端题库为空：用设计稿演示题兜底，保证页面可用。
-        setQuestions(mockQuestions.map(mockToDisplay));
-      } else {
-        setQuestions(items.map(toDisplayQuestion));
-      }
+      setQuestions(items.map(toDisplayQuestion));
     } catch (err) {
-      // mock 演示模式下后端 401 属预期：不显示错误条，直接回退演示数据。
-      if (!(err instanceof ApiError && err.status === 401)) {
-        setError(err instanceof ApiError ? err.message : '题库加载失败');
-      }
-      setQuestions(mockQuestions.map(mockToDisplay));
+      setError(err instanceof ApiError ? err.message : '题库加载失败');
     } finally {
       setLoading(false);
     }
@@ -877,7 +879,7 @@ function ResumeInlinePreview({ resume }: { resume: ResumeFile }) {
 
 /** ────────── 简历管理面板 ────────── */
 function ResumeManagementPanel() {
-  const [resumes, setResumes] = useState<ResumeFile[]>(mockResumeFiles);
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
@@ -892,7 +894,7 @@ function ResumeManagementPanel() {
     let cancelled = false;
     listResumes()
       .then((items) => {
-        if (cancelled || !items.length) return;
+        if (cancelled) return;
         setResumes(items);
       })
       .catch(() => {
@@ -922,25 +924,10 @@ function ResumeManagementPanel() {
     setError('');
     try {
       const text = await extractResumeText(file);
-      const next: ResumeFile = {
-        id: Date.now(),
-        name: file.name,
-        file_url: '',
-        size_bytes: file.size,
-        resume_text: text,
-        updated_at: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
-      };
-      setResumes((prev) => [next, ...prev]);
-      setSelectedId(next.id);
-      // 尽力上传到后端存档；失败不阻断本地可用。
-      try {
-        const up = await uploadFile('resume', file);
-        setResumes((prev) =>
-          prev.map((r) => (r.id === next.id ? { ...r, file_url: up.url } : r)),
-        );
-      } catch {
-        // ignore
-      }
+      // 通过后端简历库接口上传（写库 + OSS），返回带真实 id 的记录，刷新后仍可加载
+      const saved = await uploadResume(file, text);
+      setResumes((prev) => [saved, ...prev]);
+      setSelectedId(saved.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : '简历解析失败');
     } finally {
@@ -948,11 +935,16 @@ function ResumeManagementPanel() {
     }
   }
 
-  function handleRename(id: number) {
+  async function handleRename(id: number) {
     const name = renameDraft.trim();
     if (!name) return;
-    setResumes((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r)));
-    setRenamingId(null);
+    try {
+      await renameResume(id, name);
+      setResumes((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r)));
+      setRenamingId(null);
+    } catch {
+      setError('重命名失败');
+    }
   }
 
   return (
@@ -1074,11 +1066,17 @@ function ResumeManagementPanel() {
         title="删除简历"
         description="此操作不可撤销"
         body={`确认删除「${resumes.find((r) => r.id === deleteId)?.name ?? ''}」吗？`}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (deleteId == null) return;
-          setResumes((prev) => prev.filter((r) => r.id !== deleteId));
-          if (selectedId === deleteId) setSelectedId(null);
-          setDeleteId(null);
+          try {
+            await deleteResume(deleteId);
+            setResumes((prev) => prev.filter((r) => r.id !== deleteId));
+            if (selectedId === deleteId) setSelectedId(null);
+          } catch {
+            setError('删除失败');
+          } finally {
+            setDeleteId(null);
+          }
         }}
         onCancel={() => setDeleteId(null)}
       />
@@ -1089,13 +1087,13 @@ function ResumeManagementPanel() {
 
 /** ────────── 岗位信息管理面板 ────────── */
 function JobInfoManagementPanel() {
-  const [items, setItems] = useState<MockJobInfoItem[]>(mockJobInfoItems);
+  const [items, setItems] = useState<JobInfoItem[]>([]);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('created-desc');
   const [sortOpen, setSortOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editContent, setEditContent] = useState('');
   // 上传图片 OCR 识别状态（设计稿 job-info-upload-dialog 的“上传图片”按钮）
@@ -1105,6 +1103,21 @@ function JobInfoManagementPanel() {
   // 对话框宿主：挂到 #design-root（缩放画布外），fixed 定位相对视口、尺寸不被 --home-fit 缩放
   const portalHost =
     typeof document !== 'undefined' ? document.getElementById('design-root') : null;
+
+  // 进入面板时从后端加载岗位信息库；失败时保持空态，不阻塞面板
+  useEffect(() => {
+    let cancelled = false;
+    listJobInfo()
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch(() => {
+        // 后端不可用时保持空态
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** 上传岗位信息图片：OCR 识别后填入岗位内容。 */
   async function handleJobImage(file: File) {
@@ -1137,7 +1150,7 @@ function JobInfoManagementPanel() {
     return sort === 'created-asc' ? [...list].reverse() : list;
   }, [items, search, sort]);
 
-  function openEdit(id: string | null) {
+  function openEdit(id: number | null) {
     if (id) {
       const item = items.find((i) => i.id === id);
       if (item) {
@@ -1151,25 +1164,27 @@ function JobInfoManagementPanel() {
     setEditId(id);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const name = editName.trim();
     if (!name) return;
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-    if (editId) {
-      setItems((prev) =>
-        prev.map((i) => (i.id === editId ? { ...i, name, content: editContent.trim() } : i)),
-      );
-    } else {
-      const next: MockJobInfoItem = {
-        id: `job-info-${Date.now()}`,
-        name,
-        content: editContent.trim(),
-        date,
-      };
-      setItems((prev) => [next, ...prev]);
+    try {
+      if (editId != null) {
+        // 更新：写入后端，成功后同步本地列表
+        await updateJobInfo(editId, name, editContent.trim());
+        setItems((prev) =>
+          prev.map((i) => (i.id === editId ? { ...i, name, content: editContent.trim() } : i)),
+        );
+      } else {
+        // 新建：写库并返回带真实 id 的记录，刷新后仍可加载
+        const saved = await createJobInfo(name, editContent.trim());
+        setItems((prev) => [saved, ...prev]);
+      }
+      setEditId(null);
+      setUploadOpen(false);
+      setUploadError('');
+    } catch {
+      setUploadError('保存失败，请稍后重试');
     }
-    setEditId(null);
-    setUploadOpen(false);
   }
 
   return (
@@ -1415,10 +1430,17 @@ function JobInfoManagementPanel() {
         description="此操作不可撤销"
         body={`确认删除「${items.find((i) => i.id === deleteId)?.name ?? ''}」吗？`}
         danger
-        onConfirm={() => {
+        onConfirm={async () => {
           if (deleteId == null) return;
-          setItems((prev) => prev.filter((i) => i.id !== deleteId));
-          setDeleteId(null);
+          try {
+            await deleteJobInfo(deleteId);
+            setItems((prev) => prev.filter((i) => i.id !== deleteId));
+            setUploadError('');
+          } catch {
+            setUploadError('删除失败，请稍后重试');
+          } finally {
+            setDeleteId(null);
+          }
         }}
         onCancel={() => setDeleteId(null)}
       />

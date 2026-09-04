@@ -12,16 +12,13 @@ import { extractResumeText } from '../lib/resumeParse';
 import { uploadFile } from '../api/uploads';
 import { listResumes, type ResumeFile } from '../api/resumes';
 import { listCloudFiles, importCloudFile, type WpsCloudFile } from '../api/wps';
+import { createJobInfo, listJobInfo, type JobInfoItem } from '../api/jobinfo';
 import './InterviewPages.css';
 import './prep-page.css';
 import TopBar from '../components/TopBar';
 import QuestionImportModal from '../components/QuestionImportModal';
 import { createPortal } from 'react-dom';
-import {
-  commonInterviewJobs,
-  mockJobInfoItems,
-  type MockJobInfoItem,
-} from '../lib/mockData';
+import { commonInterviewJobs } from '../lib/mockData';
 
 /** 从云文档导入的简历大小上限（与后端 maxImportBytes 一致）。 */
 const MAX_CLOUD_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -105,15 +102,15 @@ export default function CreateInterviewPage() {
   const [jdError, setJdError] = useState('');
   // 上传岗位信息图片 OCR 识别中（home-job-info-picker 头部按钮态）
   const [jobInfoRecognizing, setJobInfoRecognizing] = useState(false);
-  // 已保存的岗位信息列表（设计稿 home-job-info-picker saved tab，可手动录入新增）
-  const [jobInfoItems, setJobInfoItems] = useState<MockJobInfoItem[]>(mockJobInfoItems);
+  // 已保存的岗位信息列表（设计稿 home-job-info-picker saved tab，从后端岗位库加载）
+  const [jobInfoItems, setJobInfoItems] = useState<JobInfoItem[]>([]);
   // 岗位信息弹窗当前 tab（设计稿 home-job-info-tabs：手动录入 / 已保存岗位）
   const [jobInfoPickerTab, setJobInfoPickerTab] = useState<'manual' | 'saved'>('manual');
   // 手动录入草稿（设计稿 home-job-info-manual 表单）
   const [jobInfoDraftName, setJobInfoDraftName] = useState('');
   const [jobInfoDraftContent, setJobInfoDraftContent] = useState('');
   // 当前选中的岗位信息（home-job-info-picker 高亮态）
-  const [selectedJobInfoId, setSelectedJobInfoId] = useState('');
+  const [selectedJobInfoId, setSelectedJobInfoId] = useState<number | null>(null);
   // ── 个人简历 ──
   const [resumeText, setResumeText] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
@@ -158,6 +155,21 @@ export default function CreateInterviewPage() {
   >(null);
   // 对话引导流：是否需要上传个人简历/岗位信息/题集（设计稿 prep-answer-options）
   const [prepUploadChoice, setPrepUploadChoice] = useState<'yes' | 'no' | null>(null);
+  // 打开岗位信息弹窗时从后端加载已保存岗位（保持「已保存岗位」tab 与岗位库同步）
+  useEffect(() => {
+    if (modal !== 'jd') return;
+    let cancelled = false;
+    listJobInfo()
+      .then((items) => {
+        if (!cancelled) setJobInfoItems(items);
+      })
+      .catch(() => {
+        // 后端不可用时保持现有列表，不阻塞弹窗
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modal]);
   const [libraryResumes, setLibraryResumes] = useState<ResumeFile[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState('');
@@ -351,25 +363,24 @@ export default function CreateInterviewPage() {
   }
 
   /** 手动录入岗位信息（设计稿 home-job-info-manual 确认录入）：
-   *  校验岗位名称/内容非空 → 存入已保存岗位列表并选中 → 归档到资料板。 */
-  function handleManualJobInfoSave() {
+   *  校验岗位名称/内容非空 → 写入后端岗位库并选中 → 归档到资料板。 */
+  async function handleManualJobInfoSave() {
     const name = jobInfoDraftName.trim();
     const content = jobInfoDraftContent.trim();
     if (!name || !content) return;
-    const item: MockJobInfoItem = {
-      id: `job-info-${Date.now()}`,
-      name,
-      content,
-      date: '刚刚录入',
-    };
-    setJobInfoItems((prev) => [item, ...prev]);
-    setSelectedJobInfoId(item.id);
-    setJobJd(`岗位名称：${item.name}\n${item.content}`);
-    setModal(null);
-    setJdError('');
-    setJobInfoDraftName('');
-    setJobInfoDraftContent('');
-    setJobInfoPickerTab('manual');
+    try {
+      const item = await createJobInfo(name, content);
+      setJobInfoItems((prev) => [item, ...prev]);
+      setSelectedJobInfoId(item.id);
+      setJobJd(`岗位名称：${item.name}\n${item.content}`);
+      setModal(null);
+      setJdError('');
+      setJobInfoDraftName('');
+      setJobInfoDraftContent('');
+      setJobInfoPickerTab('manual');
+    } catch {
+      setJdError('保存失败，请稍后重试');
+    }
   }
 
   /** 上传岗位信息图片（home-job-info-picker 头部按钮）：OCR 识别后填入岗位信息。 */
@@ -454,7 +465,7 @@ export default function CreateInterviewPage() {
     setJobTitle('');
     setJobDraft('');
     setJobJd('');
-    setSelectedJobInfoId('');
+    setSelectedJobInfoId(null);
     setResumeText('');
     setResumeFileName('');
     setResumeFileUrl('');

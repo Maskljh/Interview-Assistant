@@ -14,6 +14,7 @@ import (
 	"github.com/interview-assistant/backend/internal/db"
 	"github.com/interview-assistant/backend/internal/expression"
 	"github.com/interview-assistant/backend/internal/interview"
+	"github.com/interview-assistant/backend/internal/jobinfo"
 	"github.com/interview-assistant/backend/internal/llm"
 	"github.com/interview-assistant/backend/internal/ocr"
 	"github.com/interview-assistant/backend/internal/precheck"
@@ -137,6 +138,7 @@ func main() {
 	speech.RegisterRoutes(r, cfg.JWTSecret, speechClient)
 	upload.RegisterRoutes(r, cfg.JWTSecret, uploadSvc)
 	resume.RegisterRoutes(r, sqlDB, cfg.JWTSecret, uploadSvc)
+	jobinfo.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	analysis.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, cfg.DeepSeekModel, wpsHandler)
 	wps.RegisterRoutes(r, cfg.JWTSecret, wpsHandler)
 	expression.RegisterRoutes(r, sqlDB, cfg.JWTSecret)

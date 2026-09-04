@@ -4,7 +4,6 @@ import { ApiError } from '../api/client';
 import { fetchTrends, type TrendsData } from '../api/analytics';
 import './InterviewPages.css';
 import DesignSidebar from '../components/DesignSidebar';
-import { mockGrowth } from '../lib/mockData';
 
 const DIM_KEYS = ['expression', 'logic', 'content', 'job_match'] as const;
 const DIM_LABELS: Record<(typeof DIM_KEYS)[number], string> = {
@@ -25,7 +24,6 @@ export default function TrendsPage() {
   const [data, setData] = useState<TrendsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [usingMock, setUsingMock] = useState(false);
 
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -57,13 +55,8 @@ export default function TrendsPage() {
     try {
       const result = await fetchTrends({});
       setData(result);
-      setUsingMock(false);
     } catch (err) {
-      // mock 演示模式下后端 401 属预期：不显示错误条，直接回退演示数据。
-      if (!(err instanceof ApiError && err.status === 401)) {
-        setError(err instanceof ApiError ? err.message : '加载成长分析失败');
-      }
-      setUsingMock(true);
+      setError(err instanceof ApiError ? err.message : '加载成长分析失败');
     } finally {
       setLoading(false);
     }
@@ -107,25 +100,17 @@ export default function TrendsPage() {
   })();
 
   // dash-metrics 数据：综合表现 / 累计练习 / 完成目标
-  const metrics = usingMock
-    ? { score: mockGrowth.metrics[0].value, total: mockGrowth.metrics[1].value, goal: mockGrowth.metrics[2].value }
-    : {
-        score: String(s?.avg_score ?? '—'),
-        total: `${s?.total_sessions ?? 0}`,
-        goal: `${consecutive}`,
-      };
+  const metrics = {
+    score: String(s?.avg_score ?? '—'),
+    total: `${s?.total_sessions ?? 0}`,
+    goal: `${consecutive}`,
+  };
 
-  const bars = usingMock
-    ? mockGrowth.bars
-    : recent.map((p) => barHeight(p.total));
-  const dims = usingMock
-    ? mockGrowth.dimensions
-    : (dimAvg ?? mockGrowth.dimensions);
-  const tip = usingMock
-    ? mockGrowth.tip
-    : weakestDim
-      ? `优先补强「${weakestDim.name}」：结合真实项目案例加强表达，并在复盘中记录每次回答的结构。`
-      : '积累更多面试场次后，再定位需要优先补齐的能力维度。';
+  const bars = recent.map((p) => barHeight(p.total));
+  const dims = dimAvg ?? [];
+  const tip = weakestDim
+    ? `优先补强「${weakestDim.name}」：结合真实项目案例加强表达，并在复盘中记录每次回答的结构。`
+    : '积累更多面试场次后，再定位需要优先补齐的能力维度。';
 
   return (
     <div id="design-root" ref={rootRef}>
