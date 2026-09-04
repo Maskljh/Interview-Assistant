@@ -1,6 +1,6 @@
 # Interview Assistant — 模拟面试助手
 
-AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、通过 WebSocket 逐题**语音**作答（TTS 朗读 + 按住说话录音转写）、结束生成多维评分报告。支持题库、简历-JD 匹配预检、画像与成长分析，以及**可选的摄像头表情/行为信号分析**（本地运行，画面不上传）。
+AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、通过 WebSocket 逐题**语音**作答（TTS 朗读 + 按住说话录音转写）、结束生成多维评分报告。支持简历库、岗位信息库（JD 收藏）、题库、简历-JD 匹配预检、画像与成长分析，以及**可选的摄像头表情/行为信号分析**（本地运行，画面不上传）。业务数据全部由后端持久化，刷新/换设备不丢失。
 
 ---
 
@@ -37,7 +37,7 @@ AI 驱动的模拟面试练习工具：粘贴职位描述（JD）创建面试、
 | 缓存 | Redis 7（Docker） | 面试直播态、暂存 |
 | 语音 | 阿里云智能语音 NLS | ASR（录音转写）+ TTS（朗读题目），**唯一作答方式** |
 | 大模型 | DeepSeek | 出题、追问、评分报告 |
-| 登录 | WPS OAuth | **唯一登录方式**（账号密码接口已移除） |
+| 登录 | WPS OAuth | **推荐登录方式**（后端唯一账号体系）；前端另保留 4 种表单（账号密码/验证码/注册/忘记密码）走本地 mock 校验，仅供设计稿演示 |
 | 可选 | 阿里云 OCR（图片导入）、OSS（文件上传）、摄像头行为分析（浏览器本地 TensorFlow.js） | 见各节说明 |
 
 ---
@@ -119,9 +119,13 @@ bash start-dev.sh
 services:
   mysql:
     image: mysql:8.4
+    # 容器时区对齐本地（东八区），与后端 DSN 的 loc=Local 保持一致，
+    # 避免 created_at（CURRENT_TIMESTAMP 生成）与 started_at（Go 写入）相差 8 小时。
+    command: ["mysqld", "--default-time-zone=+08:00"]
     environment:
       MYSQL_ROOT_PASSWORD: 123456      # root 密码（与 .env 的 MYSQL_DSN 一致）
       MYSQL_DATABASE: interview        # 自动创建 interview 库
+      TZ: Asia/Shanghai                # 与 command 时区保持一致
     ports: ["3306:3306"]
     volumes: ["mysql_data:/var/lib/mysql"]   # 数据持久化卷
   redis:
@@ -155,10 +159,12 @@ docker exec interviewassistant-redis-1 redis-cli ping    # 应返回 PONG
 ```
 
 > **密码说明**：root 密码统一为 `123456`。如需修改，请同步修改 `docker-compose.yml` 的 `MYSQL_ROOT_PASSWORD`、根目录 `.env` 的 `MYSQL_DSN`、`backend/internal/config/config.go` 的默认值（三处保持一致）。
+>
+> **时区说明**：MySQL 容器已固定为东八区（`--default-time-zone=+08:00` + `TZ=Asia/Shanghai`），后端 DSN 使用 `loc=Local`，两者必须一致。若修改容器时区，请同步确认 `MYSQL_DSN` 的 `loc` 参数，否则时间会差 8 小时。
 
 ### 2. 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，按编号顺序执行（`001_init.sql` … `018_question_kind.sql`）。
+迁移脚本位于 `backend/migrations/`，按编号顺序执行（`001_init.sql` … `019_job_info.sql`）。
 
 **通常无需手动执行**：`start-dev.sh` 在首次启动（`interview` 库无表）时自动应用全部迁移。
 
@@ -221,7 +227,7 @@ $env:JWT_SECRET = "dev-change-me"
 # Docker MySQL/Redis（与 .env 一致，通常无需重复设置）：
 $env:MYSQL_DSN = "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4"
 $env:REDIS_ADDR = "127.0.0.1:6379"
-# WPS 登录（必填，唯一登录方式）：
+# WPS 登录（必填，推荐登录方式）：
 # $env:WPS_CLIENT_ID = "AK..."
 # $env:WPS_CLIENT_SECRET = "..."
 # 完整面试流需要：
@@ -296,6 +302,7 @@ npm run dev            # 默认 http://localhost:5174
 | `docker-compose.yml` | `MYSQL_ROOT_PASSWORD` | `123456` | ✅ |
 | `docker-compose.yml` | `MYSQL_DATABASE` | `interview` | ✅ |
 | `docker-compose.yml` | `ports` | `3306:3306` / `6379:6379` | ✅ |
+| `docker-compose.yml` | `command` / `TZ` | `--default-time-zone=+08:00` / `Asia/Shanghai` | ✅ |
 | `.env`（生效） | `MYSQL_DSN` | `root:123456@tcp(127.0.0.1:3306)/interview?...` | ✅ |
 | `.env`（生效） | `REDIS_ADDR` | `127.0.0.1:6379` | ✅ |
 | `.env.example` | `MYSQL_DSN` / `REDIS_ADDR` | 同上 | ✅ |
@@ -323,12 +330,15 @@ npm run dev            # 默认 http://localhost:5174
 | 图片导入 502 | 缺 OCR Key | 配置 OCR Key 或改用文字粘贴 |
 | 文件上传 502 | 缺 OSS 配置 | 配置 OSS 或直接填写 JD 文本 |
 | `docker compose up` 提示镜像拉取慢 | 网络原因 | 配置 Docker 镜像加速器后重试 |
+| 面试记录时间差 8 小时（如本地 11:05 显示 03:05） | MySQL 容器时区（UTC）与后端 DSN `loc=Local`（东八区）不一致 | 确认 `docker-compose.yml` 的 `command`/`TZ` 为东八区；改时区后历史 `started_at/ended_at` 需 −8h 数据修正 |
 
 ---
 
 ## 功能总览
 
 - **创建面试**：粘贴 JD、可选简历、选类型（行为/技术/综合）、面试官人格（标准/严厉技术面/温和 HR/压力面）、难度、企业风格（通用/外企/大厂/国企/创业）。
+- **简历库**：上传多份简历（含文本提取），可重命名/删除；创建面试时从简历库挑选，刷新后数据保留（后端持久化）。
+- **岗位信息库（JD 收藏）**：手动录入或图片 OCR 识别岗位信息存入岗位库；创建面试时从「已保存岗位」直接导入，刷新后数据保留。
 - **简历-JD 匹配预检**：检测简历与 JD 的匹配度并列出差距，可针对性出题。
 - **出题与追问**：LLM 依据 JD/简历/薄弱点/预检差距生成 5–8 题；逐题作答后由 LLM 决定追问、下一题或结束（受人格限定的追问上限）。
 - **作答方式（语音）**：TTS 朗读题目，按住说话录音 → ASR 转写自动发送。语音是唯一作答方式。
@@ -417,6 +427,7 @@ backend/                  Go API（Gin）、迁移、内部包
   internal/
     behavior/             V14 表情/行为信号存取（幂等保存、归属校验）
     interview/            会话/轮次/题目
+    jobinfo/              岗位信息库（JD 收藏）CRUD
     llm/                  DeepSeek 出题/评分/追问提示词
     speech/               阿里云语音 ASR/TTS
     ocr/                  阿里云 OCR（图片导入）
@@ -426,7 +437,7 @@ backend/                  Go API（Gin）、迁移、内部包
     expression/           表达分析（语速/口头禅/句长）
     upload/               OSS 服务端代理上传/读取（HMAC-SHA1 签名）
     ws/                   WebSocket 直播
-  migrations/             001..018 数据库迁移（015 = WPS OAuth；016 = WPS token 持久化；017 = WPS OAuth 用户列补齐；018 = 题目 kind 字段）
+  migrations/             001..019 数据库迁移（015 = WPS OAuth；016 = WPS token 持久化；017 = WPS OAuth 用户列补齐；018 = 题目 kind 字段；019 = 岗位信息库 job_info）
 frontend/                 Vite + React SPA
   src/behavior/           V14 前端：signalExtractors / aggregator / cameraFeed /
                           FaceLandmarkDetector / useBehaviorAnalysis
