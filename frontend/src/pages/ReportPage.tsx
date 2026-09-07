@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { mockReport } from '../lib/mockData';
 import {
@@ -441,9 +441,6 @@ export default function ReportPage() {
               ) : error && !feedback ? (
                 <div className="rp-state rr-state">
                   <p className="interview-error">{error}</p>
-                  <Link className="rp-back" to="/history">
-                    ← 返回列表
-                  </Link>
                 </div>
               ) : available === false ? (
                 <div className="rp-state rr-state">
