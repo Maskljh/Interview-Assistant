@@ -8,10 +8,12 @@ services:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: interview
       TZ: Asia/Shanghai
-    ports: ["3306:3306"]
+    # 本机 MySQL 服务占用 3306，容器改映射到 3307
+    ports: ["3307:3306"]
     volumes: ["mysql_data:/var/lib/mysql"]
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    # 6379 落在 Windows 排除端口范围(6311-6410)内无法绑定，改用 16379
+    ports: ["16379:6379"]
 volumes:
   mysql_data:

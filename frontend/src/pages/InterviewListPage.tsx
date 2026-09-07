@@ -5,6 +5,7 @@ import { listInterviews, type InterviewListItem } from '../api/interviews';
 import { STATUS_LABELS } from '../lib/labels';
 import './InterviewPages.css';
 import TopBar from '../components/TopBar';
+import { mockRecords, type MockRecord } from '../lib/mockData';
 
 /** 把面试列表项渲染为记录行数据。 */
 function toRecordRow(item: InterviewListItem): {
@@ -30,11 +31,45 @@ function toRecordRow(item: InterviewListItem): {
   };
 }
 
+function mockToRow(r: MockRecord, index: number): {
+  title: string;
+  time: string;
+  status: string;
+  score: number | null;
+  id: number;
+  statusKey: string;
+} {
+  return { title: r.title, time: r.time, status: '已完成', score: r.score, id: -index - 1, statusKey: 'completed' };
+}
+
+/** 设计稿 v2.1 能力维度静态值。 */
+const ABILITIES: [string, number][] = [
+  ['岗位匹配度', 86],
+  ['业务能力', 82],
+  ['逻辑分析', 76],
+  ['表达沟通', 71],
+];
+
+/** 设计稿 y 轴刻度与网格基线（由低到高，score-plot 内 bottom 定位）。 */
+const SCORE_GRIDS = [66, 48, 30, 12];
+const SCORE_YAXIS = [
+  { label: '90', bottom: 62 },
+  { label: '80', bottom: 44 },
+  { label: '70', bottom: 26 },
+  { label: '60', bottom: 8 },
+];
+
 export default function InterviewListPage() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
+  // mock 演示行（id 为负数），静态只读
+  const mockRows = useMemo(() => mockRecords.map(mockToRow), []);
+  const [usingMock, setUsingMock] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
+  // 过滤状态：岗位关键字 + 岗位下拉
+  const [keyword, setKeyword] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
 
   // ── 设计稿 938×692 画布缩放：--home-fit / --home-canvas-width 驱动 ──
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -70,10 +105,16 @@ export default function InterviewListPage() {
         const data = await listInterviews();
         if (!cancelled) {
           setInterviews(data);
+          setUsingMock(false);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : '加载面试列表失败');
+          // 后端不可用：用演示记录兜底，保证页面可看。
+          // mock 演示模式下后端 401 属预期：不显示错误条，直接回退演示数据。
+          if (!(err instanceof ApiError && err.status === 401)) {
+            setError(err instanceof ApiError ? err.message : '加载面试列表失败');
+          }
+          setUsingMock(true);
         }
       } finally {
         if (!cancelled) {
@@ -88,24 +129,40 @@ export default function InterviewListPage() {
     };
   }, []);
 
-  const rows = useMemo(() => interviews.map(toRecordRow), [interviews]);
+  const rows = useMemo(() => {
+    if (usingMock) return mockRows;
+    return interviews.map(toRecordRow);
+  }, [mockRows, interviews, usingMock]);
 
-  // dash-metrics：累计模拟 / 最近表现 / 本周练习
+  // 岗位下拉可选项（全部 + 去重岗位）
+  const roleOptions = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((r) => set.add(r.title));
+    return [...set];
+  }, [rows]);
+
+  // 依据搜索关键字 + 岗位下拉过滤历史行
+  const filteredRows = useMemo(() => {
+    const kw = keyword.trim();
+    return rows.filter((r) => {
+      const matchKeyword = !kw || r.title.includes(kw) || r.time.includes(kw);
+      const matchRole = !roleFilter || r.title === roleFilter;
+      return matchKeyword && matchRole;
+    });
+  }, [rows, keyword, roleFilter]);
+
+  // growth-metrics：累计模拟 / 平均表现
   const metrics = useMemo(() => {
+    if (usingMock) {
+      return { total: 12, recent: 86 };
+    }
     const scored = interviews.filter((i) => i.score != null);
     const latest = interviews[0]?.score ?? null;
-    const now = new Date();
-    const weekStart = new Date(now);
-    const day = (now.getDay() + 6) % 7;
-    weekStart.setDate(now.getDate() - day);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekCount = interviews.filter((i) => new Date(i.created_at).getTime() >= weekStart.getTime()).length;
     return {
       total: interviews.length,
       recent: latest ?? (scored.length > 0 ? Math.round(scored.reduce((a, b) => a + (b.score ?? 0), 0) / scored.length) : null),
-      week: weekCount,
     };
-  }, [interviews]);
+  }, [interviews, usingMock]);
 
   function openReport(id: number) {
     navigate(`/interviews/${id}/report`);
@@ -126,73 +183,110 @@ export default function InterviewListPage() {
                 </div>
               </header>
 
-              <div className="records-metrics">
-                <article>
-                  <small>累计模拟</small>
-                  <strong>{metrics.total}</strong>
-                  <span>次</span>
-                </article>
-                <article>
-                  <small>平均表现</small>
-                  <strong>{metrics.recent ?? '—'}</strong>
-                  <span>平均分</span>
-                </article>
-                <article>
-                  <small>本周练习</small>
-                  <strong>{metrics.week}</strong>
-                  <span>次</span>
-                </article>
-              </div>
-
-              {error && <p className="interview-error" role="alert">{error}</p>}
-
               <div className="records-layout">
-                <article className="records-history">
-                  <header>
-                    <h3>历史记录</h3>
-                    <small>点击查看面试报告</small>
-                  </header>
-                  {loading ? (
-                    <p className="interview-loading">加载中…</p>
-                  ) : rows.length === 0 ? (
-                    <p className="record-empty">还没有面试记录，开始你的第一场练习吧。</p>
-                  ) : (
-                    rows.map((r) => (
-                      <button key={r.id} type="button" onClick={() => openReport(r.id)}>
-                        <span>
-                          <b>{r.title}</b>
-                          <small>{r.time}</small>
-                        </span>
-                        <i>{r.status}</i>
-                        <strong>{r.score ?? '—'}</strong>
-                        <em>查看报告</em>
-                      </button>
-                    ))
-                  )}
-                </article>
-
+                {/* 左侧：成长档案（growth，order:1） */}
                 <aside className="records-growth">
-                  <header>
-                    <h3>成长轨迹</h3>
-                    <small>近 30 天练习趋势</small>
-                  </header>
-                  <div className="records-bars">
-                    {[35, 54, 43, 70, 82, 97, 110].map((h, i) => (
-                      <i key={i} className={i === 6 ? 'latest' : ''} style={{ height: `${h}px` }} />
-                    ))}
+                  <div className="growth-metrics">
+                    <p><span>累计模拟</span><b>{metrics.total}<i>次</i></b></p>
+                    <p><span>平均表现</span><b>{metrics.recent ?? '—'}<i>分</i></b></p>
                   </div>
+
+                  <div className="score-chart">
+                    <div className="score-chart-head">
+                      <h4>历次得分</h4>
+                      <small>SCORE TIMELINE</small>
+                    </div>
+                    <div className="score-plot">
+                      {SCORE_GRIDS.map((b) => (
+                        <i key={b} className="score-grid" style={{ bottom: `${b}px` }} />
+                      ))}
+                      <div className="score-yaxis">
+                        {SCORE_YAXIS.map((y) => (
+                          <span key={y.label} style={{ bottom: `${y.bottom}px` }}>{y.label}</span>
+                        ))}
+                      </div>
+                      <div className="score-bars">
+                        {/* 设计稿间隔48px+柱宽26px，容器可用宽457px最多容纳 6 根 */}
+                        {filteredRows.slice(0, 6).map((r) => {
+                          const sc = r.score ?? 0;
+                          const h = Math.max(Math.round((sc - 60) * 1.8), 2);
+                          const label = r.time.length >= 5 ? r.time.slice(5, 10) : '';
+                          return (
+                            <span key={r.id}>
+                              <b>{sc}</b>
+                              <i style={{ height: `${h}px` }} />
+                              <small>{label}</small>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
                   <section className="records-abilities">
-                    <h3>能力维度</h3>
-                    <p><span>岗位匹配度</span><i><b style={{ width: '86%' }} /></i><em>86</em></p>
-                    <p><span>业务能力</span><i><b style={{ width: '82%' }} /></i><em>82</em></p>
-                    <p><span>逻辑分析</span><i><b style={{ width: '76%' }} /></i><em>76</em></p>
-                    <p><span>表达沟通</span><i><b style={{ width: '71%' }} /></i><em>71</em></p>
+                    <h3>各能力维度平均得分</h3>
+                    {ABILITIES.map(([name, value]) => (
+                      <p key={name}>
+                        <span>{name}</span>
+                        <i><b style={{ width: `${value}%` }} /></i>
+                        <em>{value}</em>
+                      </p>
+                    ))}
                   </section>
+
                   <footer>
                     <b>本周成长建议</b>
                     <p>优先补强「应变能力」：进行 2 次追问型模拟并记录回答结构。</p>
                   </footer>
                 </aside>
+
+                {/* 右侧：历史台帐（history，order:2） */}
+                <article className="records-history">
+                  <header>
+                    <h3>历史记录</h3>
+                  </header>
+                  <div className="history-filters">
+                    <input
+                      className="history-search"
+                      type="text"
+                      placeholder="搜索面试岗位"
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                    />
+                    <select
+                      className="history-role"
+                      value={roleFilter}
+                      onChange={(e) => setRoleFilter(e.target.value)}
+                    >
+                      <option value="">全部岗位</option>
+                      {roleOptions.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="history-divider" />
+                  <div className="records-history-list">
+                    {loading ? (
+                      <p className="interview-loading">加载中…</p>
+                    ) : filteredRows.length === 0 ? (
+                      <p className="record-empty">还没有面试记录，开始你的第一场练习吧。</p>
+                    ) : (
+                      filteredRows.map((r) => (
+                        <button key={r.id} type="button" onClick={() => openReport(r.id)}>
+                          <span>
+                            <p className="row-head">
+                              <b>{r.title}</b>
+                              <i>{r.status}</i>
+                            </p>
+                            <small>{r.time.replace(/\./g, '-')}&nbsp;&nbsp;面试时长30m00s</small>
+                          </span>
+                          <strong>{r.score ?? '—'}</strong>
+                          <em>查看报告</em>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </article>
               </div>
             </section>
           </main>
