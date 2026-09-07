@@ -541,14 +541,14 @@ export default function CreateInterviewPage() {
   // ── 对话流（设计稿 prep-dialogue）──
   // 岗位未选时第一轮问询人消息打字；选岗后转为静态，新增问询轮次各自打字。
   const jobTurnTyping = !jobTitle;
-  // 上传对话轮次（岗位选完后直接显示）
-  const uploadTurnTyping = Boolean(jobTitle) && !prepUploadChoice;
-  const uploadReplyTyping = Boolean(jobTitle) && prepUploadChoice === 'yes';
-  // GitHub 对话轮次（上传步骤完成后才显示）
-  const githubTurnTyping = Boolean(prepUploadChoice) && !githubChoice;
-  const githubInputTyping = Boolean(prepUploadChoice) && githubChoice === 'yes' && githubQuestions.length === 0 && !githubLoading;
+  // GitHub 对话轮次（岗位之后）
+  const githubTurnTyping = Boolean(jobTitle) && !githubChoice;
+  const githubInputTyping = Boolean(jobTitle) && githubChoice === 'yes' && githubQuestions.length === 0 && !githubLoading;
   const githubDone = githubChoice !== null && (githubChoice === 'no' || githubQuestions.length > 0);
-  // 就绪提示（GitHub 完成后才显示）
+  // 上传对话轮次（GitHub 完成后才显示）
+  const uploadTurnTyping = githubDone && !prepUploadChoice;
+  const uploadReplyTyping = githubDone && prepUploadChoice === 'yes';
+  // 就绪提示
   const readyTurnTyping = githubDone && prepUploadChoice === 'no';
   // 右侧资料板（设计稿 prep-right / INTERVIEW MATERIALS）
   const materials: { label: string; title: string; detail?: string; list?: string[]; isGithub?: boolean }[] = [];
@@ -652,81 +652,8 @@ export default function CreateInterviewPage() {
                   </article>
                 )}
 
-                {/* 第二轮：是否需要上传 */}
+                {/* GitHub 步骤：是否需要输入项目地址（岗位之后） */}
                 {jobTitle && (
-                  <article className="prep-turn">
-                    <b className="prep-avatar" aria-label="问询人">
-                      ⌕
-                    </b>
-                    <div className="prep-bubble">
-                      <small>面知</small>
-                      <p>
-                        <TypingText
-                          text="是否需要上传个人简历、面试岗位信息或面试题集？"
-                          active={uploadTurnTyping}
-                        />
-                      </p>
-                      <div className="prep-answer-options">
-                        <button type="button" onClick={() => setPrepUploadChoice('yes')}>
-                          需要上传
-                        </button>
-                        <button type="button" onClick={() => setPrepUploadChoice('no')}>
-                          暂不需要
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                )}
-
-                {/* 用户回复上传选择 */}
-                {prepUploadChoice && (
-                  <article className="prep-turn prep-turn-user">
-                    <div className="prep-bubble">
-                      <p>{prepUploadChoice === 'yes' ? '需要上传' : '暂不需要'}</p>
-                    </div>
-                    <b className="prep-avatar-user" aria-label="用户头像" />
-                  </article>
-                )}
-
-                {/* 第三轮 yes：选择要上传的面试信息 */}
-                {prepUploadChoice === 'yes' && (
-                  <article className="prep-turn">
-                    <b className="prep-avatar" aria-label="问询人">
-                      ⌕
-                    </b>
-                    <div className="prep-bubble">
-                      <small>面知</small>
-                      <p>
-                        <TypingText text="请选择需要上传的面试信息" active={uploadReplyTyping} />
-                      </p>
-                      <div className="prep-import-options">
-                        <button type="button" onClick={() => void openResumePick()}>
-                          <b>个人简历</b>
-                          <span>{resumeFileName || '选择或上传简历'}</span>
-                        </button>
-                        <button type="button" onClick={() => setModal('jd')}>
-                          <b>岗位信息</b>
-                          <span>
-                            {jobJd.trim()
-                              ? jobInfoItems.find((i) => i.id === selectedJobInfoId)?.name || '已导入岗位信息'
-                              : '选择或上传岗位信息'}
-                          </span>
-                        </button>
-                        <button type="button" onClick={() => void openBankPicker()}>
-                          <b>面试题集</b>
-                          <span>
-                            {selectedQuestions.length > 0
-                              ? selectedQuestions[0].job_tag || '未命名题库'
-                              : '选择或导入题集'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                )}
-
-                {/* GitHub 步骤：是否需要输入项目地址（上传步骤完成后显示） */}
-                {Boolean(prepUploadChoice) && (
                   <article className="prep-turn">
                     <b className="prep-avatar" aria-label="问询人">
                       ⌕
@@ -815,7 +742,7 @@ export default function CreateInterviewPage() {
                   </article>
                 )}
 
-                {/* GitHub 分析结果：显示生成的题目列表 */}
+                {/* GitHub 分析结果 */}
                 {githubQuestions.length > 0 && (
                   <article className="prep-turn">
                     <b className="prep-avatar" aria-label="问询人">
@@ -828,8 +755,81 @@ export default function CreateInterviewPage() {
                   </article>
                 )}
 
-                {/* 就绪提示（上传选 no 且 GitHub 步骤完成后显示） */}
-                {githubDone && prepUploadChoice === 'no' && (
+                {/* 第二轮：是否需要上传（GitHub 步骤完成后显示） */}
+                {githubDone && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText
+                          text="是否需要上传个人简历、面试岗位信息或面试题集？"
+                          active={uploadTurnTyping}
+                        />
+                      </p>
+                      <div className="prep-answer-options">
+                        <button type="button" onClick={() => setPrepUploadChoice('yes')}>
+                          需要上传
+                        </button>
+                        <button type="button" onClick={() => setPrepUploadChoice('no')}>
+                          暂不需要
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )}
+
+                {/* 用户回复上传选择 */}
+                {prepUploadChoice && (
+                  <article className="prep-turn prep-turn-user">
+                    <div className="prep-bubble">
+                      <p>{prepUploadChoice === 'yes' ? '需要上传' : '暂不需要'}</p>
+                    </div>
+                    <b className="prep-avatar-user" aria-label="用户头像" />
+                  </article>
+                )}
+
+                {/* 上传选项 */}
+                {prepUploadChoice === 'yes' && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText text="请选择需要上传的面试信息" active={uploadReplyTyping} />
+                      </p>
+                      <div className="prep-import-options">
+                        <button type="button" onClick={() => void openResumePick()}>
+                          <b>个人简历</b>
+                          <span>{resumeFileName || '选择或上传简历'}</span>
+                        </button>
+                        <button type="button" onClick={() => setModal('jd')}>
+                          <b>岗位信息</b>
+                          <span>
+                            {jobJd.trim()
+                              ? jobInfoItems.find((i) => i.id === selectedJobInfoId)?.name || '已导入岗位信息'
+                              : '选择或上传岗位信息'}
+                          </span>
+                        </button>
+                        <button type="button" onClick={() => void openBankPicker()}>
+                          <b>面试题集</b>
+                          <span>
+                            {selectedQuestions.length > 0
+                              ? selectedQuestions[0].job_tag || '未命名题库'
+                              : '选择或导入题集'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )}
+
+                {/* 就绪提示 */}
+                {prepUploadChoice === 'no' && (
                   <article className="prep-turn">
                     <b className="prep-avatar" aria-label="问询人">
                       ⌕
