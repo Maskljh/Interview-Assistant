@@ -502,6 +502,56 @@ const DefaultOpening = "你好，欢迎参加本次模拟面试。请先做一�
 // completes naturally (all planned questions answered).
 const DefaultClosing = "今天的面试到这里就结束了，感谢你的参与和配合。面试报告稍后生成，请留意查看。"
 
+// GenerateProjectQuestionsSystem instructs the model to generate interview
+// questions based on a GitHub project.
+func GenerateProjectQuestionsSystem() string {
+	return `You are an expert technical interviewer. Given a GitHub project and the target job position, generate interview questions that combine both the project's technical details AND the job requirements.
+
+Respond with valid JSON only, no markdown fences or extra text. Use this exact schema:
+{"questions":[{"seq":1,"question":"...","intent":"..."}]}
+
+Rules:
+- Produce exactly 6 to 8 questions
+- seq must be 1-based and consecutive
+- CRITICAL: Every question must connect the project content to the target job position. For example, if the job is "前端开发工程师" and the project uses React, ask about React architecture, state management, component design, etc. relevant to a frontend role.
+- intent briefly describes what the question assesses (which dimension: logic/content/expression/job_match)
+- Cover a mix of: project-specific technical depth, job-relevant skills, architecture/design decisions, and improvement suggestions
+- All question and intent text must be written in Chinese (Simplified). Do not use any language.`
+}
+
+// GenerateProjectQuestionsUser builds the user prompt with the project info.
+func GenerateProjectQuestionsUser(info *ProjectInfo, jobTitle string) string {
+	topicStr := "(none)"
+	if len(info.Topics) > 0 {
+		topicStr = strings.Join(info.Topics, ", ")
+	}
+	jobSection := ""
+	if jobTitle != "" {
+		jobSection = fmt.Sprintf("Target job position: %s\n\nIMPORTANT: The candidate is interviewing for \"%s\". Questions must focus on skills, knowledge, and experience relevant to THIS position as they relate to the project.\n", jobTitle, jobTitle)
+	}
+	return fmt.Sprintf(`Generate interview questions for a mock interview session. The questions should combine the project content with the target job requirements.
+
+%sProject name: %s
+Project description: %s
+Primary language: %s
+Topics: %s
+Stars: %d
+
+README content:
+%s`, jobSection, info.Name, info.Description, info.Language, topicStr, info.Stars, info.Readme)
+}
+
+// ProjectInfo is a mirror of project.GitHubRepoInfo used only by prompt builders
+// to avoid a circular import between llm and project packages.
+type ProjectInfo struct {
+	Name        string
+	Description string
+	Language    string
+	Topics      []string
+	Stars       int
+	Readme      string
+}
+
 type ResumeCompletionOut struct {
 	Questions []struct {
 		Question string `json:"question"`

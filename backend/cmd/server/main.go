@@ -19,6 +19,7 @@ import (
 	"github.com/interview-assistant/backend/internal/ocr"
 	"github.com/interview-assistant/backend/internal/precheck"
 	"github.com/interview-assistant/backend/internal/profile"
+	"github.com/interview-assistant/backend/internal/project"
 	"github.com/interview-assistant/backend/internal/question"
 	"github.com/interview-assistant/backend/internal/resume"
 	"github.com/interview-assistant/backend/internal/sessionredis"
@@ -131,6 +132,7 @@ func main() {
 
 	interview.RegisterRoutes(r, cfg.JWTSecret, svc)
 	question.RegisterRoutes(r, sqlDB, cfg.JWTSecret, llmClient, ocrClient)
+	project.RegisterRoutes(r, llmClient, cfg.JWTSecret, cfg.GitHubToken)
 	ocr.RegisterRoutes(r, cfg.JWTSecret, ocrClient)
 	analytics.RegisterRoutes(r, sqlDB, cfg.JWTSecret)
 	profile.RegisterRoutes(r, sqlDB, cfg.JWTSecret)

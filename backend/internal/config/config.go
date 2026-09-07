@@ -35,6 +35,7 @@ type Config struct {
 	OSSEndpoint           string
 	OSSAccessKeyID        string
 	OSSAccessKeySecret    string
+	GitHubToken           string
 }
 
 func Load() (*Config, error) {
@@ -44,8 +45,8 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		HTTPAddr:              getenv("HTTP_ADDR", ":18080"),
-		MySQLDSN:              getenv("MYSQL_DSN", "root:123456@tcp(127.0.0.1:3306)/interview?parseTime=true&charset=utf8mb4&loc=Local"),
-		RedisAddr:             getenv("REDIS_ADDR", "127.0.0.1:6379"),
+		MySQLDSN:              getenv("MYSQL_DSN", "root:123456@tcp(127.0.0.1:3307)/interview?parseTime=true&charset=utf8mb4&loc=Local"),
+		RedisAddr:             getenv("REDIS_ADDR", "127.0.0.1:16379"),
 		JWTSecret:             os.Getenv("JWT_SECRET"),
 		WPSClientID:           os.Getenv("WPS_CLIENT_ID"),
 		WPSClientSecret:       os.Getenv("WPS_CLIENT_SECRET"),
@@ -70,6 +71,7 @@ func Load() (*Config, error) {
 		OSSEndpoint:           os.Getenv("OSS_ENDPOINT"),
 		OSSAccessKeyID:        os.Getenv("OSS_ACCESS_KEY_ID"),
 		OSSAccessKeySecret:    os.Getenv("OSS_ACCESS_KEY_SECRET"),
+		GitHubToken:           os.Getenv("GITHUB_TOKEN"),
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET required")

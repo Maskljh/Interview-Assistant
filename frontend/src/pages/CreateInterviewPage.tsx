@@ -13,6 +13,8 @@ import { uploadFile } from '../api/uploads';
 import { listResumes, type ResumeFile } from '../api/resumes';
 import { listCloudFiles, importCloudFile, type WpsCloudFile } from '../api/wps';
 import { createJobInfo, listJobInfo, type JobInfoItem } from '../api/jobinfo';
+import { analyzeGitHubProject, type GeneratedProjectQuestion } from '../api/projects';
+import { confirmImport } from '../api/questions';
 import './InterviewPages.css';
 import './prep-page.css';
 import TopBar from '../components/TopBar';
@@ -155,6 +157,13 @@ export default function CreateInterviewPage() {
   >(null);
   // 对话引导流：是否需要上传个人简历/岗位信息/题集（设计稿 prep-answer-options）
   const [prepUploadChoice, setPrepUploadChoice] = useState<'yes' | 'no' | null>(null);
+  // ── GitHub 项目（岗位之后、上传之前） ──
+  const [githubChoice, setGithubChoice] = useState<'yes' | 'no' | null>(null);
+  const [githubUrlDraft, setGithubUrlDraft] = useState('');
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [githubError, setGithubError] = useState('');
+  const [githubQuestions, setGithubQuestions] = useState<GeneratedProjectQuestion[]>([]);
+  const [githubProjectName, setGithubProjectName] = useState('');
   // 打开岗位信息弹窗时从后端加载已保存岗位（保持「已保存岗位」tab 与岗位库同步）
   useEffect(() => {
     if (modal !== 'jd') return;
@@ -472,6 +481,12 @@ export default function CreateInterviewPage() {
     setResumeError('');
     setSelectedIds([]);
     setPrepUploadChoice(null);
+    setGithubChoice(null);
+    setGithubUrlDraft('');
+    setGithubLoading(false);
+    setGithubError('');
+    setGithubQuestions([]);
+    setGithubProjectName('');
     setError('');
     setModal(null);
   }
@@ -526,11 +541,17 @@ export default function CreateInterviewPage() {
   // ── 对话流（设计稿 prep-dialogue）──
   // 岗位未选时第一轮问询人消息打字；选岗后转为静态，新增问询轮次各自打字。
   const jobTurnTyping = !jobTitle;
+  // 上传对话轮次（岗位选完后直接显示）
   const uploadTurnTyping = Boolean(jobTitle) && !prepUploadChoice;
   const uploadReplyTyping = Boolean(jobTitle) && prepUploadChoice === 'yes';
-  const readyTurnTyping = prepUploadChoice === 'no';
+  // GitHub 对话轮次（上传步骤完成后才显示）
+  const githubTurnTyping = Boolean(prepUploadChoice) && !githubChoice;
+  const githubInputTyping = Boolean(prepUploadChoice) && githubChoice === 'yes' && githubQuestions.length === 0 && !githubLoading;
+  const githubDone = githubChoice !== null && (githubChoice === 'no' || githubQuestions.length > 0);
+  // 就绪提示（GitHub 完成后才显示）
+  const readyTurnTyping = githubDone && prepUploadChoice === 'no';
   // 右侧资料板（设计稿 prep-right / INTERVIEW MATERIALS）
-  const materials: { label: string; title: string; detail?: string; list?: string[] }[] = [];
+  const materials: { label: string; title: string; detail?: string; list?: string[]; isGithub?: boolean }[] = [];
   if (jobTitle) {
     materials.push({
       label: '目标岗位',
@@ -547,6 +568,14 @@ export default function CreateInterviewPage() {
       label: '岗位信息',
       title: selected ? selected.name : '已录入岗位情报',
       detail: jobJd.trim(),
+    });
+  }
+  if (githubQuestions.length > 0) {
+    materials.push({
+      label: 'GitHub 项目题',
+      title: githubProjectName ? `来自 ${githubProjectName} · ${githubQuestions.length} 道` : `${githubQuestions.length} 道题目`,
+      list: githubQuestions.map((q) => q.question),
+      isGithub: true,
     });
   }
   if (selectedQuestions.length > 0) {
@@ -696,8 +725,111 @@ export default function CreateInterviewPage() {
                   </article>
                 )}
 
-                {/* 第三轮 no：就绪提示 */}
-                {prepUploadChoice === 'no' && (
+                {/* GitHub 步骤：是否需要输入项目地址（上传步骤完成后显示） */}
+                {Boolean(prepUploadChoice) && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText
+                          text="是否需要输入 GitHub 项目链接，让 AI 根据项目生成面试题？"
+                          active={githubTurnTyping}
+                        />
+                      </p>
+                      <div className="prep-answer-options">
+                        <button type="button" onClick={() => setGithubChoice('yes')}>
+                          需要
+                        </button>
+                        <button type="button" onClick={() => setGithubChoice('no')}>
+                          跳过
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                )}
+
+                {/* 用户回复 GitHub 选择 */}
+                {githubChoice && (
+                  <article className="prep-turn prep-turn-user">
+                    <div className="prep-bubble">
+                      <p>{githubChoice === 'yes' ? '需要输入 GitHub 项目链接' : '跳过'}</p>
+                    </div>
+                    <b className="prep-avatar-user" aria-label="用户头像" />
+                  </article>
+                )}
+
+                {/* GitHub 步骤：输入链接并分析 */}
+                {githubChoice === 'yes' && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>
+                        <TypingText
+                          text="请粘贴 GitHub 项目链接，AI 将根据项目内容生成面试题。"
+                          active={githubInputTyping}
+                        />
+                      </p>
+                      <div className="prep-github-input">
+                        <input
+                          type="url"
+                          placeholder="https://github.com/user/repo"
+                          value={githubUrlDraft}
+                          onChange={(e) => setGithubUrlDraft(e.target.value)}
+                          disabled={githubLoading || githubQuestions.length > 0}
+                        />
+                        <button
+                          type="button"
+                          disabled={githubLoading || !githubUrlDraft.trim() || githubQuestions.length > 0}
+                          onClick={async () => {
+                            setGithubError('');
+                            setGithubLoading(true);
+                            try {
+                              const result = await analyzeGitHubProject(githubUrlDraft.trim(), jobTitle);
+                              setGithubQuestions(result.questions);
+                              setGithubProjectName(result.project.name);
+                              // 同时存入题库（job_tag 用项目名）
+                              await confirmImport(
+                                result.questions.map((q) => ({ question: q.question })),
+                                `GitHub · ${result.project.name}`,
+                              );
+                            } catch (err) {
+                              setGithubError(err instanceof Error ? err.message : '分析失败，请稍后重试');
+                            } finally {
+                              setGithubLoading(false);
+                            }
+                          }}
+                        >
+                          {githubLoading ? '分析中…' : '分析项目'}
+                        </button>
+                      </div>
+                      {githubError && (
+                        <p className="prep-github-error">{githubError}</p>
+                      )}
+                    </div>
+                  </article>
+                )}
+
+                {/* GitHub 分析结果：显示生成的题目列表 */}
+                {githubQuestions.length > 0 && (
+                  <article className="prep-turn">
+                    <b className="prep-avatar" aria-label="问询人">
+                      ⌕
+                    </b>
+                    <div className="prep-bubble">
+                      <small>面知</small>
+                      <p>已根据项目 {githubProjectName} 生成 {githubQuestions.length} 道面试题，并同步存入题库。</p>
+                    </div>
+                  </article>
+                )}
+
+                {/* 就绪提示（上传选 no 且 GitHub 步骤完成后显示） */}
+                {githubDone && prepUploadChoice === 'no' && (
                   <article className="prep-turn">
                     <b className="prep-avatar" aria-label="问询人">
                       ⌕
@@ -728,7 +860,7 @@ export default function CreateInterviewPage() {
                   materials.map((note) => (
                     <article
                       key={note.label}
-                      className="prep-note"
+                      className={`prep-note${note.isGithub ? ' prep-note-github' : ''}`}
                       data-prep-material={
                         note.label === '岗位信息'
                           ? 'job'

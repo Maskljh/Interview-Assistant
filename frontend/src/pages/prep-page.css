@@ -190,6 +190,8 @@
 #design-root .prep-note p {display:-webkit-box;overflow:hidden;margin:6px 0 0;color:#657782;font-size:10px;line-height:1.45;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 #design-root .prep-note ol {display:grid;gap:3px;margin:7px 0 0;padding-left:15px;color:#657782;font-size:10px;line-height:1.35}
 #design-root .prep-note li {overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#design-root .prep-note-github ol {padding-left:18px}
+#design-root .prep-note-github li {white-space:normal;overflow:visible;text-overflow:unset;margin-bottom:3px;line-height:1.45}
 #design-root .prep-empty-note {grid-column:1/-1;display:grid;min-height:150px;place-items:center;border:1px dashed #b9cad5;background:rgba(255,253,247,.62);color:#7d8991;font-size:11px;text-align:center}
 #design-root .prep-note-start {grid-column:1/-1;justify-self:end;height:38px;padding:0 18px;border-radius:2px;background:#29465b;color:#fffdf7;font-size:12px;font-weight:700;box-shadow:3px 3px 0 #a9c1b2}
 #design-root .prep-note-start:hover {background:#1d3748;transform:translate(1px,1px);box-shadow:2px 2px 0 #a9c1b2}

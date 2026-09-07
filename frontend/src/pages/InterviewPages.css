@@ -3997,3 +3997,87 @@
   align-items: center;
   justify-content: flex-end;
 }
+
+/* ── GitHub 项目步骤样式 ── */
+#design-root .prep-github-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#design-root .prep-github-input input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(0,0,0,0.2);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.95);
+  color: #1a1a1a;
+  font-size: 14px;
+}
+
+#design-root .prep-github-input input::placeholder {
+  color: rgba(255,255,255,0.45);
+}
+
+#design-root .prep-github-input input:disabled {
+  opacity: 0.6;
+}
+
+#design-root .prep-github-input button {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #3a7d6a;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#design-root .prep-github-input button:hover:not(:disabled) {
+  background: #4a9a82;
+}
+
+#design-root .prep-github-input button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#design-root .prep-github-error {
+  margin-top: 8px;
+  color: #f5a3a3;
+  font-size: 13px;
+}
+
+#design-root .prep-github-questions {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.88);
+}
+
+#design-root .prep-github-questions li {
+  margin-bottom: 4px;
+}
+
+#design-root .prep-github-questions li::marker {
+  color: rgba(255,255,255,0.45);
+}
+
+#design-root .prep-note-github ol {
+  padding-left: 18px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+#design-root .prep-note-github li {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  margin-bottom: 3px;
+  line-height: 1.45;
+}
